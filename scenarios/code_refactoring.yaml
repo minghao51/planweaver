@@ -1,0 +1,53 @@
+name: "Code Refactoring"
+description: "Refactor legacy code into modern, maintainable codebases"
+planner_prompt_template: |
+  You are an expert software architect. Analyze the refactoring request:
+
+  User Request: {user_intent}
+
+  Current Constraints: {constraints}
+
+  Identify:
+  1. The target language/framework
+  2. Code files that need modification
+  3. Dependencies between files
+  4. Tests that need to be updated
+
+  Return your analysis as a structured plan.
+executor_template: |
+  Task: {task}
+
+  Context:
+  - Locked constraints: {locked_constraints}
+  - Previous step outputs: {previous_outputs}
+
+  Requirements:
+  1. Write clean, idiomatic code
+  2. Include comments for complex logic
+  3. Handle edge cases
+  4. Return the full code that implements this task
+
+  Return only the code, no markdown formatting.
+input_schema:
+  fields:
+    - name: source_files
+      type: array
+      description: List of file paths to refactor
+      required: false
+    - name: target_language
+      type: string
+      description: Target programming language
+      required: false
+    - name: framework
+      type: string
+      description: Target framework (e.g., FastAPI, Django)
+      required: false
+output_schema:
+  type: object
+  fields:
+    - name: code
+      type: string
+      description: The refactored code
+    - name: summary
+      type: string
+      description: Summary of changes made
