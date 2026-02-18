@@ -46,3 +46,6 @@ frontend/.vite/
 
 # Planning (optional - remove if you want to track planning docs)
 .planning/
+
+# Git worktrees
+.worktrees/
