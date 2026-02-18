@@ -15,16 +15,43 @@ class Planner:
         self.llm = llm_gateway or LLMGateway()
         self.template_engine = template_engine or TemplateEngine()
 
+    def _build_planner_prompt(
+        self,
+        user_intent: str,
+        plan: Plan
+    ) -> str:
+        """Build planner prompt with external context"""
+        base_prompt = f"User Request: {user_intent}"
+
+        # Add external context section if available
+        context_section = ""
+        if plan.external_contexts:
+            context_section = "\n\n=== AVAILABLE CONTEXT ===\n\n"
+            context_section += "The following external context is available for this planning session. "
+            context_section += "Use this information to generate better questions and execution steps:\n\n"
+
+            for i, ctx in enumerate(plan.external_contexts, 1):
+                context_section += f"\n--- Context Source {i} ({ctx.source_type.upper()}) ---\n"
+                context_section += ctx.content_summary
+                context_section += "\n"
+
+            context_section += "\n=== END CONTEXT ===\n\n"
+
+        return f"{context_section}{base_prompt}"
+
     def analyze_intent(
         self,
         user_intent: str,
+        plan: Plan,
         scenario_name: Optional[str] = None,
         model: str = "deepseek/deepseek-chat"
     ) -> Dict[str, Any]:
-        prompt = f"""
+        prompt = self._build_planner_prompt(user_intent, plan)
+
+        full_prompt = f"""
 You are a task decomposition expert. Analyze the following user request and extract key requirements.
 
-User Request: {user_intent}
+{prompt}
 
 Provide your analysis in JSON format:
 {{
@@ -40,7 +67,7 @@ Provide your analysis in JSON format:
 """
         response = self.llm.complete(
             model=model,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[{"role": "user", "content": full_prompt}],
             json_mode=True
         )
 
@@ -155,13 +182,15 @@ Return JSON array:
         scenario_name: Optional[str] = None,
         model: str = "deepseek/deepseek-chat"
     ) -> Plan:
-        analysis = self.analyze_intent(user_intent, scenario_name, model)
-
+        # Create plan first
         plan = Plan(
             user_intent=user_intent,
             scenario_name=scenario_name,
             status=PlanStatus.BRAINSTORMING
         )
+
+        # Analyze with context (plan.external_contexts is empty at this point)
+        analysis = self.analyze_intent(user_intent, plan, scenario_name, model)
 
         for constraint in analysis.get("identified_constraints", []):
             plan.lock_constraint(constraint, "extracted from request")
