@@ -16,10 +16,18 @@ class TestPlanner:
     def test_analyze_intent_returns_analysis(self, mock_llm_gateway):
         with patch("src.planweaver.services.planner.LLMGateway", return_value=mock_llm_gateway):
             from src.planweaver.services.planner import Planner
+            from src.planweaver.models.plan import Plan, PlanStatus
+
             planner = Planner(llm_gateway=mock_llm_gateway)
-            
-            result = planner.analyze_intent("Create a Python web app")
-            
+
+            # Create a plan for the analyze_intent call
+            plan = Plan(
+                user_intent="Create a Python web app",
+                status=PlanStatus.BRAINSTORMING
+            )
+
+            result = planner.analyze_intent("Create a Python web app", plan)
+
             assert "identified_constraints" in result
             assert "missing_information" in result
             assert "suggested_approach" in result
@@ -32,12 +40,20 @@ class TestPlanner:
             "model": "test",
             "usage": {}
         })
-        
+
         from src.planweaver.services.planner import Planner
+        from src.planweaver.models.plan import Plan, PlanStatus
+
         planner = Planner(llm_gateway=mock_gateway)
-        
-        result = planner.analyze_intent("test request")
-        
+
+        # Create a plan for the analyze_intent call
+        plan = Plan(
+            user_intent="test request",
+            status=PlanStatus.BRAINSTORMING
+        )
+
+        result = planner.analyze_intent("test request", plan)
+
         assert "identified_constraints" in result
         assert result["estimated_complexity"] == "unknown"
 

@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 from enum import Enum
 from datetime import datetime, timezone
 import uuid
@@ -61,6 +61,16 @@ class ExecutionStep(BaseModel):
     completed_at: Optional[datetime] = None
 
 
+class ExternalContext(BaseModel):
+    """External context source for planning enhancement"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    source_type: Literal["github", "web_search", "file_upload"]
+    source_url: Optional[str] = None
+    content_summary: str
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class Plan(BaseModel):
     session_id: str = Field(default_factory=lambda: f"proj_{uuid.uuid4().hex[:6]}")
     status: PlanStatus = PlanStatus.BRAINSTORMING
@@ -70,6 +80,7 @@ class Plan(BaseModel):
     open_questions: List[OpenQuestion] = Field(default_factory=list)
     strawman_proposals: List[StrawmanProposal] = Field(default_factory=list)
     execution_graph: List[ExecutionStep] = Field(default_factory=list)
+    external_contexts: List[ExternalContext] = Field(default_factory=list, description="External context sources for enhanced planning")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     final_output: Optional[Any] = None

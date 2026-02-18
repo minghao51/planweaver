@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File, Body
 from typing import Dict, Any, Optional
 from functools import lru_cache
 from pydantic import BaseModel, Field, field_validator
@@ -6,6 +6,8 @@ import re
 
 from ..orchestrator import Orchestrator
 from ..models.plan import PlanStatus
+from ..services.context_service import ContextService
+from ..config import Settings
 
 router = APIRouter()
 
@@ -50,6 +52,11 @@ def get_orchestrator_factory() -> Orchestrator:
 
 def get_orchestrator() -> Orchestrator:
     return get_orchestrator_factory()
+
+
+def get_context_service() -> ContextService:
+    orch = get_orchestrator()
+    return ContextService(orch.planner.llm.settings if hasattr(orch.planner.llm, 'settings') else Settings(), orch.planner.llm)
 
 
 @router.post("/sessions")
@@ -169,3 +176,143 @@ def list_scenarios():
 def list_models():
     orch = get_orchestrator()
     return {"models": orch.llm.get_available_models()}
+
+
+# Context management endpoints
+class GitHubContextRequest(BaseModel):
+    repo_url: str = Field(..., description="GitHub repository URL")
+
+
+class WebSearchContextRequest(BaseModel):
+    query: Optional[str] = Field(None, description="Search query (optional, auto-generated from intent if not provided)")
+
+
+@router.post("/sessions/{session_id}/context/github")
+async def add_github_context(
+    session_id: str,
+    request: GitHubContextRequest
+):
+    """Add GitHub repository context to planning session"""
+    orch = get_orchestrator()
+    context_service = get_context_service()
+
+    plan = orch.get_session(session_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    try:
+        # Process GitHub context
+        context = await context_service.add_github_context(request.repo_url)
+
+        # Add to plan
+        plan = orch.add_external_context(session_id, context)
+
+        return {
+            "context_id": context.id,
+            "source_type": context.source_type,
+            "status": "added"
+        }
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to add GitHub context: {str(e)}")
+
+
+@router.post("/sessions/{session_id}/context/web-search")
+async def add_web_search_context(
+    session_id: str,
+    request: WebSearchContextRequest
+):
+    """Add web search results to planning session.
+    If query not provided, generates one from session intent."""
+    orch = get_orchestrator()
+    context_service = get_context_service()
+
+    plan = orch.get_session(session_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    try:
+        # Get plan to generate query if needed
+        query = request.query
+        if not query:
+            query = f"best practices for: {plan.user_intent}"
+
+        # Process web search
+        context = await context_service.add_web_search_context(query)
+
+        # Add to plan
+        plan = orch.add_external_context(session_id, context)
+
+        return {
+            "context_id": context.id,
+            "source_type": context.source_type,
+            "query": query,
+            "status": "added"
+        }
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to add web search: {str(e)}")
+
+
+@router.post("/sessions/{session_id}/context/upload")
+async def upload_file_context(
+    session_id: str,
+    file: UploadFile = File(..., description="File to upload for context")
+):
+    """Upload file and extract context for planning"""
+    orch = get_orchestrator()
+    context_service = get_context_service()
+
+    plan = orch.get_session(session_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    try:
+        # Read file content
+        content = await file.read()
+
+        # Process file
+        context = await context_service.add_file_context(file.filename, content)
+
+        # Add to plan
+        plan = orch.add_external_context(session_id, context)
+
+        return {
+            "context_id": context.id,
+            "source_type": context.source_type,
+            "filename": file.filename,
+            "status": "added"
+        }
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to process file: {str(e)}")
+
+
+@router.get("/sessions/{session_id}/context")
+def list_contexts(session_id: str):
+    """List all external contexts for a session"""
+    orch = get_orchestrator()
+    plan = orch.get_session(session_id)
+
+    if not plan:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    return {
+        "session_id": session_id,
+        "contexts": [
+            {
+                "id": ctx.id,
+                "source_type": ctx.source_type,
+                "source_url": ctx.source_url,
+                "created_at": ctx.created_at,
+                "metadata": {k: v for k, v in ctx.metadata.items() if k != "full_content"}
+            }
+            for ctx in plan.external_contexts
+        ]
+    }

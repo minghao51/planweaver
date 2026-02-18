@@ -1,7 +1,7 @@
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timezone
 
-from .models.plan import Plan, PlanStatus, ExecutionStep
+from .models.plan import Plan, PlanStatus, ExecutionStep, ExternalContext
 from .services.planner import Planner
 from .services.router import ExecutionRouter
 from .services.template_engine import TemplateEngine
@@ -27,22 +27,43 @@ class Orchestrator:
     def start_session(
         self,
         user_intent: str,
-        scenario_name: Optional[str] = None
+        scenario_name: Optional[str] = None,
+        external_contexts: Optional[List[ExternalContext]] = None
     ) -> Plan:
         plan = self.planner.create_initial_plan(
             user_intent=user_intent,
             scenario_name=scenario_name,
             model=self.planner_model
         )
+        plan.external_contexts = external_contexts or []
         self._save_plan(plan)
         return plan
 
     def get_session(self, session_id: str) -> Optional[Plan]:
+        return self._get_plan(session_id)
+
+    def add_external_context(
+        self,
+        session_id: str,
+        context: ExternalContext
+    ) -> Plan:
+        """Add external context to a planning session"""
+        plan = self._get_plan(session_id)
+
+        # Add context to plan
+        plan.external_contexts.append(context)
+
+        # Save to database
+        self._save_plan(plan)
+
+        return plan
+
+    def _get_plan(self, session_id: str) -> Optional[Plan]:
         db_session = get_session()
         try:
             db_plan = db_session.query(DBSession).filter_by(id=session_id).first()
             if not db_plan:
-                return None
+                raise ValueError(f"Session {session_id} not found")
             return self._db_to_plan(db_plan)
         finally:
             db_session.close()
@@ -112,6 +133,7 @@ class Orchestrator:
                 existing.open_questions = [q.model_dump() for q in plan.open_questions]
                 existing.strawman_proposals = [p.model_dump() for p in plan.strawman_proposals]
                 existing.execution_graph = [s.model_dump() for s in plan.execution_graph]
+                existing.external_contexts = [c.model_dump(mode='json') for c in plan.external_contexts]
                 existing.final_output = plan.final_output
                 existing.updated_at = datetime.now(timezone.utc)
             else:
@@ -124,6 +146,7 @@ class Orchestrator:
                     open_questions=[q.model_dump() for q in plan.open_questions],
                     strawman_proposals=[p.model_dump() for p in plan.strawman_proposals],
                     execution_graph=[s.model_dump() for s in plan.execution_graph],
+                    external_contexts=[c.model_dump(mode='json') for c in plan.external_contexts],
                     final_output=plan.final_output
                 )
                 db_session.add(db_plan)
@@ -144,5 +167,6 @@ class Orchestrator:
             open_questions=[OpenQuestion(**q) for q in (db_plan.open_questions or [])],
             strawman_proposals=[StrawmanProposal(**p) for p in (db_plan.strawman_proposals or [])],
             execution_graph=[ExecutionStep(**s) for s in (db_plan.execution_graph or [])],
+            external_contexts=[ExternalContext(**c) for c in (db_plan.external_contexts or [])],
             final_output=db_plan.final_output
         )

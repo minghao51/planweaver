@@ -37,6 +37,7 @@ class SessionModel(Base):
     open_questions = Column(JSON, default=list)
     strawman_proposals = Column(JSON, default=list)
     execution_graph = Column(JSON, default=list)
+    external_contexts = Column(JSON, default=list)
     final_output = Column(JSON, nullable=True)
 
 
