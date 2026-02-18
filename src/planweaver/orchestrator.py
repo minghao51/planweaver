@@ -1,5 +1,5 @@
 from typing import Dict, Any, Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 from .models.plan import Plan, PlanStatus, ExecutionStep
 from .services.planner import Planner
@@ -13,8 +13,8 @@ from .db.models import SessionModel as DBSession
 class Orchestrator:
     def __init__(
         self,
-        planner_model: str = "deepseek/deepseek-chat",
-        executor_model: str = "anthropic/claude-3-5-sonnet-20241022",
+        planner_model: str = "gemini-2.5-flash",
+        executor_model: str = "gemini-3-flash",
         scenarios_path: str = "scenarios"
     ):
         self.planner_model = planner_model
@@ -63,6 +63,7 @@ class Orchestrator:
                 plan.lock_constraint("selected_approach", proposal.title)
                 plan.lock_constraint("approach_description", proposal.description)
                 break
+        self._save_plan(plan)
         return plan
 
     def answer_questions(
@@ -112,7 +113,7 @@ class Orchestrator:
                 existing.strawman_proposals = [p.model_dump() for p in plan.strawman_proposals]
                 existing.execution_graph = [s.model_dump() for s in plan.execution_graph]
                 existing.final_output = plan.final_output
-                existing.updated_at = datetime.utcnow()
+                existing.updated_at = datetime.now(timezone.utc)
             else:
                 db_plan = DBSession(
                     id=plan.session_id,

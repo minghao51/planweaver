@@ -1,7 +1,7 @@
 from typing import Dict, Any, Optional, List
 import time
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from ..models.plan import Plan, ExecutionStep, StepStatus, PlanStatus
 from .llm_gateway import LLMGateway
@@ -53,7 +53,7 @@ class ExecutionRouter:
         )
 
         step.status = StepStatus.IN_PROGRESS
-        step.started_at = datetime.utcnow()
+        step.started_at = datetime.now(timezone.utc)
 
         last_error = None
         for attempt in range(MAX_RETRIES):
@@ -64,7 +64,7 @@ class ExecutionRouter:
                     max_tokens=8192
                 )
 
-                step.completed_at = datetime.utcnow()
+                step.completed_at = datetime.now(timezone.utc)
 
                 if response:
                     step.output = response["content"]
@@ -146,6 +146,3 @@ class ExecutionRouter:
             if step.output:
                 outputs[f"step_{step.step_id}"] = step.output
         return outputs
-
-    def can_skip_step(self, step: ExecutionStep, context: Dict[str, Any]) -> bool:
-        return False

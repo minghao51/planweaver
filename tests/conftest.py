@@ -1,6 +1,5 @@
 import pytest
-from unittest.mock import Mock, MagicMock, patch
-from fastapi.testclient import TestClient
+from unittest.mock import Mock, patch
 
 
 @pytest.fixture

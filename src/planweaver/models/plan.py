@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 
@@ -70,21 +70,21 @@ class Plan(BaseModel):
     open_questions: List[OpenQuestion] = Field(default_factory=list)
     strawman_proposals: List[StrawmanProposal] = Field(default_factory=list)
     execution_graph: List[ExecutionStep] = Field(default_factory=list)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     final_output: Optional[Any] = None
 
     def add_open_question(self, question: str) -> None:
         self.open_questions.append(OpenQuestion(question=question))
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
 
     def lock_constraint(self, key: str, value: Any) -> None:
         self.locked_constraints[key] = value
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
 
     def add_step(self, step: ExecutionStep) -> None:
         self.execution_graph.append(step)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
 
     def get_pending_steps(self) -> List[ExecutionStep]:
         return [s for s in self.execution_graph if s.status == StepStatus.PENDING]

@@ -1,6 +1,6 @@
 from sqlalchemy import Column, String, Text, DateTime, JSON, Integer, ForeignKey
 from sqlalchemy.orm import declarative_base
-from datetime import datetime
+from datetime import datetime, timezone
 import enum
 import uuid
 
@@ -28,8 +28,8 @@ class SessionModel(Base):
     __tablename__ = "sessions"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     user_intent = Column(Text, nullable=False)
     scenario_name = Column(String(255), nullable=True)
     status = Column(String(50), default=PlanStatusDB.BRAINSTORMING.value)
@@ -45,8 +45,8 @@ class PlanModel(Base):
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     session_id = Column(String(36), ForeignKey("sessions.id"), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     status = Column(String(50), default=PlanStatusDB.BRAINSTORMING.value)
     locked_constraints = Column(JSON, default=dict)
     execution_graph = Column(JSON, default=list)
@@ -65,4 +65,4 @@ class ExecutionLog(Base):
     response_received = Column(Text, nullable=True)
     status = Column(String(50), default=StepStatusDB.PENDING.value)
     error_message = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
