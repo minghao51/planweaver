@@ -5,6 +5,7 @@ from ..config import Settings
 from ..services.llm_gateway import LLMGateway
 from .github_analyzer import GitHubAnalyzer
 from .web_search_service import WebSearchService
+from .file_processor import FileProcessorService
 
 
 class ContextService:
@@ -18,6 +19,10 @@ class ContextService:
             self.web_search = WebSearchService(config.tavily_api_key)
         else:
             self.web_search = None
+        self.file_processor = FileProcessorService(
+            max_size_mb=config.max_file_size_mb,
+            allowed_types=config.allowed_file_types
+        )
 
     async def add_github_context(self, repo_url: str) -> ExternalContext:
         """Add GitHub repository context"""
@@ -72,5 +77,23 @@ class ContextService:
 
     async def add_file_context(self, filename: str, content: bytes) -> ExternalContext:
         """Add uploaded file context"""
-        # Implementation in Task 7
-        raise NotImplementedError("File processing not yet implemented")
+        try:
+            # Process file
+            file_data = await self.file_processor.process_file(filename, content)
+
+            # Create ExternalContext
+            context = ExternalContext(
+                source_type="file_upload",
+                content_summary=file_data["summary"],
+                metadata={
+                    "filename": file_data["filename"],
+                    "file_type": file_data["file_type"],
+                    "size_bytes": file_data["size_bytes"],
+                    "full_content": file_data["content"]
+                }
+            )
+
+            return context
+
+        except Exception as e:
+            raise ValueError(f"Failed to process file: {str(e)}")

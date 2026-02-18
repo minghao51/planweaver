@@ -20,6 +20,8 @@ dependencies = [
     "google-genai>=1.63.0",
     "pygithub>=2.8.1",
     "tavily-python>=0.7.21",
+    "pypdf2>=3.0.1",
+    "python-multipart>=0.0.22",
 ]
 
 [project.optional-dependencies]

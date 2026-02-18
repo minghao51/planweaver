@@ -90,8 +90,53 @@ async def test_web_search_not_configured(context_service):
 
 
 @pytest.mark.asyncio
-async def test_file_context_not_implemented(context_service):
-    """Test file context raises NotImplementedError"""
-    with pytest.raises(NotImplementedError):
-        await context_service.add_file_context("test.txt", b"content")
+async def test_add_file_context_text(context_service):
+    """Test adding text file context"""
+    content = b"Hello, this is a test file with some content."
+
+    context = await context_service.add_file_context("test.txt", content)
+
+    assert context.source_type == "file_upload"
+    assert "test.txt" in context.content_summary
+    assert context.metadata["filename"] == "test.txt"
+    assert context.metadata["file_type"] == ".txt"
+
+
+@pytest.mark.asyncio
+async def test_add_file_context_pdf(context_service):
+    """Test adding PDF file context"""
+    # Create minimal PDF (for testing)
+    from PyPDF2 import PdfWriter
+    import io
+
+    pdf_writer = PdfWriter()
+    pdf_writer.add_blank_page(width=200, height=200)
+
+    pdf_bytes = io.BytesIO()
+    pdf_writer.write(pdf_bytes)
+    content = pdf_bytes.getvalue()
+
+    context = await context_service.add_file_context("test.pdf", content)
+
+    assert context.source_type == "file_upload"
+    assert context.metadata["file_type"] == ".pdf"
+
+
+@pytest.mark.asyncio
+async def test_file_too_large(context_service):
+    """Test file size validation"""
+    large_content = b"x" * (11 * 1024 * 1024)  # 11MB
+
+    with pytest.raises(ValueError, match="File too large"):
+        await context_service.add_file_context("large.txt", large_content)
+
+
+@pytest.mark.asyncio
+async def test_unsupported_file_type(context_service):
+    """Test file type validation"""
+    content = b"some content"
+
+    with pytest.raises(ValueError, match="Unsupported file type"):
+        await context_service.add_file_context("test.exe", content)
+
 
