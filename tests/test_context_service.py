@@ -46,10 +46,47 @@ async def test_add_github_context(context_service, mocker):
 
 
 @pytest.mark.asyncio
-async def test_web_search_not_implemented(context_service):
-    """Test web search raises NotImplementedError"""
-    with pytest.raises(NotImplementedError):
-        await context_service.add_web_search_context("test query")
+async def test_add_web_search_context(context_service, mocker):
+    """Test adding web search context"""
+    # Skip if not configured
+    if not context_service.web_search:
+        pytest.skip("Tavily API key not configured")
+
+    # Mock the search service
+    mock_results = {
+        "query": "FastAPI best practices",
+        "results": [
+            {"title": "FastAPI Guide", "url": "https://example.com", "snippet": "Best practices..."}
+        ],
+        "answer": "FastAPI is a modern web framework",
+        "summary": "## Web Search Results..."
+    }
+
+    mocker.patch.object(
+        context_service.web_search,
+        "search",
+        new=mocker.AsyncMock(return_value=mock_results)
+    )
+
+    context = await context_service.add_web_search_context("FastAPI best practices")
+
+    assert context.source_type == "web_search"
+    assert "FastAPI" in context.content_summary
+    assert context.metadata["query"] == "FastAPI best practices"
+
+
+@pytest.mark.asyncio
+async def test_web_search_not_configured(context_service):
+    """Test web search raises ValueError when not configured"""
+    # Temporarily remove web_search to simulate missing API key
+    original_web_search = context_service.web_search
+    context_service.web_search = None
+
+    try:
+        with pytest.raises(ValueError, match="Web search not configured"):
+            await context_service.add_web_search_context("test query")
+    finally:
+        context_service.web_search = original_web_search
 
 
 @pytest.mark.asyncio

@@ -19,6 +19,7 @@ dependencies = [
     "loguru>=0.7.3",
     "google-genai>=1.63.0",
     "pygithub>=2.8.1",
+    "tavily-python>=0.7.21",
 ]
 
 [project.optional-dependencies]
