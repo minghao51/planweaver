@@ -1,5 +1,7 @@
 import pytest
 from unittest.mock import Mock, patch
+from planweaver.config import Settings
+from planweaver.services.llm_gateway import LLMGateway
 
 
 @pytest.fixture
@@ -12,6 +14,18 @@ def mock_llm_response():
         response.usage.dict.return_value = {"prompt_tokens": 100, "completion_tokens": 50}
         return response
     return _mock_response
+
+
+@pytest.fixture
+def settings():
+    """Test settings fixture"""
+    return Settings()
+
+
+@pytest.fixture
+def llm_gateway():
+    """Test LLM gateway fixture"""
+    return LLMGateway()
 
 
 @pytest.fixture
