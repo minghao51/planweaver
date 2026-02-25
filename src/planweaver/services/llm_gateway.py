@@ -9,6 +9,7 @@ from google import genai
 from google.genai import types
 
 logger = logging.getLogger(__name__)
+JSON_ONLY_INSTRUCTION = "You must output valid JSON only. No markdown formatting, no code blocks."
 
 
 class LLMResponse(BaseModel):
@@ -47,6 +48,28 @@ class LLMGateway:
             })
         return converted
 
+    def _prepare_messages(self, messages: list[dict], json_mode: bool) -> list[dict]:
+        prepared = list(messages)
+        if json_mode:
+            prepared.append({"role": "system", "content": JSON_ONLY_INSTRUCTION})
+        return prepared
+
+    def _format_response(self, model: str, content: Optional[str], usage: Optional[Dict[str, Any]] = None) -> dict:
+        return {
+            "content": content or "",
+            "model": model,
+            "usage": usage,
+        }
+
+    def _normalize_content(self, content: Optional[str], json_mode: bool) -> str:
+        return self._repair_json(content) if json_mode else (content or "")
+
+    def _extract_usage(self, response: Any) -> Optional[Dict[str, Any]]:
+        usage = getattr(response, "usage", None)
+        if usage is None:
+            return None
+        return usage.dict() if hasattr(usage, "dict") else usage
+
     def complete(
         self,
         model: str,
@@ -56,29 +79,17 @@ class LLMGateway:
     ) -> dict:
         if self._is_gemini_model(model):
             return self._complete_gemini(model, messages, json_mode, max_tokens)
-        
-        if json_mode:
-            messages.append({
-                "role": "system",
-                "content": "You must output valid JSON only. No markdown formatting, no code blocks."
-            })
+
+        prepared_messages = self._prepare_messages(messages, json_mode)
 
         response = completion(
             model=model,
-            messages=messages,
+            messages=prepared_messages,
             max_tokens=max_tokens
         )
 
-        content = response.choices[0].message.content
-
-        if json_mode:
-            content = self._repair_json(content)
-
-        return {
-            "content": content,
-            "model": model,
-            "usage": response.usage.dict() if hasattr(response, "usage") else None
-        }
+        content = self._normalize_content(response.choices[0].message.content, json_mode)
+        return self._format_response(model, content, self._extract_usage(response))
 
     def _complete_gemini(
         self,
@@ -88,18 +99,14 @@ class LLMGateway:
         max_tokens: int = 4096
     ) -> dict:
         client = self._get_gemini_client()
-        
-        gemini_messages = self._convert_messages_for_gemini(messages)
-        
-        generation_config = types.GenerateContentConfig(
-            max_output_tokens=max_tokens,
-        )
-        
+
+        prepared_messages = self._prepare_messages(messages, json_mode)
+        gemini_messages = self._convert_messages_for_gemini(prepared_messages)
+
+        config_kwargs = {"max_output_tokens": max_tokens}
         if json_mode:
-            generation_config = types.GenerateContentConfig(
-                max_output_tokens=max_tokens,
-                response_mime_type="application/json"
-            )
+            config_kwargs["response_mime_type"] = "application/json"
+        generation_config = types.GenerateContentConfig(**config_kwargs)
 
         response = client.models.generate_content(
             model=model,
@@ -108,15 +115,7 @@ class LLMGateway:
         )
 
         content = response.text if hasattr(response, "text") else str(response)
-
-        if json_mode:
-            content = self._repair_json(content)
-
-        return {
-            "content": content,
-            "model": model,
-            "usage": None
-        }
+        return self._format_response(model, self._normalize_content(content, json_mode))
 
     async def acomplete(
         self,
@@ -127,29 +126,17 @@ class LLMGateway:
     ) -> dict:
         if self._is_gemini_model(model):
             return self._complete_gemini(model, messages, json_mode, max_tokens)
-        
-        if json_mode:
-            messages.append({
-                "role": "system",
-                "content": "You must output valid JSON only. No markdown formatting, no code blocks."
-            })
+
+        prepared_messages = self._prepare_messages(messages, json_mode)
 
         response = await acompletion(
             model=model,
-            messages=messages,
+            messages=prepared_messages,
             max_tokens=max_tokens
         )
 
-        content = response.choices[0].message.content
-
-        if json_mode:
-            content = self._repair_json(content)
-
-        return {
-            "content": content,
-            "model": model,
-            "usage": response.usage.dict() if hasattr(response, "usage") else None
-        }
+        content = self._normalize_content(response.choices[0].message.content, json_mode)
+        return self._format_response(model, content, self._extract_usage(response))
 
     def stream_complete(
         self,
@@ -157,15 +144,11 @@ class LLMGateway:
         messages: list[dict],
         json_mode: bool = False
     ) -> AsyncIterator[dict]:
-        if json_mode:
-            messages.append({
-                "role": "system",
-                "content": "You must output valid JSON only. No markdown formatting, no code blocks."
-            })
+        prepared_messages = self._prepare_messages(messages, json_mode)
 
         response = completion(
             model=model,
-            messages=messages,
+            messages=prepared_messages,
             stream=True
         )
 

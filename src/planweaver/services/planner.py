@@ -21,23 +21,81 @@ class Planner:
         plan: Plan
     ) -> str:
         """Build planner prompt with external context"""
-        base_prompt = f"User Request: {user_intent}"
+        if not plan.external_contexts:
+            return f"User Request: {user_intent}"
 
-        # Add external context section if available
-        context_section = ""
-        if plan.external_contexts:
-            context_section = "\n\n=== AVAILABLE CONTEXT ===\n\n"
-            context_section += "The following external context is available for this planning session. "
-            context_section += "Use this information to generate better questions and execution steps:\n\n"
+        lines = [
+            "",
+            "",
+            "=== AVAILABLE CONTEXT ===",
+            "",
+            "The following external context is available for this planning session. "
+            "Use this information to generate better questions and execution steps:",
+            "",
+        ]
+        for i, ctx in enumerate(plan.external_contexts, 1):
+            lines.extend(
+                [
+                    f"--- Context Source {i} ({ctx.source_type.upper()}) ---",
+                    ctx.content_summary,
+                    "",
+                ]
+            )
+        lines.extend(["=== END CONTEXT ===", "", f"User Request: {user_intent}"])
+        return "\n".join(lines)
 
-            for i, ctx in enumerate(plan.external_contexts, 1):
-                context_section += f"\n--- Context Source {i} ({ctx.source_type.upper()}) ---\n"
-                context_section += ctx.content_summary
-                context_section += "\n"
+    def _parse_json_or_default(self, raw_content: str, default: Any) -> Any:
+        try:
+            return json.loads(raw_content)
+        except json.JSONDecodeError:
+            return default
 
-            context_section += "\n=== END CONTEXT ===\n\n"
+    def _analysis_fallback(self) -> Dict[str, Any]:
+        return {
+            "identified_constraints": [],
+            "missing_information": ["Unable to parse analysis"],
+            "suggested_approach": "Manual review needed",
+            "estimated_complexity": "unknown",
+        }
 
-        return f"{context_section}{base_prompt}"
+    def _parse_execution_steps(self, steps_data: Any, default_model: str) -> List[ExecutionStep]:
+        if not isinstance(steps_data, list):
+            return self._fallback_execution_steps(default_model)
+
+        steps: List[ExecutionStep] = []
+        for step_data in steps_data:
+            if not isinstance(step_data, dict):
+                continue
+            steps.append(
+                ExecutionStep(
+                    step_id=step_data.get("step_id", 0),
+                    task=step_data.get("task", ""),
+                    prompt_template_id=step_data.get("prompt_template_id", "default"),
+                    assigned_model=step_data.get("assigned_model", default_model),
+                    dependencies=step_data.get("dependencies", []),
+                    status=StepStatus.PENDING,
+                )
+            )
+        return steps or self._fallback_execution_steps(default_model)
+
+    def _fallback_execution_steps(self, model: str) -> List[ExecutionStep]:
+        return [
+            ExecutionStep(
+                step_id=1,
+                task="Execute user request directly",
+                prompt_template_id="default",
+                assigned_model=model,
+                dependencies=[],
+            )
+        ]
+
+    def _parse_strawman_proposals(self, proposals_data: Any) -> List[StrawmanProposal]:
+        if not isinstance(proposals_data, list):
+            return []
+        try:
+            return [StrawmanProposal(**proposal) for proposal in proposals_data if isinstance(proposal, dict)]
+        except TypeError:
+            return []
 
     def analyze_intent(
         self,
@@ -71,15 +129,7 @@ Provide your analysis in JSON format:
             json_mode=True
         )
 
-        try:
-            return json.loads(response["content"])
-        except json.JSONDecodeError:
-            return {
-                "identified_constraints": [],
-                "missing_information": ["Unable to parse analysis"],
-                "suggested_approach": "Manual review needed",
-                "estimated_complexity": "unknown"
-            }
+        return self._parse_json_or_default(response["content"], self._analysis_fallback())
 
     def decompose_into_steps(
         self,
@@ -118,27 +168,8 @@ Output only valid JSON array, no markdown, no explanation.
             json_mode=True
         )
 
-        try:
-            steps_data = json.loads(response["content"])
-            steps = []
-            for step_data in steps_data:
-                steps.append(ExecutionStep(
-                    step_id=step_data.get("step_id", 0),
-                    task=step_data.get("task", ""),
-                    prompt_template_id=step_data.get("prompt_template_id", "default"),
-                    assigned_model=step_data.get("assigned_model", model),
-                    dependencies=step_data.get("dependencies", []),
-                    status=StepStatus.PENDING
-                ))
-            return steps
-        except json.JSONDecodeError:
-            return [ExecutionStep(
-                step_id=1,
-                task="Execute user request directly",
-                prompt_template_id="default",
-                assigned_model=model,
-                dependencies=[]
-            )]
+        steps_data = self._parse_json_or_default(response["content"], [])
+        return self._parse_execution_steps(steps_data, model)
 
     def generate_strawman_proposals(
         self,
@@ -168,13 +199,8 @@ Return JSON array:
             json_mode=True
         )
 
-        try:
-            proposals_data = json.loads(response["content"])
-            return [
-                StrawmanProposal(**p) for p in proposals_data
-            ]
-        except (json.JSONDecodeError, TypeError):
-            return []
+        proposals_data = self._parse_json_or_default(response["content"], [])
+        return self._parse_strawman_proposals(proposals_data)
 
     def create_initial_plan(
         self,

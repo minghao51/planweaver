@@ -33,6 +33,108 @@ class ExecutionRouter:
 
         return executable
 
+    def _build_step_prompt(
+        self,
+        step: ExecutionStep,
+        plan: Plan,
+        context: Dict[str, Any],
+    ) -> str:
+        return self.template_engine.render_executor_prompt(
+            scenario_name=plan.scenario_name or "",
+            step_task=step.task,
+            context={
+                **context,
+                "locked_constraints": plan.locked_constraints,
+                "previous_outputs": self._get_previous_outputs(plan, step),
+            },
+        )
+
+    def _mark_step_started(self, step: ExecutionStep) -> None:
+        step.status = StepStatus.IN_PROGRESS
+        step.started_at = datetime.now(timezone.utc)
+
+    def _mark_step_completed(self, step: ExecutionStep, output: Any) -> None:
+        step.completed_at = datetime.now(timezone.utc)
+        step.output = output
+        step.status = StepStatus.COMPLETED
+
+    def _mark_step_failed(self, step: ExecutionStep, error: str) -> None:
+        step.status = StepStatus.FAILED
+        step.error = error
+
+    def _call_model(self, model: str, prompt: str) -> Dict[str, Any]:
+        return self.llm.complete(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=8192,
+        )
+
+    def _execute_with_retries(
+        self,
+        step: ExecutionStep,
+        actual_model: str,
+        prompt: str,
+    ) -> Dict[str, Any]:
+        last_error = None
+        for attempt in range(MAX_RETRIES):
+            try:
+                response = self._call_model(actual_model, prompt)
+                if response:
+                    self._mark_step_completed(step, response.get("content"))
+                    return {
+                        "step_id": step.step_id,
+                        "output": step.output,
+                        "model": actual_model,
+                        "success": True,
+                    }
+                last_error = "Empty response"
+            except Exception as exc:
+                last_error = str(exc)
+                logger.warning(f"Step {step.step_id} attempt {attempt + 1} failed: {exc}")
+                if attempt < MAX_RETRIES - 1:
+                    time.sleep(RETRY_DELAY_BASE * (2 ** attempt))
+
+        error_message = f"Failed after {MAX_RETRIES} attempts: {last_error}"
+        self._mark_step_failed(step, error_message)
+        return {
+            "step_id": step.step_id,
+            "error": step.error,
+            "model": actual_model,
+            "success": False,
+        }
+
+    def _validate_execution_graph(self, plan: Plan) -> None:
+        steps_by_id = {step.step_id: step for step in plan.execution_graph}
+        if len(steps_by_id) != len(plan.execution_graph):
+            raise ValueError("Execution graph contains duplicate step_id values")
+
+        for step in plan.execution_graph:
+            for dep in step.dependencies:
+                if dep == step.step_id:
+                    raise ValueError(f"Step {step.step_id} cannot depend on itself")
+                if dep not in steps_by_id:
+                    raise ValueError(
+                        f"Step {step.step_id} depends on missing step {dep}"
+                    )
+
+        visiting: set[int] = set()
+        visited: set[int] = set()
+
+        def visit(step_id: int) -> None:
+            if step_id in visited:
+                return
+            if step_id in visiting:
+                raise ValueError(f"Execution graph contains a dependency cycle at step {step_id}")
+
+            visiting.add(step_id)
+            for dep_id in steps_by_id[step_id].dependencies:
+                visit(dep_id)
+            visiting.remove(step_id)
+            visited.add(step_id)
+
+        for step_id in steps_by_id:
+            visit(step_id)
+
     def execute_step(
         self,
         step: ExecutionStep,
@@ -42,54 +144,9 @@ class ExecutionRouter:
     ) -> Dict[str, Any]:
         actual_model = model or step.assigned_model
 
-        prompt = self.template_engine.render_executor_prompt(
-            scenario_name=plan.scenario_name or "",
-            step_task=step.task,
-            context={
-                **context,
-                "locked_constraints": plan.locked_constraints,
-                "previous_outputs": self._get_previous_outputs(plan, step)
-            }
-        )
-
-        step.status = StepStatus.IN_PROGRESS
-        step.started_at = datetime.now(timezone.utc)
-
-        last_error = None
-        for attempt in range(MAX_RETRIES):
-            try:
-                response = self.llm.complete(
-                    model=actual_model,
-                    messages=[{"role": "user", "content": prompt}],
-                    max_tokens=8192
-                )
-
-                step.completed_at = datetime.now(timezone.utc)
-
-                if response:
-                    step.output = response["content"]
-                    step.status = StepStatus.COMPLETED
-                    return {
-                        "step_id": step.step_id,
-                        "output": step.output,
-                        "model": actual_model,
-                        "success": True
-                    }
-                last_error = "Empty response"
-            except Exception as e:
-                last_error = str(e)
-                logger.warning(f"Step {step.step_id} attempt {attempt + 1} failed: {e}")
-                if attempt < MAX_RETRIES - 1:
-                    time.sleep(RETRY_DELAY_BASE * (2 ** attempt))
-
-        step.status = StepStatus.FAILED
-        step.error = f"Failed after {MAX_RETRIES} attempts: {last_error}"
-        return {
-            "step_id": step.step_id,
-            "error": step.error,
-            "model": actual_model,
-            "success": False
-        }
+        prompt = self._build_step_prompt(step, plan, context)
+        self._mark_step_started(step)
+        return self._execute_with_retries(step, actual_model, prompt)
 
     def _get_previous_outputs(self, plan: Plan, current_step: ExecutionStep) -> Dict[int, Any]:
         outputs = {}
@@ -107,6 +164,7 @@ class ExecutionRouter:
         if context is None:
             context = {}
 
+        self._validate_execution_graph(plan)
         plan.status = PlanStatus.EXECUTING
         step_count = 0
 

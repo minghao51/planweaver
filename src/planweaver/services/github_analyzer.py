@@ -1,7 +1,8 @@
 """GitHub repository context analyzer"""
+import json
+import re
 from github import Github, GithubException
 from typing import Dict, Any, List
-import re
 
 
 class GitHubAnalyzer:
@@ -9,6 +10,9 @@ class GitHubAnalyzer:
 
     def __init__(self, github_token: str = None):
         self.github = Github(github_token) if github_token else Github()
+        self._max_files = 20
+        self._max_readme_chars = 1000
+        self._max_summary_list_items = 10
 
     async def analyze_repository(self, repo_url: str) -> Dict[str, Any]:
         """Analyze a GitHub repository and extract context"""
@@ -52,6 +56,21 @@ class GitHubAnalyzer:
         except GithubException as e:
             raise ValueError(f"GitHub API error: {str(e)}")
 
+    def _safe_repo_contents(self, repo, path: str):
+        try:
+            return repo.get_contents(path)
+        except GithubException:
+            return None
+
+    def _safe_decoded_content(self, repo, path: str) -> str | None:
+        file_obj = self._safe_repo_contents(repo, path)
+        if file_obj is None:
+            return None
+        try:
+            return file_obj.decoded_content.decode()
+        except (AttributeError, UnicodeDecodeError):
+            return None
+
     def _parse_github_url(self, url: str) -> tuple[str, str]:
         """Parse GitHub URL to extract owner and repo name"""
         patterns = [
@@ -79,11 +98,11 @@ class GitHubAnalyzer:
                 else:
                     files.append(f"{file_content.path} ({file_content.size} bytes)")
 
-                if len(files) >= 20:
+                if len(files) >= self._max_files:
                     break
 
-            return files[:20]
-        except:
+            return files[: self._max_files]
+        except GithubException:
             return []
 
     def _get_key_files(self, repo) -> Dict[str, str]:
@@ -91,25 +110,18 @@ class GitHubAnalyzer:
         key_files = {}
 
         try:
-            # README
             readme = repo.get_readme()
-            key_files["README.md"] = readme.decoded_content.decode()[:1000]
-        except:
+            key_files["README.md"] = readme.decoded_content.decode()[: self._max_readme_chars]
+        except (GithubException, UnicodeDecodeError, AttributeError):
             pass
 
-        try:
-            # package.json
-            pkg_file = repo.get_contents("package.json")
-            key_files["package.json"] = pkg_file.decoded_content.decode()
-        except:
-            pass
+        package_json = self._safe_decoded_content(repo, "package.json")
+        if package_json is not None:
+            key_files["package.json"] = package_json
 
-        try:
-            # requirements.txt
-            req_file = repo.get_contents("requirements.txt")
-            key_files["requirements.txt"] = req_file.decoded_content.decode()
-        except:
-            pass
+        requirements_txt = self._safe_decoded_content(repo, "requirements.txt")
+        if requirements_txt is not None:
+            key_files["requirements.txt"] = requirements_txt
 
         return key_files
 
@@ -117,20 +129,22 @@ class GitHubAnalyzer:
         """Extract dependencies from package files"""
         dependencies = {"python": [], "javascript": [], "other": []}
 
-        try:
-            req_file = repo.get_contents("requirements.txt")
-            requirements = req_file.decoded_content.decode().split("\n")
-            dependencies["python"] = [r.strip() for r in requirements if r.strip() and not r.startswith("#")]
-        except:
-            pass
+        requirements_txt = self._safe_decoded_content(repo, "requirements.txt")
+        if requirements_txt:
+            requirements = requirements_txt.splitlines()
+            dependencies["python"] = [
+                line.strip()
+                for line in requirements
+                if line.strip() and not line.startswith("#")
+            ]
 
-        try:
-            pkg_file = repo.get_contents("package.json")
-            import json
-            pkg_json = json.loads(pkg_file.decoded_content.decode())
-            dependencies["javascript"] = list(pkg_json.get("dependencies", {}).keys())
-        except:
-            pass
+        package_json = self._safe_decoded_content(repo, "package.json")
+        if package_json:
+            try:
+                pkg_data = json.loads(package_json)
+            except json.JSONDecodeError:
+                pkg_data = {}
+            dependencies["javascript"] = list(pkg_data.get("dependencies", {}).keys())
 
         return dependencies
 
@@ -142,26 +156,30 @@ class GitHubAnalyzer:
         dependencies: Dict[str, List[str]]
     ) -> str:
         """Build a comprehensive summary for the planner"""
-        summary = f"""## GitHub Repository: {metadata['name']}
+        lines = [
+            f"## GitHub Repository: {metadata['name']}",
+            "",
+            f"**Description:** {metadata['description']}",
+            f"**Language:** {metadata['language']}",
+            f"**Stars:** {metadata['stars']}",
+            f"**URL:** {metadata['url']}",
+            "",
+            "### File Structure (Top 20 by size):",
+        ]
 
-**Description:** {metadata['description']}
-**Language:** {metadata['language']}
-**Stars:** {metadata['stars']}
-**URL:** {metadata['url']}
+        for file in file_structure[: self._max_summary_list_items]:
+            lines.append(f"- {file}")
 
-### File Structure (Top 20 by size):
-"""
-        for file in file_structure[:10]:
-            summary += f"- {file}\n"
+        lines.extend(["", "### Dependencies:"])
+        if dependencies["python"]:
+            lines.append("**Python:** " + ", ".join(dependencies["python"][: self._max_summary_list_items]))
+        if dependencies["javascript"]:
+            lines.append("**JavaScript:** " + ", ".join(dependencies["javascript"][: self._max_summary_list_items]))
 
-        summary += "\n### Dependencies:\n"
-        if dependencies['python']:
-            summary += "**Python:** " + ", ".join(dependencies['python'][:10]) + "\n"
-        if dependencies['javascript']:
-            summary += "**JavaScript:** " + ", ".join(dependencies['javascript'][:10]) + "\n"
-
-        summary += "\n### Key Files:\n"
+        lines.extend(["", "### Key Files:"])
         for filename, content in key_files.items():
-            summary += f"\n**{filename}**:\n```\n{content[:500]}...\n```\n"
+            preview = content[:500]
+            suffix = "..." if len(content) > 500 else ""
+            lines.extend(["", f"**{filename}**:", "```", f"{preview}{suffix}", "```"])
 
-        return summary
+        return "\n".join(lines) + "\n"

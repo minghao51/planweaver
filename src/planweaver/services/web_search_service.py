@@ -8,6 +8,15 @@ class WebSearchService:
 
     def __init__(self, api_key: str):
         self.client = TavilyClient(api_key=api_key)
+        self._max_snippet_chars = 500
+        self._max_summary_results = 5
+
+    def _format_result(self, result: Dict[str, Any]) -> Dict[str, str]:
+        return {
+            "title": result.get("title", ""),
+            "url": result.get("url", ""),
+            "snippet": result.get("content", "")[: self._max_snippet_chars],
+        }
 
     async def search(self, query: str, max_results: int = 10) -> Dict[str, Any]:
         """Execute web search and return results"""
@@ -20,22 +29,9 @@ class WebSearchService:
                 include_raw_content=False
             )
 
-            # Extract results
             results = response.get("results", [])
-
-            # Build formatted results
-            formatted_results = []
-            for result in results:
-                formatted_results.append({
-                    "title": result.get("title", ""),
-                    "url": result.get("url", ""),
-                    "snippet": result.get("content", "")[:500]
-                })
-
-            # Get AI answer if available
+            formatted_results = [self._format_result(result) for result in results]
             answer = response.get("answer", "")
-
-            # Build summary
             summary = self._build_summary(query, formatted_results, answer)
 
             return {
@@ -44,9 +40,8 @@ class WebSearchService:
                 "answer": answer,
                 "summary": summary
             }
-
         except Exception as e:
-            raise ValueError(f"Web search failed: {str(e)}")
+            raise ValueError(f"Web search failed: {str(e)}") from e
 
     def _build_summary(
         self,
@@ -61,7 +56,7 @@ class WebSearchService:
             summary += f"**AI Answer:** {answer}\n\n"
 
         summary += "### Top Results:\n\n"
-        for i, result in enumerate(results[:5], 1):
+        for i, result in enumerate(results[: self._max_summary_results], 1):
             summary += f"{i}. **{result['title']}**\n"
             summary += f"   {result['snippet']}\n"
             summary += f"   URL: {result['url']}\n\n"
