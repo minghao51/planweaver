@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { usePlanApi } from '../hooks/useApi';
-import { Plan } from '../types';
+import { Plan, StrawmanProposal } from '../types';
+import { colors, disabledStyle, sharedStyles } from '../styles/ui';
 
 interface ProposalPanelProps {
   plan: Plan;
@@ -8,31 +9,34 @@ interface ProposalPanelProps {
 }
 
 export function ProposalPanel({ plan, onSelected }: ProposalPanelProps) {
-  const [proposals, setProposals] = useState<any[]>([]);
-  const { getProposals, selectProposal, loading } = usePlanApi();
+  const [proposals, setProposals] = useState<StrawmanProposal[]>([]);
+  const { getProposals, selectProposal, isLoading, error } = usePlanApi();
 
   useEffect(() => {
-    loadProposals();
-  }, [plan.session_id]);
+    void loadProposals();
+  }, [plan.session_id, getProposals]);
 
   async function loadProposals() {
     try {
       const list = await getProposals(plan.session_id);
       setProposals(list);
-    } catch (e) {
-      console.error('Failed to load proposals');
-    }
+    } catch {}
   }
 
   async function handleSelect(proposalId: string) {
-    await selectProposal(plan.session_id, proposalId);
-    onSelected();
+    try {
+      await selectProposal(plan.session_id, proposalId);
+      onSelected();
+    } catch {}
   }
+
+  const selecting = isLoading('selectProposal');
 
   return (
     <div style={styles.container}>
       <h2 style={styles.title}>Proposed Approaches</h2>
       <p style={styles.subtitle}>Review and select the best approach for your needs.</p>
+      {error && <div style={styles.error}>{error}</div>}
 
       <div style={styles.proposals}>
         {proposals.map((p, i) => (
@@ -63,9 +67,9 @@ export function ProposalPanel({ plan, onSelected }: ProposalPanelProps) {
             </div>
 
             <button
-              style={styles.selectButton}
+              style={{ ...styles.selectButton, ...disabledStyle(selecting) }}
               onClick={() => handleSelect(p.id)}
-              disabled={loading}
+              disabled={selecting}
             >
               Select This Approach
             </button>
@@ -77,30 +81,17 @@ export function ProposalPanel({ plan, onSelected }: ProposalPanelProps) {
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  container: {
-    backgroundColor: '#1e1e36',
-    borderRadius: '12px',
-    padding: '24px',
-    marginBottom: '24px',
-  },
-  title: {
-    fontSize: '18px',
-    fontWeight: '600',
-    color: '#fff',
-    marginBottom: '4px',
-  },
-  subtitle: {
-    color: '#a0a0b0',
-    fontSize: '14px',
-    marginBottom: '20px',
-  },
+  container: { ...sharedStyles.panel, marginBottom: '24px' },
+  title: sharedStyles.sectionTitle,
+  subtitle: sharedStyles.sectionSubtitle,
+  error: { ...sharedStyles.errorBox, marginBottom: '16px' },
   proposals: {
     display: 'flex',
     flexDirection: 'column',
     gap: '16px',
   },
   proposal: {
-    border: '1px solid #3d3d5c',
+    border: `1px solid ${colors.border}`,
     borderRadius: '8px',
     padding: '20px',
   },
@@ -114,8 +105,8 @@ const styles: Record<string, React.CSSProperties> = {
     width: '28px',
     height: '28px',
     borderRadius: '50%',
-    backgroundColor: '#6366f1',
-    color: '#fff',
+    backgroundColor: colors.primary,
+    color: colors.text,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -125,10 +116,10 @@ const styles: Record<string, React.CSSProperties> = {
   proposalTitle: {
     fontSize: '16px',
     fontWeight: '600',
-    color: '#fff',
+    color: colors.text,
   },
   proposalDesc: {
-    color: '#c0c0d0',
+    color: colors.textSubtle,
     fontSize: '14px',
     marginBottom: '16px',
   },
@@ -143,7 +134,7 @@ const styles: Record<string, React.CSSProperties> = {
   prosConsLabel: {
     fontSize: '12px',
     fontWeight: '600',
-    color: '#a0a0b0',
+    color: colors.textMuted,
     textTransform: 'uppercase',
     marginBottom: '8px',
     display: 'block',
@@ -155,16 +146,16 @@ const styles: Record<string, React.CSSProperties> = {
   },
   listItem: {
     fontSize: '13px',
-    color: '#c0c0d0',
+    color: colors.textSubtle,
     marginBottom: '4px',
   },
   selectButton: {
     width: '100%',
     padding: '10px 16px',
     borderRadius: '6px',
-    border: '1px solid #6366f1',
+    border: `1px solid ${colors.primary}`,
     backgroundColor: 'transparent',
-    color: '#6366f1',
+    color: colors.primary,
     fontSize: '14px',
     fontWeight: '500',
     cursor: 'pointer',

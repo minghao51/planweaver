@@ -1,159 +1,109 @@
-import { useState, useCallback } from 'react';
-import { Plan } from '../types';
+import { useCallback, useMemo, useState } from 'react';
+import { planApi } from '../api/planApi';
+import type { SessionHistoryQuery } from '../types';
 
-const API_BASE = '/api/v1';
+type ActionName =
+  | 'createSession'
+  | 'getSession'
+  | 'answerQuestions'
+  | 'getProposals'
+  | 'selectProposal'
+  | 'approvePlan'
+  | 'executePlan'
+  | 'listScenarios'
+  | 'listModels'
+  | 'listSessions';
 
-async function fetchJson(url: string, options?: RequestInit) {
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-  });
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
-  }
-  return response.json();
-}
+type LoadingState = Partial<Record<ActionName, boolean>>;
 
 export function usePlanApi() {
-  const [loading, setLoading] = useState(false);
+  const [loadingByAction, setLoadingByAction] = useState<LoadingState>({});
   const [error, setError] = useState<string | null>(null);
 
-  const createSession = useCallback(async (userIntent: string, scenarioName?: string) => {
-    setLoading(true);
+  const runAction = useCallback(async <T,>(
+    action: ActionName,
+    request: () => Promise<T>,
+  ): Promise<T> => {
+    setLoadingByAction((prev) => ({ ...prev, [action]: true }));
     setError(null);
     try {
-      const result = await fetchJson(`${API_BASE}/sessions`, {
-        method: 'POST',
-        body: JSON.stringify({ user_intent: userIntent, scenario_name: scenarioName }),
-      });
-      return result;
+      return await request();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unknown error');
       throw e;
     } finally {
-      setLoading(false);
+      setLoadingByAction((prev) => ({ ...prev, [action]: false }));
     }
   }, []);
 
-  const getSession = useCallback(async (sessionId: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await fetchJson(`${API_BASE}/sessions/${sessionId}`);
-      return result as Plan;
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unknown error');
-      throw e;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const createSession = useCallback(
+    (userIntent: string, scenarioName?: string) =>
+      runAction('createSession', () => planApi.createSession(userIntent, scenarioName)),
+    [runAction],
+  );
 
-  const answerQuestions = useCallback(async (sessionId: string, answers: Record<string, string>) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await fetchJson(`${API_BASE}/sessions/${sessionId}/questions`, {
-        method: 'POST',
-        body: JSON.stringify(answers),
-      });
-      return result;
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unknown error');
-      throw e;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const getSession = useCallback(
+    (sessionId: string) => runAction('getSession', () => planApi.getSession(sessionId)),
+    [runAction],
+  );
 
-  const getProposals = useCallback(async (sessionId: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await fetchJson(`${API_BASE}/sessions/${sessionId}/proposals`);
-      return result.proposals;
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unknown error');
-      throw e;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const answerQuestions = useCallback(
+    (sessionId: string, answers: Record<string, string>) =>
+      runAction('answerQuestions', () => planApi.answerQuestions(sessionId, answers)),
+    [runAction],
+  );
 
-  const selectProposal = useCallback(async (sessionId: string, proposalId: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await fetchJson(`${API_BASE}/sessions/${sessionId}/proposals/${proposalId}/select`, {
-        method: 'POST',
-      });
-      return result;
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unknown error');
-      throw e;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const getProposals = useCallback(
+    (sessionId: string) => runAction('getProposals', () => planApi.getProposals(sessionId)),
+    [runAction],
+  );
 
-  const approvePlan = useCallback(async (sessionId: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await fetchJson(`${API_BASE}/sessions/${sessionId}/approve`, {
-        method: 'POST',
-      });
-      return result;
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unknown error');
-      throw e;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const selectProposal = useCallback(
+    (sessionId: string, proposalId: string) =>
+      runAction('selectProposal', () => planApi.selectProposal(sessionId, proposalId)),
+    [runAction],
+  );
 
-  const executePlan = useCallback(async (sessionId: string, context?: Record<string, unknown>) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await fetchJson(`${API_BASE}/sessions/${sessionId}/execute`, {
-        method: 'POST',
-        body: JSON.stringify(context || {}),
-      });
-      return result;
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unknown error');
-      throw e;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const approvePlan = useCallback(
+    (sessionId: string) => runAction('approvePlan', () => planApi.approvePlan(sessionId)),
+    [runAction],
+  );
 
-  const listScenarios = useCallback(async () => {
-    try {
-      const result = await fetchJson(`${API_BASE}/scenarios`);
-      return result.scenarios as string[];
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unknown error');
-      throw e;
-    }
-  }, []);
+  const executePlan = useCallback(
+    (sessionId: string, context?: Record<string, unknown>) =>
+      runAction('executePlan', () => planApi.executePlan(sessionId, context)),
+    [runAction],
+  );
 
-  const listModels = useCallback(async () => {
-    try {
-      const result = await fetchJson(`${API_BASE}/models`);
-      return result.models;
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unknown error');
-      throw e;
-    }
-  }, []);
+  const listScenarios = useCallback(
+    () => runAction('listScenarios', () => planApi.listScenarios()),
+    [runAction],
+  );
+
+  const listModels = useCallback(
+    () => runAction('listModels', () => planApi.listModels()),
+    [runAction],
+  );
+
+  const listSessions = useCallback(
+    (query?: SessionHistoryQuery) => runAction('listSessions', () => planApi.listSessions(query)),
+    [runAction],
+  );
+
+  const loading = useMemo(
+    () => Object.values(loadingByAction).some(Boolean),
+    [loadingByAction],
+  );
+
+  const isLoading = useCallback(
+    (action: ActionName) => Boolean(loadingByAction[action]),
+    [loadingByAction],
+  );
 
   return {
     loading,
+    loadingByAction,
+    isLoading,
     error,
     createSession,
     getSession,
@@ -164,5 +114,6 @@ export function usePlanApi() {
     executePlan,
     listScenarios,
     listModels,
+    listSessions,
   };
 }

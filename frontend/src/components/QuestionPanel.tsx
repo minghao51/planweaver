@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { usePlanApi } from '../hooks/useApi';
 import { Plan } from '../types';
+import { colors, disabledStyle, sharedStyles } from '../styles/ui';
 
 interface QuestionPanelProps {
   plan: Plan;
@@ -9,14 +10,18 @@ interface QuestionPanelProps {
 
 export function QuestionPanel({ plan, onUpdated }: QuestionPanelProps) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
-  const { answerQuestions, loading } = usePlanApi();
+  const { answerQuestions, isLoading, error } = usePlanApi();
 
   const unansweredQuestions = plan.open_questions?.filter((q) => !q.answered) || [];
 
   async function handleSubmit() {
-    await answerQuestions(plan.session_id, answers);
-    onUpdated();
+    try {
+      await answerQuestions(plan.session_id, answers);
+      onUpdated();
+    } catch {}
   }
+
+  const submitting = isLoading('answerQuestions');
 
   return (
     <div style={styles.container}>
@@ -37,13 +42,15 @@ export function QuestionPanel({ plan, onUpdated }: QuestionPanelProps) {
         ))}
       </div>
 
+      {error && <div style={styles.error}>{error}</div>}
+
       {unansweredQuestions.length > 0 && (
         <button
-          style={{...styles.button, opacity: loading ? 0.5 : 1}}
+          style={{ ...styles.button, ...disabledStyle(submitting) }}
           onClick={handleSubmit}
-          disabled={loading}
+          disabled={submitting}
         >
-          {loading ? 'Submitting...' : 'Submit Answers'}
+          {submitting ? 'Submitting...' : 'Submit Answers'}
         </button>
       )}
     </div>
@@ -51,23 +58,9 @@ export function QuestionPanel({ plan, onUpdated }: QuestionPanelProps) {
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  container: {
-    backgroundColor: '#1e1e36',
-    borderRadius: '12px',
-    padding: '24px',
-    marginBottom: '24px',
-  },
-  title: {
-    fontSize: '18px',
-    fontWeight: '600',
-    color: '#fff',
-    marginBottom: '4px',
-  },
-  subtitle: {
-    color: '#a0a0b0',
-    fontSize: '14px',
-    marginBottom: '20px',
-  },
+  container: { ...sharedStyles.panel, marginBottom: '24px' },
+  title: sharedStyles.sectionTitle,
+  subtitle: sharedStyles.sectionSubtitle,
   questions: {
     display: 'flex',
     flexDirection: 'column',
@@ -80,26 +73,11 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '8px',
   },
   label: {
-    color: '#e0e0e0',
-    fontSize: '14px',
-    fontWeight: '500',
+    ...sharedStyles.fieldLabel,
   },
   input: {
-    padding: '12px 16px',
-    borderRadius: '8px',
-    border: '1px solid #3d3d5c',
-    backgroundColor: '#16162a',
-    color: '#fff',
-    fontSize: '14px',
+    ...sharedStyles.inputBase,
   },
-  button: {
-    padding: '12px 24px',
-    borderRadius: '8px',
-    border: 'none',
-    backgroundColor: '#6366f1',
-    color: '#fff',
-    fontSize: '14px',
-    fontWeight: '500',
-    cursor: 'pointer',
-  },
+  error: { ...sharedStyles.errorBox, marginBottom: '16px' },
+  button: { ...sharedStyles.primaryButton, backgroundColor: colors.primary },
 };

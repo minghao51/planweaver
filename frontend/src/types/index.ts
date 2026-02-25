@@ -1,6 +1,20 @@
+export type PlanStatus =
+  | 'BRAINSTORMING'
+  | 'AWAITING_APPROVAL'
+  | 'APPROVED'
+  | 'EXECUTING'
+  | 'COMPLETED'
+  | 'FAILED';
+
+export type ExecutionStepStatus =
+  | 'PENDING'
+  | 'IN_PROGRESS'
+  | 'COMPLETED'
+  | 'FAILED';
+
 export interface Plan {
   session_id: string;
-  status: string;
+  status: PlanStatus;
   user_intent: string;
   locked_constraints: Record<string, unknown>;
   open_questions: OpenQuestion[];
@@ -30,7 +44,7 @@ export interface ExecutionStep {
   task: string;
   prompt_template_id: string;
   assigned_model: string;
-  status: string;
+  status: ExecutionStepStatus;
   dependencies: number[];
   output: string | null;
   error: string | null;
@@ -45,4 +59,43 @@ export interface Model {
   id: string;
   name: string;
   type: string;
+}
+
+export interface CreateSessionResponse {
+  session_id: string;
+}
+
+export interface ProposalsResponse {
+  proposals: StrawmanProposal[];
+}
+
+export interface ScenariosResponse {
+  scenarios: string[];
+}
+
+export interface ModelsResponse {
+  models: Model[];
+}
+
+export interface SessionHistoryItem {
+  session_id: string;
+  status: PlanStatus;
+  user_intent: string;
+  scenario_name?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface SessionHistoryQuery {
+  limit?: number;
+  offset?: number;
+  status?: PlanStatus | '';
+  q?: string;
+}
+
+export interface SessionsListResponse {
+  sessions: SessionHistoryItem[];
+  total: number;
+  limit: number;
+  offset: number;
 }

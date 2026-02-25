@@ -1,50 +1,95 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePlanApi } from '../hooks/useApi';
-import { Plan } from '../types';
+import { Plan, PlanStatus } from '../types';
 import { QuestionPanel } from './QuestionPanel';
 import { ProposalPanel } from './ProposalPanel';
 import { ExecutionPanel } from './ExecutionPanel';
+import { colors, sharedStyles } from '../styles/ui';
 
 interface PlanViewProps {
   sessionId: string;
 }
 
+const POLL_BASE_MS = 3000;
+const POLL_MAX_MS = 30000;
+
 export function PlanView({ sessionId }: PlanViewProps) {
   const [plan, setPlan] = useState<Plan | null>(null);
-  const [view, setView] = useState<'loading' | 'questions' | 'proposals' | 'execution' | 'completed'>('loading');
   const { getSession, loading, error } = usePlanApi();
+  const pollTimerRef = useRef<number | null>(null);
 
-  useEffect(() => {
-    loadPlan();
-  }, [sessionId]);
-
-  async function loadPlan() {
+  const loadPlan = useCallback(async () => {
     try {
       const p = await getSession(sessionId);
       setPlan(p);
-      updateView(p);
-    } catch (e) {
-      console.error('Failed to load plan');
+      return true;
+    } catch {
+      return false;
     }
-  }
+  }, [getSession, sessionId]);
 
-  function updateView(p: Plan) {
-    const unansweredQuestions = p.open_questions?.filter((q) => !q.answered).length || 0;
-    if (p.status === 'COMPLETED' || p.status === 'FAILED') {
-      setView('completed');
-    } else if (p.execution_graph && p.execution_graph.length > 0 && p.status === 'APPROVED') {
-      setView('execution');
-    } else if (p.strawman_proposals && p.strawman_proposals.length > 0) {
-      setView('proposals');
-    } else if (unansweredQuestions > 0) {
-      setView('questions');
-    } else if (p.execution_graph && p.execution_graph.length > 0) {
-      setView('execution');
+  useEffect(() => {
+    void loadPlan();
+  }, [loadPlan]);
+
+  useEffect(() => {
+    if (plan?.status !== 'EXECUTING') {
+      return;
     }
-  }
+
+    let stopped = false;
+    let consecutiveFailures = 0;
+
+    const clearPending = () => {
+      if (pollTimerRef.current !== null) {
+        window.clearTimeout(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
+
+    const nextDelay = () =>
+      Math.min(POLL_BASE_MS * 2 ** consecutiveFailures, POLL_MAX_MS);
+
+    const schedule = (delayMs: number) => {
+      clearPending();
+      if (stopped || document.visibilityState === 'hidden') {
+        return;
+      }
+      pollTimerRef.current = window.setTimeout(() => {
+        void runPoll();
+      }, delayMs);
+    };
+
+    const runPoll = async () => {
+      if (stopped || document.visibilityState === 'hidden') {
+        return;
+      }
+      const ok = await loadPlan();
+      consecutiveFailures = ok ? 0 : Math.min(consecutiveFailures + 1, 4);
+      schedule(nextDelay());
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        consecutiveFailures = 0;
+        void runPoll();
+      } else {
+        clearPending();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    schedule(POLL_BASE_MS);
+
+    return () => {
+      stopped = true;
+      clearPending();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [plan?.status, loadPlan]);
 
   function handleUpdate() {
-    loadPlan();
+    void loadPlan();
   }
 
   if (loading && !plan) {
@@ -67,6 +112,8 @@ export function PlanView({ sessionId }: PlanViewProps) {
   if (!plan) {
     return null;
   }
+
+  const stage = getPlanStage(plan);
 
   return (
     <div style={styles.container}>
@@ -93,19 +140,19 @@ export function PlanView({ sessionId }: PlanViewProps) {
         </div>
       )}
 
-      {view === 'questions' && plan.open_questions && (
+      {stage === 'questions' && plan.open_questions && (
         <QuestionPanel plan={plan} onUpdated={handleUpdate} />
       )}
 
-      {view === 'proposals' && (
+      {stage === 'proposals' && (
         <ProposalPanel plan={plan} onSelected={handleUpdate} />
       )}
 
-      {(view === 'execution' || view === 'completed') && plan.execution_graph && (
+      {(stage === 'execution' || stage === 'completed') && plan.execution_graph && (
         <ExecutionPanel plan={plan} onUpdated={handleUpdate} />
       )}
 
-      {view === 'completed' && plan.final_output && (
+      {stage === 'completed' && plan.final_output && (
         <div style={styles.result}>
           <h3 style={styles.resultTitle}>Final Output</h3>
           <pre style={styles.resultPre}>{JSON.stringify(plan.final_output, null, 2)}</pre>
@@ -115,24 +162,35 @@ export function PlanView({ sessionId }: PlanViewProps) {
   );
 }
 
-function getStatusColor(status: string) {
+type PlanStage = 'questions' | 'proposals' | 'execution' | 'completed';
+
+function getPlanStage(plan: Plan): PlanStage {
+  const unansweredQuestions = plan.open_questions?.some((q) => !q.answered);
+  const hasProposals = (plan.strawman_proposals?.length ?? 0) > 0;
+  const hasExecutionGraph = (plan.execution_graph?.length ?? 0) > 0;
+  const isTerminal = plan.status === 'COMPLETED' || plan.status === 'FAILED';
+
+  if (isTerminal) return 'completed';
+  if (hasExecutionGraph) return 'execution';
+  if (hasProposals) return 'proposals';
+  if (unansweredQuestions) return 'questions';
+  return 'execution';
+}
+
+function getStatusColor(status: PlanStatus) {
   switch (status) {
-    case 'BRAINSTORMING': return '#f59e0b';
-    case 'AWAITING_APPROVAL': return '#3b82f6';
-    case 'APPROVED': return '#22c55e';
-    case 'EXECUTING': return '#8b5cf6';
-    case 'COMPLETED': return '#10b981';
-    case 'FAILED': return '#ef4444';
-    default: return '#6b7280';
+    case 'BRAINSTORMING': return colors.warning;
+    case 'AWAITING_APPROVAL': return colors.info;
+    case 'APPROVED': return colors.success;
+    case 'EXECUTING': return colors.violet;
+    case 'COMPLETED': return colors.successSoft;
+    case 'FAILED': return colors.danger;
+    default: return colors.gray;
   }
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  container: {
-    maxWidth: '900px',
-    margin: '0 auto',
-    padding: '24px',
-  },
+  container: sharedStyles.pageContainer,
   header: {
     display: 'flex',
     justifyContent: 'space-between',
@@ -142,30 +200,29 @@ const styles: Record<string, React.CSSProperties> = {
   title: {
     fontSize: '24px',
     fontWeight: '600',
-    color: '#fff',
+    color: colors.text,
   },
   status: {
     padding: '6px 12px',
     borderRadius: '20px',
     fontSize: '12px',
     fontWeight: '600',
-    color: '#fff',
+    color: colors.text,
   },
   intent: {
-    backgroundColor: '#1e1e36',
-    borderRadius: '12px',
+    ...sharedStyles.panel,
     padding: '20px',
     marginBottom: '20px',
   },
   intentLabel: {
     fontSize: '12px',
     fontWeight: '600',
-    color: '#a0a0b0',
+    color: colors.textMuted,
     textTransform: 'uppercase',
     marginBottom: '8px',
   },
   intentText: {
-    color: '#e0e0e0',
+    color: colors.textBody,
     fontSize: '16px',
     lineHeight: '1.6',
   },
@@ -175,7 +232,7 @@ const styles: Record<string, React.CSSProperties> = {
   constraintsLabel: {
     fontSize: '14px',
     fontWeight: '500',
-    color: '#a0a0b0',
+    color: colors.textMuted,
     marginBottom: '8px',
   },
   constraintsList: {
@@ -186,8 +243,8 @@ const styles: Record<string, React.CSSProperties> = {
   constraint: {
     padding: '4px 10px',
     borderRadius: '4px',
-    backgroundColor: '#2d2d44',
-    color: '#e0e0e0',
+    backgroundColor: colors.borderMuted,
+    color: colors.textBody,
     fontSize: '13px',
   },
   loading: {
@@ -196,37 +253,32 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     padding: '60px',
-    color: '#a0a0b0',
+    color: colors.textMuted,
   },
   spinner: {
     width: '40px',
     height: '40px',
-    border: '3px solid #2d2d44',
-    borderTopColor: '#6366f1',
+    border: `3px solid ${colors.borderMuted}`,
+    borderTopColor: colors.primary,
     borderRadius: '50%',
     animation: 'spin 1s linear infinite',
     marginBottom: '16px',
   },
-  error: {
-    padding: '24px',
-    backgroundColor: '#2d1f1f',
-    borderRadius: '8px',
-    color: '#ff6b6b',
-  },
+  error: { ...sharedStyles.errorBox, padding: '24px' },
   result: {
     marginTop: '24px',
-    backgroundColor: '#1e1e36',
+    backgroundColor: colors.surface,
     borderRadius: '12px',
     padding: '24px',
   },
   resultTitle: {
     fontSize: '16px',
     fontWeight: '600',
-    color: '#fff',
+    color: colors.text,
     marginBottom: '16px',
   },
   resultPre: {
-    backgroundColor: '#0f0f1a',
+    backgroundColor: colors.surfaceMuted,
     padding: '16px',
     borderRadius: '8px',
     color: '#9ca3af',

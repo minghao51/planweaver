@@ -1,3 +1,6 @@
+import { NavLink } from 'react-router-dom';
+import { colors } from '../styles/ui';
+
 export function Header() {
   return (
     <header style={styles.header}>
@@ -6,11 +9,18 @@ export function Header() {
         <span style={styles.logoText}>PlanWeaver</span>
       </div>
       <nav style={styles.nav}>
-        <a href="/" style={styles.navLink}>New Plan</a>
-        <a href="/history" style={styles.navLink}>History</a>
+        <NavLink to="/" style={getNavLinkStyle}>New Plan</NavLink>
+        <NavLink to="/history" style={getNavLinkStyle}>History</NavLink>
       </nav>
     </header>
   );
+}
+
+function getNavLinkStyle({ isActive }: { isActive: boolean }) {
+  return {
+    ...styles.navLink,
+    color: isActive ? colors.text : styles.navLink.color,
+  };
 }
 
 const styles: Record<string, React.CSSProperties> = {
@@ -20,7 +30,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     padding: '16px 24px',
     backgroundColor: '#1a1a2e',
-    borderBottom: '1px solid #2d2d44',
+    borderBottom: `1px solid ${colors.borderMuted}`,
   },
   logo: {
     display: 'flex',
@@ -33,14 +43,14 @@ const styles: Record<string, React.CSSProperties> = {
   logoText: {
     fontSize: '20px',
     fontWeight: '600',
-    color: '#fff',
+    color: colors.text,
   },
   nav: {
     display: 'flex',
     gap: '24px',
   },
   navLink: {
-    color: '#a0a0b0',
+    color: colors.textMuted,
     textDecoration: 'none',
     fontSize: '14px',
   },

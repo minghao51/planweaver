@@ -5,6 +5,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   
   return {
+    envPrefix: 'VITE_',
     plugins: [react()],
     server: {
       port: 3000,
@@ -14,9 +15,6 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true
         }
       }
-    },
-    build: {
-      envPrefix: 'VITE_'
     }
   }
 })

@@ -1,5 +1,6 @@
 import { usePlanApi } from '../hooks/useApi';
 import { Plan } from '../types';
+import { colors, disabledStyle, sharedStyles } from '../styles/ui';
 
 interface ExecutionPanelProps {
   plan: Plan;
@@ -7,21 +8,27 @@ interface ExecutionPanelProps {
 }
 
 export function ExecutionPanel({ plan, onUpdated }: ExecutionPanelProps) {
-  const { approvePlan, executePlan, loading } = usePlanApi();
+  const { approvePlan, executePlan, isLoading, error } = usePlanApi();
 
   async function handleApprove() {
-    await approvePlan(plan.session_id);
-    onUpdated();
+    try {
+      await approvePlan(plan.session_id);
+      onUpdated();
+    } catch {}
   }
 
   async function handleExecute() {
-    await executePlan(plan.session_id);
-    onUpdated();
+    try {
+      await executePlan(plan.session_id);
+      onUpdated();
+    } catch {}
   }
 
   const completedSteps = plan.execution_graph?.filter((s) => s.status === 'COMPLETED').length || 0;
   const totalSteps = plan.execution_graph?.length || 0;
   const progress = totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
+  const approving = isLoading('approvePlan');
+  const executing = isLoading('executePlan');
 
   return (
     <div style={styles.container}>
@@ -56,23 +63,33 @@ export function ExecutionPanel({ plan, onUpdated }: ExecutionPanelProps) {
         ))}
       </div>
 
+      {error && <div style={styles.error}>{error}</div>}
+
       <div style={styles.actions}>
         {plan.status === 'AWAITING_APPROVAL' && (
           <button
-            style={{...styles.button, backgroundColor: '#22c55e'}}
+            style={{
+              ...styles.button,
+              backgroundColor: colors.success,
+              ...disabledStyle(approving),
+            }}
             onClick={handleApprove}
-            disabled={loading}
+            disabled={approving}
           >
             Approve & Execute
           </button>
         )}
         {plan.status === 'EXECUTING' && (
           <button
-            style={{...styles.button, backgroundColor: '#6366f1'}}
+            style={{
+              ...styles.button,
+              backgroundColor: colors.primary,
+              ...disabledStyle(executing),
+            }}
             onClick={handleExecute}
-            disabled={loading}
+            disabled={executing}
           >
-            {loading ? 'Executing...' : 'Continue Execution'}
+            {executing ? 'Executing...' : 'Continue Execution'}
           </button>
         )}
       </div>
@@ -81,11 +98,7 @@ export function ExecutionPanel({ plan, onUpdated }: ExecutionPanelProps) {
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  container: {
-    backgroundColor: '#1e1e36',
-    borderRadius: '12px',
-    padding: '24px',
-  },
+  container: sharedStyles.panel,
   header: {
     display: 'flex',
     justifyContent: 'space-between',
@@ -95,22 +108,22 @@ const styles: Record<string, React.CSSProperties> = {
   title: {
     fontSize: '18px',
     fontWeight: '600',
-    color: '#fff',
+    color: colors.text,
   },
   stepCount: {
-    color: '#a0a0b0',
+    color: colors.textMuted,
     fontSize: '14px',
   },
   progressBar: {
     height: '6px',
-    backgroundColor: '#2d2d44',
+    backgroundColor: colors.borderMuted,
     borderRadius: '3px',
     marginBottom: '20px',
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#6366f1',
+    backgroundColor: colors.primary,
     transition: 'width 0.3s ease',
   },
   steps: {
@@ -125,7 +138,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '12px',
     padding: '12px',
     borderRadius: '8px',
-    backgroundColor: '#16162a',
+    backgroundColor: colors.surfaceAlt,
   },
   stepStatus: {
     width: '24px',
@@ -137,22 +150,22 @@ const styles: Record<string, React.CSSProperties> = {
     flexShrink: 0,
   },
   check: {
-    color: '#22c55e',
+    color: colors.success,
     fontSize: '14px',
     fontWeight: 'bold',
   },
   spinner: {
-    color: '#6366f1',
+    color: colors.primary,
     fontSize: '16px',
     animation: 'spin 1s linear infinite',
   },
   pending: {
-    color: '#6b7280',
+    color: colors.gray,
     fontSize: '12px',
     fontWeight: '600',
   },
   fail: {
-    color: '#ef4444',
+    color: colors.danger,
     fontSize: '14px',
     fontWeight: 'bold',
   },
@@ -161,19 +174,19 @@ const styles: Record<string, React.CSSProperties> = {
   },
   stepTask: {
     display: 'block',
-    color: '#e0e0e0',
+    color: colors.textBody,
     fontSize: '14px',
     marginBottom: '4px',
   },
   stepModel: {
     display: 'block',
-    color: '#6b7280',
+    color: colors.gray,
     fontSize: '12px',
   },
   stepOutput: {
     marginTop: '8px',
     padding: '8px',
-    backgroundColor: '#0f0f1a',
+    backgroundColor: colors.surfaceMuted,
     borderRadius: '4px',
   },
   pre: {
@@ -187,11 +200,12 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     gap: '12px',
   },
+  error: { ...sharedStyles.errorBox, marginBottom: '16px' },
   button: {
     padding: '12px 24px',
     borderRadius: '8px',
     border: 'none',
-    color: '#fff',
+    color: colors.text,
     fontSize: '14px',
     fontWeight: '500',
     cursor: 'pointer',

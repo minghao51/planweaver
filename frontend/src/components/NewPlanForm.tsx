@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { usePlanApi } from '../hooks/useApi';
+import { colors, disabledStyle, sharedStyles } from '../styles/ui';
 
 interface NewPlanFormProps {
   onPlanCreated: (sessionId: string) => void;
@@ -9,20 +10,17 @@ export function NewPlanForm({ onPlanCreated }: NewPlanFormProps) {
   const [intent, setIntent] = useState('');
   const [scenario, setScenario] = useState('');
   const [scenarios, setScenarios] = useState<string[]>([]);
-  const { createSession, loading, error } = usePlanApi();
+  const { createSession, listScenarios, isLoading, error } = usePlanApi();
 
   useEffect(() => {
-    loadScenarios();
-  }, []);
+    void loadScenarios();
+  }, [listScenarios]);
 
   async function loadScenarios() {
     try {
-      const list = await new Promise<string[]>((resolve) => {
-        setTimeout(() => resolve(['Code Refactoring', 'Market Competitor Analysis', 'Blog Post Generation', 'Data Analysis Report']), 100);
-      });
-      setScenarios(list);
-    } catch (e) {
-      console.error('Failed to load scenarios');
+      setScenarios(await listScenarios());
+    } catch {
+      setScenarios([]);
     }
   }
 
@@ -33,10 +31,12 @@ export function NewPlanForm({ onPlanCreated }: NewPlanFormProps) {
     try {
       const result = await createSession(intent, scenario || undefined);
       onPlanCreated(result.session_id);
-    } catch (e) {
-      console.error('Failed to create session:', e);
-    }
+    } catch {}
   }
+
+  const submitting = isLoading('createSession');
+  const loadingScenarios = isLoading('listScenarios');
+  const submitDisabled = submitting || !intent.trim();
 
   return (
     <div style={styles.container}>
@@ -61,6 +61,7 @@ export function NewPlanForm({ onPlanCreated }: NewPlanFormProps) {
             style={styles.select}
             value={scenario}
             onChange={(e) => setScenario(e.target.value)}
+            disabled={loadingScenarios}
           >
             <option value="">Auto-detect from request</option>
             {scenarios.map((s) => (
@@ -73,10 +74,10 @@ export function NewPlanForm({ onPlanCreated }: NewPlanFormProps) {
 
         <button
           type="submit"
-          style={{...styles.button, opacity: loading || !intent.trim() ? 0.5 : 1}}
-          disabled={loading || !intent.trim()}
+          style={{ ...styles.button, ...disabledStyle(submitDisabled) }}
+          disabled={submitDisabled}
         >
-          {loading ? 'Creating...' : 'Start Planning'}
+          {submitting ? 'Creating...' : 'Start Planning'}
         </button>
       </form>
     </div>
@@ -92,11 +93,11 @@ const styles: Record<string, React.CSSProperties> = {
   title: {
     fontSize: '28px',
     fontWeight: '600',
-    color: '#fff',
+    color: colors.text,
     marginBottom: '8px',
   },
   subtitle: {
-    color: '#a0a0b0',
+    color: colors.textMuted,
     marginBottom: '32px',
   },
   form: {
@@ -110,16 +111,14 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '8px',
   },
   label: {
-    color: '#e0e0e0',
-    fontSize: '14px',
-    fontWeight: '500',
+    ...sharedStyles.fieldLabel,
   },
   textarea: {
     padding: '16px',
     borderRadius: '8px',
-    border: '1px solid #3d3d5c',
-    backgroundColor: '#16162a',
-    color: '#fff',
+    border: `1px solid ${colors.border}`,
+    backgroundColor: colors.surfaceAlt,
+    color: colors.text,
     fontSize: '16px',
     resize: 'vertical',
     minHeight: '120px',
@@ -127,24 +126,18 @@ const styles: Record<string, React.CSSProperties> = {
   select: {
     padding: '12px 16px',
     borderRadius: '8px',
-    border: '1px solid #3d3d5c',
-    backgroundColor: '#16162a',
-    color: '#fff',
+    border: `1px solid ${colors.border}`,
+    backgroundColor: colors.surfaceAlt,
+    color: colors.text,
     fontSize: '16px',
   },
-  error: {
-    padding: '12px 16px',
-    borderRadius: '8px',
-    backgroundColor: '#2d1f1f',
-    color: '#ff6b6b',
-    fontSize: '14px',
-  },
+  error: sharedStyles.errorBox,
   button: {
     padding: '14px 24px',
     borderRadius: '8px',
     border: 'none',
-    backgroundColor: '#6366f1',
-    color: '#fff',
+    backgroundColor: colors.primary,
+    color: colors.text,
     fontSize: '16px',
     fontWeight: '500',
     cursor: 'pointer',
