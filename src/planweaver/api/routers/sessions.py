@@ -3,8 +3,6 @@ import logging
 
 from fastapi import APIRouter, HTTPException, Query, Depends
 
-logger = logging.getLogger(__name__)
-
 from ...models.plan import PlanStatus, ComparisonRequest, ProposalComparison
 from ...services.comparison_service import ProposalComparisonService
 from ..dependencies import get_orchestrator, get_plan_or_404, get_comparison_service
@@ -19,6 +17,8 @@ from ..serializers import (
     serialize_session_history_item,
     serialize_plan_summary,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 

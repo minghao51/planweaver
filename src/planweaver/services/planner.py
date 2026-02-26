@@ -85,7 +85,7 @@ Return JSON only, no explanation:
 
             return analysis_data
 
-        except Exception as e:
+        except Exception:
             # Return conservative defaults
             return {
                 str(i): {
@@ -302,7 +302,7 @@ Return JSON array:
         proposals_with_analysis = []
         for i, raw_prop in enumerate(raw_proposals, 1):
             prop_id = str(i)  # Use string index as ID
-            analysis_data = analysis.get(str(i), {
+            _analysis_data = analysis.get(str(i), {
                 "estimated_step_count": 5,
                 "complexity_score": "Medium",
                 "estimated_time_minutes": 10,

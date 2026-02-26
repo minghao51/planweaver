@@ -1,12 +1,11 @@
 """Service for comparing proposals with detailed execution graphs."""
 
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Literal
 import logging
 from decimal import Decimal
 
 from planweaver.models.plan import (
     Plan,
-    StrawmanProposal,
     ProposalDetail,
     ProposalComparison,
     StepSummary,
@@ -214,7 +213,7 @@ class ProposalComparisonService:
 
         return unique_by_proposal
 
-    def _infer_step_complexity(self, step: ExecutionStep) -> str:
+    def _infer_step_complexity(self, step: ExecutionStep) -> Literal["Low", "Medium", "High"]:
         """Infer complexity from step description."""
         task_lower = step.task.lower()
 
@@ -235,7 +234,7 @@ class ProposalComparisonService:
 
         return "Medium"
 
-    def _calculate_complexity_score(self, prop: ProposalDetail) -> str:
+    def _calculate_complexity_score(self, prop: ProposalDetail) -> Literal["Low", "Medium", "High"]:
         """Calculate overall complexity score for proposal."""
         if not prop.full_execution_graph:
             return "Medium"
