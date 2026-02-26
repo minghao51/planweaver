@@ -5,6 +5,7 @@ from fastapi import HTTPException
 from ..config import get_settings
 from ..orchestrator import Orchestrator
 from ..services.context_service import ContextService
+from ..services.comparison_service import ProposalComparisonService
 
 
 @lru_cache
@@ -20,6 +21,11 @@ def get_context_service() -> ContextService:
     orch = get_orchestrator()
     settings = getattr(orch.llm, "settings", get_settings())
     return ContextService(settings, orch.llm)
+
+
+def get_comparison_service() -> ProposalComparisonService:
+    orch = get_orchestrator()
+    return ProposalComparisonService(orch.planner, orch.llm)
 
 
 def get_plan_or_404(session_id: str):

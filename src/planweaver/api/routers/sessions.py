@@ -1,9 +1,13 @@
 from typing import Optional
+import logging
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 
-from ...models.plan import PlanStatus
-from ..dependencies import get_orchestrator, get_plan_or_404
+logger = logging.getLogger(__name__)
+
+from ...models.plan import PlanStatus, ComparisonRequest, ProposalComparison
+from ...services.comparison_service import ProposalComparisonService
+from ..dependencies import get_orchestrator, get_plan_or_404, get_comparison_service
 from ..schemas import (
     AnswerQuestionsRequest,
     CreateSessionRequest,
@@ -101,3 +105,56 @@ def execute_plan(session_id: str, request: Optional[ExecutePlanRequest] = None):
         "final_output": result.final_output,
         "execution_graph": serialize_execution_graph(result),
     }
+
+
+@router.post("/sessions/{session_id}/compare-proposals", response_model=ProposalComparison)
+def compare_proposals(
+    session_id: str,
+    request: ComparisonRequest,
+    comparison_service: ProposalComparisonService = Depends(get_comparison_service)
+):
+    """Compare detailed execution graphs for selected proposals.
+
+    Args:
+        session_id: Session identifier
+        request: Comparison request with proposal_ids to compare
+
+    Returns:
+        ProposalComparison with full execution graphs and diff analysis
+
+    Raises:
+        HTTPException 404: If proposal IDs are invalid
+        HTTPException 400: If fewer than 2 proposals provided
+    """
+    _, plan = get_plan_or_404(session_id)
+
+    # Validate proposal IDs
+    valid_ids = {p.id for p in plan.strawman_proposals}
+    invalid_ids = set(request.proposal_ids) - valid_ids
+
+    if invalid_ids:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Proposals not found: {invalid_ids}. Valid IDs: {valid_ids}"
+        )
+
+    if len(request.proposal_ids) < 2:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Comparison requires at least 2 proposals. Got {len(request.proposal_ids)}"
+        )
+
+    try:
+        comparison = comparison_service.compare_proposals(
+            plan=plan,
+            proposal_ids=request.proposal_ids
+        )
+        return comparison
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Comparison failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to generate comparison. Please try again."
+        )
