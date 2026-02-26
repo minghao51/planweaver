@@ -135,7 +135,7 @@ def compare_proposals(
     if invalid_ids:
         raise HTTPException(
             status_code=404,
-            detail=f"Proposals not found: {invalid_ids}. Valid IDs: {valid_ids}"
+            detail=f"Proposals not found: {sorted(invalid_ids)}"
         )
 
     if len(request.proposal_ids) < 2:

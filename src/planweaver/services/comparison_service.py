@@ -3,6 +3,7 @@
 from typing import Dict, List, Tuple, Literal
 import logging
 from decimal import Decimal
+from cachetools import TTLCache
 
 from planweaver.models.plan import (
     Plan,
@@ -14,6 +15,10 @@ from planweaver.models.plan import (
 
 logger = logging.getLogger(__name__)
 
+# Cache configuration: max 100 graphs, 10 minute TTL per entry
+_CACHE_MAX_SIZE = 100
+_CACHE_TTL_SECONDS = 600
+
 
 class ProposalComparisonService:
     """Service for generating detailed proposal comparisons."""
@@ -21,7 +26,10 @@ class ProposalComparisonService:
     def __init__(self, planner, llm_gateway):
         self.planner = planner
         self.llm = llm_gateway
-        self._graph_cache: Dict[Tuple[str, str], List[ExecutionStep]] = {}
+        self._graph_cache: TTLCache[Tuple[str, str], List[ExecutionStep]] = TTLCache(
+            maxsize=_CACHE_MAX_SIZE,
+            ttl=_CACHE_TTL_SECONDS
+        )
 
     def compare_proposals(
         self,
@@ -127,7 +135,7 @@ class ProposalComparisonService:
             scenario_name=plan.scenario_name
         )
 
-        # Cache for 10 minutes
+        # Cache with TTL (automatic expiration handled by TTLCache)
         self._graph_cache[cache_key] = graph
         logger.debug(f"Cached execution graph for {cache_key}")
 

@@ -22,6 +22,7 @@ dependencies = [
     "tavily-python>=0.7.21",
     "pypdf2>=3.0.1",
     "python-multipart>=0.0.22",
+    "cachetools>=7.0.1",
 ]
 
 [project.optional-dependencies]
