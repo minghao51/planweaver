@@ -4,8 +4,8 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Depends, Request
 
-from ....db.database import get_session
-from ....services.optimizer_service import OptimizerService
+from ...db.database import get_session
+from ...services.optimizer_service import OptimizerService
 from ..schemas import (
     OptimizerRequest,
     OptimizerResponse,
@@ -16,7 +16,7 @@ from ..schemas import (
     OptimizationStateResponse,
 )
 from ..middleware import limiter
-from ....db.models import UserRating
+from ...db.models import UserRating
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +103,7 @@ def rate_plans(request: Request, body: RatePlansRequest):
     for comparison on various criteria.
     """
     try:
-        from ....services.model_rater import ModelRater
+        from ...services.model_rater import ModelRater
 
         model_rater = ModelRater()
         ratings_by_plan = {}
