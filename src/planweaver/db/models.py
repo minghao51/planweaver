@@ -96,6 +96,17 @@ class OptimizedVariant(Base):
     variant_metadata = Column(JSON, nullable=True)  # {step_count, complexity_score, optimization_notes, etc}
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "session_id": self.session_id,
+            "proposal_id": self.proposal_id,
+            "variant_type": self.variant_type,
+            "execution_graph": self.execution_graph,
+            "metadata": self.variant_metadata,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
 
 class PlanRating(Base):
     __tablename__ = "plan_ratings"
@@ -108,6 +119,17 @@ class PlanRating(Base):
     reasoning = Column(Text, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "session_id": self.session_id,
+            "plan_id": self.plan_id,
+            "model_name": self.model_name,
+            "ratings": self.ratings,
+            "reasoning": self.reasoning,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
 
 class UserRating(Base):
     __tablename__ = "user_ratings"
@@ -119,3 +141,14 @@ class UserRating(Base):
     comment = Column(Text, nullable=True)
     rationale = Column(Text, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "session_id": self.session_id,
+            "plan_id": self.plan_id,
+            "rating": self.rating,
+            "comment": self.comment,
+            "rationale": self.rationale,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }

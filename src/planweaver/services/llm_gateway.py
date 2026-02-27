@@ -185,6 +185,49 @@ class LLMGateway:
             raise
 
     def get_available_models(self) -> list[dict]:
+        """Get available models from database, with fallback to hard-coded list.
+
+        Returns:
+            List of model dictionaries with keys: id, name, type, provider, is_free, pricing_info, context_length
+        """
+        from ..db.models import AvailableModel
+        from ..db.database import get_session
+
+        session = get_session()
+        try:
+            # Fetch active models from DB
+            db_models = session.query(AvailableModel).filter_by(is_active=True).all()
+
+            if db_models:
+                # Return models from database
+                return [
+                    {
+                        "id": m.model_id,
+                        "name": m.name,
+                        "type": m.type,
+                        "provider": m.provider,
+                        "is_free": m.is_free,
+                        "pricing_info": m.pricing_info,
+                        "context_length": m.context_length
+                    }
+                    for m in db_models
+                ]
+            else:
+                # Fallback to hard-coded list if DB is empty
+                logger.info("No models in database, using fallback list")
+                return self._get_fallback_models()
+        except Exception as e:
+            logger.warning(f"Error fetching models from database: {e}, using fallback list")
+            return self._get_fallback_models()
+        finally:
+            session.close()
+
+    def _get_fallback_models(self) -> list[dict]:
+        """Hard-coded fallback models when database is empty or unavailable.
+
+        Returns:
+            List of model dictionaries
+        """
         return [
             {"id": "gemini-2.5-flash", "name": "Gemini 2.5 Flash", "type": "planner", "provider": "google"},
             {"id": "gemini-2.5-flash-latest", "name": "Gemini 2.5 Flash Latest", "type": "planner", "provider": "google"},
