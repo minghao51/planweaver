@@ -6,6 +6,7 @@ import { QuestionPanel } from './QuestionPanel';
 import { ProposalPanel } from './ProposalPanel';
 import { ExecutionPanel } from './ExecutionPanel';
 import { FlowCanvas } from './FlowCanvas';
+import { OptimizerStage } from './optimizer';
 import {
   Target,
   Settings2,
@@ -24,7 +25,13 @@ interface PlanViewProps {
 
 export function PlanView({ sessionId }: PlanViewProps) {
   const [plan, setPlan] = useState<Plan | null>(null);
-  const { getSession, loading, error } = usePlanApi();
+  const [showOptimizer, setShowOptimizer] = useState(false);
+  const [selectedProposalForOptimizer, setSelectedProposalForOptimizer] = useState<{
+    id: string;
+    title: string;
+    description: string;
+  } | null>(null);
+  const { getSession, selectProposal, loading, error } = usePlanApi();
 
   const loadPlan = useCallback(async () => {
     try {
@@ -173,8 +180,41 @@ export function PlanView({ sessionId }: PlanViewProps) {
           <QuestionPanel plan={plan} onUpdated={handleUpdate} />
         )}
 
-        {stage === 'proposals' && (
-          <ProposalPanel plan={plan} onSelected={handleUpdate} />
+        {stage === 'proposals' && !showOptimizer && (
+          <ProposalPanel
+            plan={plan}
+            onSelected={() => {
+              // Find selected proposal
+              const selected = plan.strawman_proposals?.find(p => p.selected);
+              if (selected) {
+                setSelectedProposalForOptimizer({
+                  id: selected.id,
+                  title: selected.title,
+                  description: selected.description,
+                });
+                setShowOptimizer(true);
+              }
+              handleUpdate();
+            }}
+          />
+        )}
+
+        {showOptimizer && selectedProposalForOptimizer && (
+          <OptimizerStage
+            sessionId={sessionId}
+            selectedProposalId={selectedProposalForOptimizer.id}
+            selectedProposalTitle={selectedProposalForOptimizer.title}
+            selectedProposalDescription={selectedProposalForOptimizer.description}
+            onComplete={async (optimizedPlanId) => {
+              // Move to execution by selecting the optimized plan
+              await selectProposal(sessionId, optimizedPlanId);
+              setShowOptimizer(false);
+              handleUpdate();
+            }}
+            onBack={() => {
+              setShowOptimizer(false);
+            }}
+          />
         )}
 
         {(stage === 'execution' || stage === 'completed') && (
@@ -209,7 +249,7 @@ function getCompletionPercentage(plan: Plan) {
   return Math.round((completed / plan.execution_graph.length) * 100);
 }
 
-type PlanStage = 'questions' | 'proposals' | 'execution' | 'completed';
+type PlanStage = 'questions' | 'proposals' | 'execution' | 'completed' | 'optimizer';
 
 function getPlanStage(plan: Plan): PlanStage {
   const unansweredQuestions = plan.open_questions?.some((q) => !q.answered);
