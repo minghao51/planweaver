@@ -29,7 +29,12 @@ router = APIRouter()
 def create_session(request: Request, body: CreateSessionRequest):
     try:
         orch = get_orchestrator()
-        plan = orch.start_session(body.user_intent, body.scenario_name)
+        plan = orch.start_session(
+            body.user_intent,
+            body.scenario_name,
+            planner_model=body.planner_model,
+            executor_model=body.executor_model
+        )
         return serialize_plan_summary(plan)
     except ValueError as e:
         logger.warning(f"Validation error: {e}")
