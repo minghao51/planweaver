@@ -23,6 +23,7 @@ dependencies = [
     "pypdf2>=3.0.1",
     "python-multipart>=0.0.22",
     "cachetools>=7.0.1",
+    "slowapi>=0.1.9",
 ]
 
 [project.optional-dependencies]

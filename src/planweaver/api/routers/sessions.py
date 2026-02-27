@@ -1,7 +1,7 @@
 from typing import Optional
 import logging
 
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, HTTPException, Query, Depends, Request
 
 from ...models.plan import PlanStatus, ComparisonRequest, ProposalComparison
 from ...services.comparison_service import ProposalComparisonService
@@ -17,6 +17,7 @@ from ..serializers import (
     serialize_session_history_item,
     serialize_plan_summary,
 )
+from ..middleware import limiter
 
 logger = logging.getLogger(__name__)
 
@@ -24,10 +25,11 @@ router = APIRouter()
 
 
 @router.post("/sessions")
-def create_session(request: CreateSessionRequest):
+@limiter.limit("10/hour")
+def create_session(request: Request, body: CreateSessionRequest):
     try:
         orch = get_orchestrator()
-        plan = orch.start_session(request.user_intent, request.scenario_name)
+        plan = orch.start_session(body.user_intent, body.scenario_name)
         return serialize_plan_summary(plan)
     except ValueError as e:
         logger.warning(f"Validation error: {e}")
@@ -40,7 +42,8 @@ def create_session(request: CreateSessionRequest):
 
 
 @router.get("/sessions")
-def list_sessions(
+@limiter.limit("60/minute")
+def list_sessions(request: Request,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     status: Optional[str] = Query(default=None),
@@ -57,7 +60,8 @@ def list_sessions(
 
 
 @router.get("/sessions/{session_id}")
-def get_session(session_id: str):
+@limiter.limit("60/minute")
+def get_session(request: Request, session_id: str):
     try:
         _, plan = get_plan_or_404(session_id)
         return serialize_plan_detail(plan)
@@ -69,7 +73,8 @@ def get_session(session_id: str):
 
 
 @router.post("/sessions/{session_id}/questions")
-def answer_questions(session_id: str, answers: AnswerQuestionsRequest):
+@limiter.limit("30/minute")
+def answer_questions(request: Request, session_id: str, answers: AnswerQuestionsRequest):
     orch, plan = get_plan_or_404(session_id)
     updated_plan = orch.answer_questions(plan, answers.answers)
     return {
@@ -115,13 +120,14 @@ def approve_plan(session_id: str):
 
 
 @router.post("/sessions/{session_id}/execute")
-def execute_plan(session_id: str, request: Optional[ExecutePlanRequest] = None):
+@limiter.limit("10/hour")
+async def execute_plan(request: Request, session_id: str, body: Optional[ExecutePlanRequest] = None):
     try:
         orch, plan = get_plan_or_404(session_id)
         if plan.status != PlanStatus.APPROVED:
             raise HTTPException(status_code=400, detail="Plan must be approved before execution")
 
-        result = orch.execute(plan, request.context if request else {})
+        result = await orch.execute(plan, body.context if body else {})
         return {
             "status": result.status.value,
             "final_output": result.final_output,
@@ -135,7 +141,9 @@ def execute_plan(session_id: str, request: Optional[ExecutePlanRequest] = None):
 
 
 @router.post("/sessions/{session_id}/compare-proposals", response_model=ProposalComparison)
+@limiter.limit("10/hour")
 def compare_proposals(
+    http_request: Request,
     session_id: str,
     request: ComparisonRequest,
     comparison_service: ProposalComparisonService = Depends(get_comparison_service)

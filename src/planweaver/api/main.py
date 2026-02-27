@@ -4,6 +4,8 @@ from loguru import logger
 from .routes import router
 from ..db.database import init_db
 from ..config import get_settings
+from slowapi.errors import RateLimitExceeded
+from .middleware import limiter, rate_limit_exception_handler
 
 logger.add("planweaver.log", rotation="10 MB", retention="7 days", level="INFO")
 
@@ -17,6 +19,8 @@ app = FastAPI(
     description="Universal LLM Planning & Execution Engine",
     version="0.1.0"
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_exception_handler)
 
 cors_origins = settings.cors_origins.split(",") if settings.cors_origins else ["http://localhost:3000"]
 app.add_middleware(

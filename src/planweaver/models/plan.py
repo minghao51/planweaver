@@ -161,4 +161,8 @@ class ProposalComparison(BaseModel):
 
 class ComparisonRequest(BaseModel):
     """Request to compare proposals"""
-    proposal_ids: List[str]
+    proposal_ids: List[str] = Field(
+        min_length=2,
+        max_length=10,
+        description="List of proposal IDs to compare (2-10)"
+    )

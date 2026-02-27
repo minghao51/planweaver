@@ -110,11 +110,11 @@ class Orchestrator:
         self.plan_repository.save(plan)
         return plan
 
-    def execute(self, plan: Plan, context: Optional[Dict[str, Any]] = None) -> Plan:
+    async def execute(self, plan: Plan, context: Optional[Dict[str, Any]] = None) -> Plan:
         if plan.status != PlanStatus.APPROVED:
             raise ValueError("Plan must be APPROVED before execution")
 
-        plan = self.router.execute_plan(
+        plan = await self.router.execute_plan(
             plan=plan,
             context=context or {}
         )

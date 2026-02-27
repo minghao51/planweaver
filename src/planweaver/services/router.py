@@ -1,5 +1,5 @@
 from typing import Dict, Any, Optional, List
-import time
+import asyncio
 import logging
 from datetime import datetime, timezone
 
@@ -62,14 +62,14 @@ class ExecutionRouter:
         step.status = StepStatus.FAILED
         step.error = error
 
-    def _call_model(self, model: str, prompt: str) -> Dict[str, Any]:
-        return self.llm.complete(
+    async def _call_model(self, model: str, prompt: str) -> Dict[str, Any]:
+        return await self.llm.acomplete(
             model=model,
             messages=[{"role": "user", "content": prompt}],
             max_tokens=8192,
         )
 
-    def _execute_with_retries(
+    async def _execute_with_retries(
         self,
         step: ExecutionStep,
         actual_model: str,
@@ -78,7 +78,7 @@ class ExecutionRouter:
         last_error = None
         for attempt in range(MAX_RETRIES):
             try:
-                response = self._call_model(actual_model, prompt)
+                response = await self._call_model(actual_model, prompt)
                 if response:
                     self._mark_step_completed(step, response.get("content"))
                     return {
@@ -92,7 +92,7 @@ class ExecutionRouter:
                 last_error = str(exc)
                 logger.warning(f"Step {step.step_id} attempt {attempt + 1} failed: {exc}")
                 if attempt < MAX_RETRIES - 1:
-                    time.sleep(RETRY_DELAY_BASE * (2 ** attempt))
+                    await asyncio.sleep(RETRY_DELAY_BASE * (2 ** attempt))
 
         error_message = f"Failed after {MAX_RETRIES} attempts: {last_error}"
         self._mark_step_failed(step, error_message)
@@ -135,7 +135,7 @@ class ExecutionRouter:
         for step_id in steps_by_id:
             visit(step_id)
 
-    def execute_step(
+    async def execute_step(
         self,
         step: ExecutionStep,
         plan: Plan,
@@ -146,7 +146,7 @@ class ExecutionRouter:
 
         prompt = self._build_step_prompt(step, plan, context)
         self._mark_step_started(step)
-        return self._execute_with_retries(step, actual_model, prompt)
+        return await self._execute_with_retries(step, actual_model, prompt)
 
     def _get_previous_outputs(self, plan: Plan, current_step: ExecutionStep) -> Dict[int, Any]:
         outputs = {}
@@ -155,7 +155,7 @@ class ExecutionRouter:
                 outputs[step.step_id] = step.output
         return outputs
 
-    def execute_plan(
+    async def execute_plan(
         self,
         plan: Plan,
         context: Optional[Dict[str, Any]] = None,
@@ -175,7 +175,7 @@ class ExecutionRouter:
                 break
 
             for step in executable_steps:
-                result = self.execute_step(step, plan, context)
+                result = await self.execute_step(step, plan, context)
                 step_count += 1
 
                 if not result["success"]:

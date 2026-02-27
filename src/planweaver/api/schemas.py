@@ -10,8 +10,18 @@ def sanitize_text(value: str) -> str:
 
 
 class CreateSessionRequest(BaseModel):
-    user_intent: str = Field(..., min_length=1, max_length=10000)
-    scenario_name: Optional[str] = Field(None, max_length=200)
+    user_intent: str = Field(
+        min_length=1,
+        max_length=5000,
+        description="User's planning intent"
+    )
+    scenario_name: str = Field(
+        default="default",
+        min_length=1,
+        max_length=100,
+        pattern=r"^[a-zA-Z0-9 _-]+$",
+        description="Scenario template name"
+    )
 
     @field_validator("user_intent", mode="before")
     @classmethod
@@ -22,7 +32,10 @@ class CreateSessionRequest(BaseModel):
 
 
 class AnswerQuestionsRequest(BaseModel):
-    answers: Dict[str, str] = Field(default_factory=dict)
+    answers: Dict[str, str] = Field(
+        min_length=1,
+        description="List of answers to clarifying questions"
+    )
 
     @field_validator("answers", mode="before")
     @classmethod
@@ -30,6 +43,14 @@ class AnswerQuestionsRequest(BaseModel):
         if isinstance(value, dict):
             return {k: sanitize_text(str(v)) for k, v in value.items()}
         return {}
+
+    @field_validator('answers')
+    @classmethod
+    def validate_answer_length(cls, v: Dict[str, str]) -> Dict[str, str]:
+        for key, answer in v.items():
+            if len(answer) > 2000:
+                raise ValueError(f"Answer '{key}' exceeds 2000 characters")
+        return v
 
 
 class ExecutePlanRequest(BaseModel):

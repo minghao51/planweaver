@@ -58,8 +58,33 @@ async def upload_file_context(
     orch, _ = get_plan_or_404(session_id)
     context_service = get_context_service()
 
+    # Validate file size (10MB limit)
+    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+    content = await file.read()
+
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File size exceeds 10MB limit. Got {len(content) / 1024 / 1024:.2f}MB"
+        )
+
+    # Validate MIME type
+    ALLOWED_MIME_TYPES = {
+        "text/plain",
+        "text/markdown",
+        "application/json",
+        "text/csv",
+        "application/pdf",
+        "text/html",
+    }
+
+    if file.content_type not in ALLOWED_MIME_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file type '{file.content_type}'. Allowed types: {', '.join(sorted(ALLOWED_MIME_TYPES))}"
+        )
+
     try:
-        content = await file.read()
         context = await context_service.add_file_context(file.filename, content)
         orch.add_external_context(session_id, context)
         return {
