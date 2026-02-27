@@ -59,6 +59,10 @@ export interface Model {
   id: string;
   name: string;
   type: string;
+  provider?: string;
+  is_free?: boolean;
+  pricing_info?: Record<string, unknown> | null;
+  context_length?: number | null;
 }
 
 export interface CreateSessionResponse {
@@ -144,4 +148,105 @@ export interface ProposalComparison {
 
 export interface ComparisonRequest {
   proposal_ids: string[];
+}
+
+// ==================== Optimizer Types ====================
+
+export type VariantType = 'simplified' | 'enhanced' | 'cost-optimized';
+
+export type OptimizationStatus = 'idle' | 'generating_variants' | 'rating' | 'completed' | 'error';
+
+export interface OptimizedVariant {
+  id: string;
+  proposal_id: string;
+  variant_type: VariantType;
+  execution_graph: ExecutionStep[];
+  metadata: VariantMetadata;
+  created_at?: string | null;
+}
+
+export interface VariantMetadata {
+  step_count: number;
+  complexity_score: ComplexityScore;
+  optimization_notes: string;
+  estimated_time_minutes: number;
+  estimated_cost_usd: number;
+}
+
+export interface ModelRating {
+  model_name: string;
+  ratings: PlanRatings;
+  overall_score: number;
+  reasoning: string;
+}
+
+export interface PlanRatings {
+  feasibility: number;
+  cost_efficiency: number;
+  time_efficiency: number;
+  complexity: number;
+  risk_level?: number;
+}
+
+export interface PlanRatingsByModel {
+  [modelName: string]: ModelRating;
+}
+
+export interface RatedPlan {
+  plan_id: string;
+  ratings: PlanRatingsByModel;
+  average_score: number;
+}
+
+export interface OptimizerRequest {
+  selected_proposal_id: string;
+  optimization_types: VariantType[];
+  user_context?: string;
+}
+
+export interface OptimizerResponse {
+  optimization_id: string;
+  status: string;
+  variants: OptimizedVariant[];
+  ratings: Record<string, RatedPlan>;
+  session_id: string;
+}
+
+export interface RatePlansRequest {
+  plan_ids: string[];
+  models?: string[];
+  criteria?: string[];
+}
+
+export interface RatePlansResponse {
+  rating_id: string;
+  status: string;
+  ratings: Record<string, RatedPlan>;
+}
+
+export interface UserRatingRequest {
+  plan_id: string;
+  rating: number;
+  comment?: string;
+  rationale?: string;
+}
+
+export interface UserRatingResponse {
+  saved: boolean;
+  rating_id: string;
+}
+
+export interface OptimizationState {
+  status: OptimizationStatus;
+  progress: number;
+  message?: string;
+}
+
+export interface OptimizerStageData {
+  sessionId: string;
+  selectedProposalId: string;
+  variants: OptimizedVariant[];
+  ratings: Record<string, RatedPlan>;
+  selectedPlanId: string | null;
+  status: OptimizationStatus;
 }
