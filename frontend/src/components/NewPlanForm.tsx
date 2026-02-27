@@ -7,9 +7,11 @@ import {
   ChevronRight,
   Loader2,
   Search,
-  FileText
+  FileText,
+  Cpu
 } from 'lucide-react';
 import { cn } from '../utils';
+import type { Model } from '../types';
 
 interface NewPlanFormProps {
   onPlanCreated: (sessionId: string) => void;
@@ -19,12 +21,16 @@ export function NewPlanForm({ onPlanCreated }: NewPlanFormProps) {
   const [intent, setIntent] = useState('');
   const [scenario, setScenario] = useState('');
   const [scenarios, setScenarios] = useState<string[]>([]);
-  const { createSession, listScenarios, isLoading, error } = usePlanApi();
+  const [models, setModels] = useState<Model[]>([]);
+  const [selectedPlannerModel, setSelectedPlannerModel] = useState<string>('auto');
+  const [selectedExecutorModel, setSelectedExecutorModel] = useState<string>('auto');
+  const { createSession, listScenarios, listModels, isLoading, error } = usePlanApi();
   const { error: showError, success: showSuccess } = useToast();
 
   useEffect(() => {
     void loadScenarios();
-  }, [listScenarios]);
+    void loadModels();
+  }, [listScenarios, listModels]);
 
   async function loadScenarios() {
     try {
@@ -35,12 +41,26 @@ export function NewPlanForm({ onPlanCreated }: NewPlanFormProps) {
     }
   }
 
+  async function loadModels() {
+    try {
+      setModels(await listModels());
+    } catch (error) {
+      showError('Failed to load models.');
+      setModels([]);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!intent.trim()) return;
 
     try {
-      const result = await createSession(intent, scenario || undefined);
+      const result = await createSession(
+        intent,
+        scenario || undefined,
+        selectedPlannerModel === 'auto' ? undefined : selectedPlannerModel,
+        selectedExecutorModel === 'auto' ? undefined : selectedExecutorModel
+      );
       showSuccess('Plan created successfully!');
       onPlanCreated(result.session_id);
     } catch (error) {
@@ -116,6 +136,89 @@ export function NewPlanForm({ onPlanCreated }: NewPlanFormProps) {
             ))}
           </div>
         </div>
+
+        {models.length > 0 && (
+          <div className="space-y-4">
+            <label className="text-xs font-bold uppercase tracking-widest text-text-muted flex items-center gap-2">
+              <Cpu size={14} className="text-primary" />
+              AI Models (Optional)
+            </label>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <span className="text-sm font-medium text-text-body">Planner Model</span>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPlannerModel('auto')}
+                    className={cn(
+                      "p-3 rounded-xl border text-left transition-all duration-200 text-sm",
+                      selectedPlannerModel === 'auto'
+                        ? "bg-primary/15 border-primary/70 text-primary"
+                        : "bg-surface-alt/80 border-border/45 text-text-muted hover:bg-white/5"
+                    )}
+                  >
+                    <div className="font-bold">Auto (Default)</div>
+                    <div className="text-[10px] opacity-60">System default planner</div>
+                  </button>
+                  {models.filter(m => m.type === 'planner' || m.type === 'both').slice(0, 8).map(model => (
+                    <button
+                      key={model.id}
+                      type="button"
+                      onClick={() => setSelectedPlannerModel(model.id)}
+                      className={cn(
+                        "p-3 rounded-xl border text-left transition-all duration-200 text-sm",
+                        selectedPlannerModel === model.id
+                          ? "bg-primary/15 border-primary/70 text-primary"
+                          : "bg-surface-alt/80 border-border/45 text-text-muted hover:bg-white/5"
+                      )}
+                      title={model.name}
+                    >
+                      <div className="font-bold truncate">{model.name}</div>
+                      <div className="text-[10px] opacity-60 truncate">{model.provider}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <span className="text-sm font-medium text-text-body">Executor Model</span>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedExecutorModel('auto')}
+                    className={cn(
+                      "p-3 rounded-xl border text-left transition-all duration-200 text-sm",
+                      selectedExecutorModel === 'auto'
+                        ? "bg-primary/15 border-primary/70 text-primary"
+                        : "bg-surface-alt/80 border-border/45 text-text-muted hover:bg-white/5"
+                    )}
+                  >
+                    <div className="font-bold">Auto (Default)</div>
+                    <div className="text-[10px] opacity-60">System default executor</div>
+                  </button>
+                  {models.filter(m => m.type === 'executor' || m.type === 'both').slice(0, 8).map(model => (
+                    <button
+                      key={model.id}
+                      type="button"
+                      onClick={() => setSelectedExecutorModel(model.id)}
+                      className={cn(
+                        "p-3 rounded-xl border text-left transition-all duration-200 text-sm",
+                        selectedExecutorModel === model.id
+                          ? "bg-primary/15 border-primary/70 text-primary"
+                          : "bg-surface-alt/80 border-border/45 text-text-muted hover:bg-white/5"
+                      )}
+                      title={model.name}
+                    >
+                      <div className="font-bold truncate">{model.name}</div>
+                      <div className="text-[10px] opacity-60 truncate">{model.provider}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {error && (
           <div className="p-4 rounded-xl bg-danger/10 border border-danger/20 text-danger text-sm flex items-center gap-2 animate-pulse">

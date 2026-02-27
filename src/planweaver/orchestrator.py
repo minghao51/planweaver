@@ -27,13 +27,21 @@ class Orchestrator:
         self,
         user_intent: str,
         scenario_name: Optional[str] = None,
-        external_contexts: Optional[List[ExternalContext]] = None
+        external_contexts: Optional[List[ExternalContext]] = None,
+        planner_model: Optional[str] = None,
+        executor_model: Optional[str] = None
     ) -> Plan:
+        # Use provided models or fall back to instance defaults
+        planner = planner_model or self.planner_model
+        executor = executor_model or self.executor_model
+
         plan = self.planner.create_initial_plan(
             user_intent=user_intent,
             scenario_name=scenario_name,
-            model=self.planner_model
+            model=planner
         )
+        # Store executor model for later use
+        plan.executor_model = executor
         plan.external_contexts = external_contexts or []
         self.plan_repository.save(plan)
         return plan
