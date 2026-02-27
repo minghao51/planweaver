@@ -25,9 +25,18 @@ router = APIRouter()
 
 @router.post("/sessions")
 def create_session(request: CreateSessionRequest):
-    orch = get_orchestrator()
-    plan = orch.start_session(request.user_intent, request.scenario_name)
-    return serialize_plan_summary(plan)
+    try:
+        orch = get_orchestrator()
+        plan = orch.start_session(request.user_intent, request.scenario_name)
+        return serialize_plan_summary(plan)
+    except ValueError as e:
+        logger.warning(f"Validation error: {e}")
+        raise HTTPException(status_code=400, detail=f"Cannot complete operation: {str(e)}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Unexpected error creating session")
+        raise HTTPException(status_code=500, detail="Operation failed. Please try again.")
 
 
 @router.get("/sessions")
@@ -49,8 +58,14 @@ def list_sessions(
 
 @router.get("/sessions/{session_id}")
 def get_session(session_id: str):
-    _, plan = get_plan_or_404(session_id)
-    return serialize_plan_detail(plan)
+    try:
+        _, plan = get_plan_or_404(session_id)
+        return serialize_plan_detail(plan)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Unexpected error getting session")
+        raise HTTPException(status_code=500, detail="Operation failed. Please try again.")
 
 
 @router.post("/sessions/{session_id}/questions")
@@ -82,29 +97,41 @@ def select_proposal(session_id: str, proposal_id: str):
 
 @router.post("/sessions/{session_id}/approve")
 def approve_plan(session_id: str):
-    orch, plan = get_plan_or_404(session_id)
-    if not plan.execution_graph:
-        raise HTTPException(status_code=400, detail="No execution steps to approve")
+    try:
+        orch, plan = get_plan_or_404(session_id)
+        if not plan.execution_graph:
+            raise HTTPException(status_code=400, detail="No execution steps to approve. Please select a proposal first.")
 
-    updated_plan = orch.approve_plan(plan)
-    return {
-        "status": updated_plan.status.value,
-        "execution_graph": serialize_execution_graph(updated_plan),
-    }
+        updated_plan = orch.approve_plan(plan)
+        return {
+            "status": updated_plan.status.value,
+            "execution_graph": serialize_execution_graph(updated_plan),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Unexpected error approving plan")
+        raise HTTPException(status_code=500, detail="Operation failed. Please try again.")
 
 
 @router.post("/sessions/{session_id}/execute")
 def execute_plan(session_id: str, request: Optional[ExecutePlanRequest] = None):
-    orch, plan = get_plan_or_404(session_id)
-    if plan.status != PlanStatus.APPROVED:
-        raise HTTPException(status_code=400, detail="Plan must be approved before execution")
+    try:
+        orch, plan = get_plan_or_404(session_id)
+        if plan.status != PlanStatus.APPROVED:
+            raise HTTPException(status_code=400, detail="Plan must be approved before execution")
 
-    result = orch.execute(plan, request.context if request else {})
-    return {
-        "status": result.status.value,
-        "final_output": result.final_output,
-        "execution_graph": serialize_execution_graph(result),
-    }
+        result = orch.execute(plan, request.context if request else {})
+        return {
+            "status": result.status.value,
+            "final_output": result.final_output,
+            "execution_graph": serialize_execution_graph(result),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Unexpected error executing plan")
+        raise HTTPException(status_code=500, detail="Operation failed. Please try again.")
 
 
 @router.post("/sessions/{session_id}/compare-proposals", response_model=ProposalComparison)
@@ -124,7 +151,7 @@ def compare_proposals(
 
     Raises:
         HTTPException 404: If proposal IDs are invalid
-        HTTPException 400: If fewer than 2 proposals provided
+        HTTPException 400: If fewer than 2 or more than 10 proposals provided
     """
     _, plan = get_plan_or_404(session_id)
 
@@ -142,6 +169,12 @@ def compare_proposals(
         raise HTTPException(
             status_code=400,
             detail=f"Comparison requires at least 2 proposals. Got {len(request.proposal_ids)}"
+        )
+
+    if len(request.proposal_ids) > 10:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Comparison supports a maximum of 10 proposals. Got {len(request.proposal_ids)}"
         )
 
     try:

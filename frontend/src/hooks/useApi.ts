@@ -17,6 +17,15 @@ type ActionName =
 
 type LoadingState = Partial<Record<ActionName, boolean>>;
 
+const getErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  if (error && typeof error === 'object' && 'detail' in error) {
+    return String(error.detail);
+  }
+  return 'An unexpected error occurred. Please try again.';
+};
+
 export function usePlanApi() {
   const [loadingByAction, setLoadingByAction] = useState<LoadingState>({});
   const [error, setError] = useState<string | null>(null);
@@ -30,7 +39,8 @@ export function usePlanApi() {
     try {
       return await request();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unknown error');
+      const message = getErrorMessage(e);
+      setError(message);
       throw e;
     } finally {
       setLoadingByAction((prev) => ({ ...prev, [action]: false }));

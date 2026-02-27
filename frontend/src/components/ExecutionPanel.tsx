@@ -1,4 +1,5 @@
 import { usePlanApi } from '../hooks/useApi';
+import { useToast } from '../hooks/useToast';
 import { Plan } from '../types';
 import {
   CheckCircle2,
@@ -17,13 +18,14 @@ interface ExecutionPanelProps {
 
 export function ExecutionPanel({ plan, onUpdated }: ExecutionPanelProps) {
   const { approvePlan, executePlan, isLoading, error } = usePlanApi();
+  const { error: showError } = useToast();
 
   async function handleApprove() {
     try {
       await approvePlan(plan.session_id);
       onUpdated();
     } catch (error) {
-      console.error('Failed to approve plan:', error);
+      showError('Failed to approve plan. Please try again.');
     }
   }
 
@@ -32,7 +34,7 @@ export function ExecutionPanel({ plan, onUpdated }: ExecutionPanelProps) {
       await executePlan(plan.session_id);
       onUpdated();
     } catch (error) {
-      console.error('Failed to execute plan:', error);
+      showError('Failed to execute plan. Please try again.');
     }
   }
 

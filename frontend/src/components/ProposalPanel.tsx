@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { usePlanApi } from '../hooks/useApi';
+import { useToast } from '../hooks/useToast';
 import { Plan, ProposalWithAnalysis } from '../types';
 import {
   Lightbulb,
@@ -21,13 +22,14 @@ interface ProposalPanelProps {
 export function ProposalPanel({ plan, onSelected }: ProposalPanelProps) {
   const [showComparison, setShowComparison] = useState(false);
   const { selectProposal, isLoading, error } = usePlanApi();
+  const { error: showError } = useToast();
 
   async function handleSelect(proposalId: string) {
     try {
       await selectProposal(plan.session_id, proposalId);
       onSelected();
     } catch (error) {
-      console.error('Failed to select proposal:', error);
+      showError('Failed to select proposal. Please try again.');
     }
   }
 

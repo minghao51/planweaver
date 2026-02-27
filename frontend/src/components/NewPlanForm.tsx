@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { usePlanApi } from '../hooks/useApi';
+import { useToast } from '../hooks/useToast';
 import {
   PlusCircle,
   Sparkles,
@@ -19,6 +20,7 @@ export function NewPlanForm({ onPlanCreated }: NewPlanFormProps) {
   const [scenario, setScenario] = useState('');
   const [scenarios, setScenarios] = useState<string[]>([]);
   const { createSession, listScenarios, isLoading, error } = usePlanApi();
+  const { error: showError, success: showSuccess } = useToast();
 
   useEffect(() => {
     void loadScenarios();
@@ -28,7 +30,7 @@ export function NewPlanForm({ onPlanCreated }: NewPlanFormProps) {
     try {
       setScenarios(await listScenarios());
     } catch (error) {
-      console.error('Failed to load scenarios:', error);
+      showError('Failed to load scenarios.');
       setScenarios([]);
     }
   }
@@ -39,9 +41,10 @@ export function NewPlanForm({ onPlanCreated }: NewPlanFormProps) {
 
     try {
       const result = await createSession(intent, scenario || undefined);
+      showSuccess('Plan created successfully!');
       onPlanCreated(result.session_id);
     } catch (error) {
-      console.error('Failed to create session:', error);
+      showError('Failed to create plan. Please try again.');
     }
   }
 

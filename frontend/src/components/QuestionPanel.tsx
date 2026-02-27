@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { usePlanApi } from '../hooks/useApi';
+import { useToast } from '../hooks/useToast';
 import { Plan } from '../types';
 import {
   HelpCircle,
@@ -17,6 +18,7 @@ interface QuestionPanelProps {
 export function QuestionPanel({ plan, onUpdated }: QuestionPanelProps) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const { answerQuestions, isLoading, error } = usePlanApi();
+  const { error: showError } = useToast();
 
   const openQuestions = plan.open_questions?.filter((q) => !q.answered) || [];
 
@@ -28,7 +30,7 @@ export function QuestionPanel({ plan, onUpdated }: QuestionPanelProps) {
       await answerQuestions(plan.session_id, answers);
       onUpdated();
     } catch (error) {
-      console.error('Failed to submit answers:', error);
+      showError('Failed to submit answer. Please try again.');
     }
   }
 

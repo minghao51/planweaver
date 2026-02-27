@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePlanApi } from '../hooks/useApi';
+import { useToast } from '../hooks/useToast';
 import { SessionHistoryItem, PlanStatus } from '../types';
 import {
   History,
@@ -21,6 +22,7 @@ export function HistoryPage() {
   const [status, setStatus] = useState<PlanStatus | ''>('');
   const [total, setTotal] = useState(0);
   const { listSessions, isLoading } = usePlanApi();
+  const { error: showError } = useToast();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -33,7 +35,7 @@ export function HistoryPage() {
       setSessions(result.sessions);
       setTotal(result.total);
     } catch (error) {
-      console.error('Failed to load sessions:', error);
+      showError('Failed to load session history. Please refresh.');
     }
   }
 
