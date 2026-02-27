@@ -31,17 +31,17 @@ class Orchestrator:
         planner_model: Optional[str] = None,
         executor_model: Optional[str] = None
     ) -> Plan:
-        # Use provided models or fall back to instance defaults
+        # Use override for this call when provided, otherwise defaults.
         planner = planner_model or self.planner_model
-        executor = executor_model or self.executor_model
 
         plan = self.planner.create_initial_plan(
             user_intent=user_intent,
             scenario_name=scenario_name,
             model=planner
         )
-        # Store executor model for later use
-        plan.executor_model = executor
+        # Persist explicit user overrides only; step-assigned models remain the fallback.
+        plan.planner_model = planner_model
+        plan.executor_model = executor_model
         plan.external_contexts = external_contexts or []
         self.plan_repository.save(plan)
         return plan
@@ -84,7 +84,7 @@ class Orchestrator:
     def get_strawman_proposals(self, plan: Plan) -> List[Dict[str, Any]]:
         proposals = self.planner.generate_strawman_proposals(
             plan.user_intent,
-            model=self.planner_model
+            model=plan.planner_model or self.planner_model
         )
         plan.strawman_proposals = proposals
         self.plan_repository.save(plan)
@@ -108,7 +108,7 @@ class Orchestrator:
         plan = self.planner.refine_plan(
             plan=plan,
             user_answers=answers,
-            model=self.planner_model
+            model=plan.planner_model or self.planner_model
         )
         self.plan_repository.save(plan)
         return plan
@@ -124,7 +124,8 @@ class Orchestrator:
 
         plan = await self.router.execute_plan(
             plan=plan,
-            context=context or {}
+            context=context or {},
+            model_override=plan.executor_model
         )
 
         self.plan_repository.save(plan)

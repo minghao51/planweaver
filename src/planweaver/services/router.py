@@ -159,7 +159,8 @@ class ExecutionRouter:
         self,
         plan: Plan,
         context: Optional[Dict[str, Any]] = None,
-        max_steps: int = 100
+        max_steps: int = 100,
+        model_override: Optional[str] = None
     ) -> Plan:
         if context is None:
             context = {}
@@ -175,7 +176,7 @@ class ExecutionRouter:
                 break
 
             for step in executable_steps:
-                result = await self.execute_step(step, plan, context)
+                result = await self.execute_step(step, plan, context, model=model_override)
                 step_count += 1
 
                 if not result["success"]:

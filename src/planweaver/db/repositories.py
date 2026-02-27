@@ -14,6 +14,9 @@ from ..models.plan import (
     StrawmanProposal,
 )
 
+PLANNER_OVERRIDE_KEY = "__planner_model_override__"
+EXECUTOR_OVERRIDE_KEY = "__executor_model_override__"
+
 
 class PlanRepository:
     def list_summaries(
@@ -93,11 +96,17 @@ class PlanRepository:
             db_session.close()
 
     def _plan_to_db_payload(self, plan: Plan) -> dict:
+        locked_constraints = dict(plan.locked_constraints)
+        if plan.planner_model:
+            locked_constraints[PLANNER_OVERRIDE_KEY] = plan.planner_model
+        if plan.executor_model:
+            locked_constraints[EXECUTOR_OVERRIDE_KEY] = plan.executor_model
+
         return {
             "user_intent": plan.user_intent,
             "scenario_name": plan.scenario_name,
             "status": plan.status.value,
-            "locked_constraints": plan.locked_constraints,
+            "locked_constraints": locked_constraints,
             "open_questions": [q.model_dump() for q in plan.open_questions],
             "strawman_proposals": [p.model_dump() for p in plan.strawman_proposals],
             "execution_graph": [s.model_dump() for s in plan.execution_graph],
@@ -106,15 +115,21 @@ class PlanRepository:
         }
 
     def _db_to_plan(self, db_plan: DBSession) -> Plan:
+        locked_constraints = dict(db_plan.locked_constraints or {})
+        planner_model = locked_constraints.pop(PLANNER_OVERRIDE_KEY, None)
+        executor_model = locked_constraints.pop(EXECUTOR_OVERRIDE_KEY, None)
+
         return Plan(
             session_id=db_plan.id,
             status=PlanStatus(db_plan.status),
             user_intent=db_plan.user_intent,
             scenario_name=db_plan.scenario_name,
-            locked_constraints=db_plan.locked_constraints or {},
+            locked_constraints=locked_constraints,
             open_questions=[OpenQuestion(**q) for q in (db_plan.open_questions or [])],
             strawman_proposals=[StrawmanProposal(**p) for p in (db_plan.strawman_proposals or [])],
             execution_graph=[ExecutionStep(**s) for s in (db_plan.execution_graph or [])],
             external_contexts=[ExternalContext(**c) for c in (db_plan.external_contexts or [])],
+            planner_model=planner_model,
+            executor_model=executor_model,
             final_output=db_plan.final_output,
         )

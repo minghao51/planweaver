@@ -82,3 +82,16 @@ def test_get_session_includes_contexts(mock_orchestrator):
 
     assert len(retrieved_plan.external_contexts) == 1
     assert retrieved_plan.external_contexts[0].source_type == "file_upload"
+
+
+def test_model_overrides_persist_through_repository(mock_orchestrator):
+    """Test planner/executor overrides persist across save/load."""
+    plan = mock_orchestrator.start_session(
+        "Test intent",
+        planner_model="planner-override",
+        executor_model="executor-override",
+    )
+
+    retrieved = mock_orchestrator.get_session(plan.session_id)
+    assert retrieved.planner_model == "planner-override"
+    assert retrieved.executor_model == "executor-override"

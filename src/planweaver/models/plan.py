@@ -104,6 +104,7 @@ class Plan(BaseModel):
     strawman_proposals: List[StrawmanProposal] = Field(default_factory=list)
     execution_graph: List[ExecutionStep] = Field(default_factory=list)
     external_contexts: List[ExternalContext] = Field(default_factory=list, description="External context sources for enhanced planning")
+    planner_model: Optional[str] = Field(default=None, description="User-selected planner model override")
     executor_model: Optional[str] = Field(default=None, description="Executor model to use for this plan")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
