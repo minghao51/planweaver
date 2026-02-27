@@ -140,6 +140,20 @@ describe('OptimizerStage', () => {
   it('should show error if no plan selected on complete', () => {
     const mockOnComplete = vi.fn();
 
+    // Mock useOptimizerStage to return null selectedPlanId
+    vi.spyOn(hooks, 'useOptimizerStage').mockReturnValue({
+      sessionId: 'session-1',
+      selectedProposalId: 'proposal-1',
+      variants: [],
+      ratings: {},
+      selectedPlanId: null,  // No plan selected
+      status: 'completed',
+      setSelectedPlanId: vi.fn(),
+      setStatus: vi.fn(),
+      setVariants: vi.fn(),
+      setRatings: vi.fn(),
+    } as any);
+
     render(
       <OptimizerStage
         sessionId="session-1"
@@ -160,16 +174,16 @@ describe('OptimizerStage', () => {
 
   it('should save user rating when provided', async () => {
     const mockOnComplete = vi.fn();
-    const mockSetSelectedPlanId = vi.fn();
 
+    // Mock useOptimizerStage to return a selected plan
     vi.spyOn(hooks, 'useOptimizerStage').mockReturnValue({
       sessionId: 'session-1',
       selectedProposalId: 'proposal-1',
       variants: [],
       ratings: {},
-      selectedPlanId: 'plan-1',
+      selectedPlanId: 'plan-1',  // User has selected a plan
       status: 'completed',
-      setSelectedPlanId: mockSetSelectedPlanId,
+      setSelectedPlanId: vi.fn(),
       setStatus: vi.fn(),
       setVariants: vi.fn(),
       setRatings: vi.fn(),
@@ -186,9 +200,9 @@ describe('OptimizerStage', () => {
       />
     );
 
-    // Click 5 stars
+    // Click 5th star
     const stars = screen.getAllByRole('button').filter(b => b.querySelector('svg'));
-    stars[4].click(); // 5th star
+    stars[4].click();
 
     const continueButton = screen.getByRole('button', { name: /continue/i });
     continueButton.click();

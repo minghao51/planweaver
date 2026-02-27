@@ -108,7 +108,8 @@ describe('ComparisonPanel', () => {
     );
 
     expect(screen.getByText('AI Model Ratings')).toBeInTheDocument();
-    expect(screen.getByText('CLAUDE')).toBeInTheDocument();
+    // Model name is rendered in lowercase
+    expect(screen.getByText('claude')).toBeInTheDocument();
   });
 
   it('should call onSelectPlan when plan button is clicked', () => {
