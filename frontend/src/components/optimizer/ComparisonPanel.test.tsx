@@ -132,7 +132,7 @@ describe('ComparisonPanel', () => {
     render(
       <ComparisonPanel
         plans={mockPlans}
-        selectedPlanId="plan-1"}
+        selectedPlanId="plan-1"
         onSelectPlan={vi.fn()}
       />
     );
