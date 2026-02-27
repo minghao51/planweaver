@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { usePlanApi } from '../hooks/useApi';
+import { useSSE } from '../hooks/useSSE';
 import { Plan } from '../types';
 import { QuestionPanel } from './QuestionPanel';
 import { ProposalPanel } from './ProposalPanel';
@@ -21,13 +22,9 @@ interface PlanViewProps {
   sessionId: string;
 }
 
-const POLL_BASE_MS = 3000;
-const POLL_MAX_MS = 30000;
-
 export function PlanView({ sessionId }: PlanViewProps) {
   const [plan, setPlan] = useState<Plan | null>(null);
   const { getSession, loading, error } = usePlanApi();
-  const pollTimerRef = useRef<number | null>(null);
 
   const loadPlan = useCallback(async () => {
     try {
@@ -43,61 +40,31 @@ export function PlanView({ sessionId }: PlanViewProps) {
     void loadPlan();
   }, [loadPlan]);
 
-  useEffect(() => {
-    if (plan?.status !== 'EXECUTING') {
-      return;
-    }
-
-    let stopped = false;
-    let consecutiveFailures = 0;
-
-    const clearPending = () => {
-      if (pollTimerRef.current !== null) {
-        window.clearTimeout(pollTimerRef.current);
-        pollTimerRef.current = null;
-      }
-    };
-
-    const nextDelay = () =>
-      Math.min(POLL_BASE_MS * 2 ** consecutiveFailures, POLL_MAX_MS);
-
-    const schedule = (delayMs: number) => {
-      clearPending();
-      if (stopped || document.visibilityState === 'hidden') {
-        return;
-      }
-      pollTimerRef.current = window.setTimeout(() => {
-        void runPoll();
-      }, delayMs);
-    };
-
-    const runPoll = async () => {
-      if (stopped || document.visibilityState === 'hidden') {
-        return;
-      }
-      const ok = await loadPlan();
-      consecutiveFailures = ok ? 0 : Math.min(consecutiveFailures + 1, 4);
-      schedule(nextDelay());
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        consecutiveFailures = 0;
-        void runPoll();
-      } else {
-        clearPending();
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    schedule(POLL_BASE_MS);
-
-    return () => {
-      stopped = true;
-      clearPending();
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [plan?.status, loadPlan]);
+  // Use SSE for real-time updates during execution
+  useSSE(sessionId, {
+    onConnected: () => {
+      console.log('SSE connected for session', sessionId);
+    },
+    onStepCompleted: () => {
+      // Reload plan when a step completes
+      void loadPlan();
+    },
+    onStepFailed: () => {
+      // Reload plan when a step fails
+      void loadPlan();
+    },
+    onExecutionComplete: () => {
+      // Final reload when execution completes
+      void loadPlan();
+    },
+    onExecutionFailed: () => {
+      // Reload plan when execution fails
+      void loadPlan();
+    },
+    onError: (data) => {
+      console.error('SSE error:', data.message);
+    },
+  });
 
   function handleUpdate() {
     void loadPlan();
