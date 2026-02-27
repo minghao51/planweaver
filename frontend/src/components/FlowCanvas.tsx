@@ -73,10 +73,10 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({ steps = [] }) => {
                     source: depId.toString(),
                     target: step.step_id.toString(),
                     animated: step.status === 'IN_PROGRESS',
-                    style: { stroke: step.status === 'COMPLETED' ? '#22c55e' : '#6366f1' },
+                    style: { stroke: step.status === 'COMPLETED' ? '#22c55e' : '#38bdf8' },
                     markerEnd: {
                         type: MarkerType.ArrowClosed,
-                        color: step.status === 'COMPLETED' ? '#22c55e' : '#6366f1',
+                        color: step.status === 'COMPLETED' ? '#22c55e' : '#38bdf8',
                     },
                 });
             });
@@ -94,15 +94,15 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({ steps = [] }) => {
                 fitView
                 className="bg-bg"
             >
-                <Background color="#1e1e36" gap={20} />
+                <Background color="#123048" gap={20} />
                 <Controls />
                 <MiniMap
                     nodeColor={(n) => {
                         if (n.data?.status === 'COMPLETED') return '#22c55e';
-                        if (n.data?.status === 'IN_PROGRESS') return '#6366f1';
-                        return '#3d3d5c';
+                        if (n.data?.status === 'IN_PROGRESS') return '#38bdf8';
+                        return '#26455f';
                     }}
-                    style={{ backgroundColor: '#0f0f1a' }}
+                    style={{ backgroundColor: '#0a1a28' }}
                 />
             </ReactFlow>
         </div>

@@ -29,7 +29,7 @@ export function getStepStyles(status: string, stepId?: number): StepStyleConfig 
     IN_PROGRESS: {
       container: 'bg-primary/5 border-primary shadow-lg shadow-primary/5',
       iconLabel: 'spinner',
-      iconContainer: 'border-primary text-primary bg-primary/10 shadow-[0_0_15px_rgba(99,102,241,0.3)]',
+      iconContainer: 'border-primary text-primary bg-primary/10 shadow-[0_0_15px_rgba(56,189,248,0.32)]',
     },
     COMPLETED: {
       container: 'bg-success/5 border-success/30',

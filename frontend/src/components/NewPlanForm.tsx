@@ -49,27 +49,27 @@ export function NewPlanForm({ onPlanCreated }: NewPlanFormProps) {
   const submitDisabled = submitting || !intent.trim();
 
   return (
-    <div className="max-w-3xl mx-auto space-y-12 py-12 animate-in fade-in duration-700">
-      <div className="text-center space-y-4">
-        <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary mb-2 shadow-inner">
+    <div className="max-w-4xl mx-auto space-y-12 py-8 sm:py-12 animate-in fade-in duration-700">
+      <div className="text-center space-y-5">
+        <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/30 to-teal-300/20 text-primary mb-2 shadow-[0_14px_34px_-18px_rgba(56,189,248,0.9)]">
           <PlusCircle size={28} />
         </div>
-        <h1 className="text-4xl font-extrabold tracking-tight text-white lg:text-5xl">
+        <h1 className="font-heading text-4xl font-bold tracking-tight text-white lg:text-6xl">
           Start a new <span className="text-primary">Plan</span>
         </h1>
-        <p className="text-text-muted text-lg max-w-xl mx-auto">
+        <p className="text-text-muted text-lg max-w-2xl mx-auto">
           Describe your objective, and PlanWeaver's dual-LLM engine will weave an execution strategy.
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-8 p-8 rounded-3xl bg-surface border border-white/5 shadow-2xl glassmorphism">
+      <form onSubmit={handleSubmit} className="space-y-8 p-6 sm:p-8 rounded-[28px] bg-surface border border-border/40 shadow-2xl glassmorphism">
         <div className="space-y-4">
           <label className="text-xs font-bold uppercase tracking-widest text-text-muted flex items-center gap-2">
             <Sparkles size={14} className="text-primary" />
             Core Intent
           </label>
           <textarea
-            className="w-full bg-surface-alt border border-white/5 rounded-2xl p-6 text-text-body text-lg focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-300 min-h-[160px] placeholder:text-white/10"
+            className="w-full bg-surface-alt/80 border border-border/45 rounded-2xl p-6 text-text-body text-lg focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all duration-300 min-h-[160px] placeholder:text-text-muted/45"
             placeholder="e.g., Architect a microservices deployment on AWS using Terraform..."
             value={intent}
             onChange={(e) => setIntent(e.target.value)}
@@ -88,8 +88,8 @@ export function NewPlanForm({ onPlanCreated }: NewPlanFormProps) {
               className={cn(
                 "p-4 rounded-xl border text-left transition-all duration-200",
                 scenario === ''
-                  ? "bg-primary/10 border-primary text-primary"
-                  : "bg-surface-alt border-white/5 text-text-muted hover:bg-white/5"
+                  ? "bg-primary/15 border-primary/70 text-primary"
+                  : "bg-surface-alt/80 border-border/45 text-text-muted hover:bg-white/5"
               )}
             >
               <div className="font-bold text-sm">Auto-detect</div>
@@ -103,8 +103,8 @@ export function NewPlanForm({ onPlanCreated }: NewPlanFormProps) {
                 className={cn(
                   "p-4 rounded-xl border text-left transition-all duration-200",
                   scenario === s
-                    ? "bg-primary/10 border-primary text-primary"
-                    : "bg-surface-alt border-white/5 text-text-muted hover:bg-white/5"
+                    ? "bg-primary/15 border-primary/70 text-primary"
+                    : "bg-surface-alt/80 border-border/45 text-text-muted hover:bg-white/5"
                 )}
               >
                 <div className="font-bold text-sm uppercase tracking-tighter">{s.replace('_', ' ')}</div>
@@ -128,7 +128,7 @@ export function NewPlanForm({ onPlanCreated }: NewPlanFormProps) {
             "w-full h-16 rounded-2xl font-bold text-lg flex items-center justify-center gap-2 transition-all duration-500",
             submitDisabled
               ? "bg-white/5 text-text-muted opacity-50 cursor-not-allowed"
-              : "bg-primary hover:bg-primary-hover text-white shadow-lg shadow-primary/20 hover:scale-[1.01] active:scale-100"
+              : "bg-gradient-to-r from-primary to-cyan-300 hover:to-cyan-200 text-slate-950 shadow-lg shadow-primary/25 hover:scale-[1.01] active:scale-100"
           )}
         >
           {submitting ? (

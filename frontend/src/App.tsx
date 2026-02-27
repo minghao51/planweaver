@@ -8,9 +8,9 @@ function App() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-bg text-white font-sans selection:bg-primary/30">
+    <div className="app-shell min-h-screen bg-bg text-text-body font-sans selection:bg-primary/30">
       <Header />
-      <main className="container mx-auto px-6 py-8">
+      <main className="container mx-auto px-4 py-8 sm:px-6 sm:py-10">
         <Routes>
           <Route
             path="/"
