@@ -46,7 +46,7 @@ describe('ComparisonPanel', () => {
   ];
 
   it('should render comparison table with metrics', () => {
-    render(
+    const { container } = render(
       <ComparisonPanel
         plans={mockPlans}
         selectedPlanId={null}
@@ -55,8 +55,9 @@ describe('ComparisonPanel', () => {
     );
 
     expect(screen.getByText('Metrics Comparison')).toBeInTheDocument();
-    expect(screen.getByText('Original Plan')).toBeInTheDocument();
-    expect(screen.getByText('Simplified Variant')).toBeInTheDocument();
+    // Check that plans are rendered - use getAllByText since it appears multiple times
+    expect(screen.getAllByText('Original Plan').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Simplified Variant').length).toBeGreaterThan(0);
   });
 
   it('should display step counts', () => {
