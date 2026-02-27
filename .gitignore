@@ -43,6 +43,8 @@ Thumbs.db
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+frontend/.npm_cache/
+frontend/test-results/
 
 # Planning (optional - remove if you want to track planning docs)
 .planning/
