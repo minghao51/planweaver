@@ -1,10 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePlanApi } from '../hooks/useApi';
-import { Plan, PlanStatus } from '../types';
+import { Plan } from '../types';
 import { QuestionPanel } from './QuestionPanel';
 import { ProposalPanel } from './ProposalPanel';
 import { ExecutionPanel } from './ExecutionPanel';
-import { colors, sharedStyles } from '../styles/ui';
+import { FlowCanvas } from './FlowCanvas';
+import {
+  Target,
+  Settings2,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+  ChevronRight,
+  Zap
+} from 'lucide-react';
+import { cn } from '../utils';
+import { getStatusStyles } from '../lib/statusStyles';
 
 interface PlanViewProps {
   sessionId: string;
@@ -94,79 +105,148 @@ export function PlanView({ sessionId }: PlanViewProps) {
 
   if (loading && !plan) {
     return (
-      <div style={styles.loading}>
-        <div style={styles.spinner} />
-        <p>Loading plan...</p>
+      <div className="flex flex-col items-center justify-center py-20 animate-in fade-in duration-500">
+        <Loader2 className="w-10 h-10 text-primary animate-spin mb-4" />
+        <p className="text-text-muted font-medium">Initializing orchestrator...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div style={styles.error}>
-        <p>Error loading plan: {error}</p>
+      <div className="p-6 rounded-2xl bg-danger/10 border border-danger/20 text-danger flex items-center gap-3">
+        <AlertCircle size={20} />
+        <p>Error in session {sessionId}: {error}</p>
       </div>
     );
   }
 
-  if (!plan) {
-    return null;
-  }
+  if (!plan) return null;
 
   const stage = getPlanStage(plan);
 
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <h1 style={styles.title}>Plan: {plan.session_id}</h1>
-        <span style={{...styles.status, backgroundColor: getStatusColor(plan.status)}}>
-          {plan.status}
-        </span>
-      </div>
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in slide-in-from-bottom-4 duration-700">
+      {/* Sidebar: Info & Constraints */}
+      <div className="lg:col-span-4 flex flex-col gap-6">
+        <div className="p-6 rounded-2xl bg-surface border border-white/5 shadow-xl glassmorphism">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold flex items-center gap-2">
+              <Target className="text-primary" size={20} />
+              Session Plan
+            </h2>
+            <div className={cn(
+              "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border",
+              getStatusStyles(plan.status)
+            )}>
+              {plan.status}
+            </div>
+          </div>
 
-      <div style={styles.intent}>
-        <h3 style={styles.intentLabel}>Your Request</h3>
-        <p style={styles.intentText}>{plan.user_intent}</p>
-      </div>
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs font-bold text-text-muted uppercase tracking-wider block mb-2">Intent</label>
+              <p className="text-text-body leading-relaxed bg-white/5 p-4 rounded-xl border border-white/5 italic">
+                "{plan.user_intent}"
+              </p>
+            </div>
 
-      {plan.locked_constraints && Object.keys(plan.locked_constraints).length > 0 && (
-        <div style={styles.constraints}>
-          <h4 style={styles.constraintsLabel}>Locked Constraints</h4>
-          <div style={styles.constraintsList}>
-            {Object.entries(plan.locked_constraints).map(([key, value]) => (
-              <span key={key} style={styles.constraint}>{key}: {String(value)}</span>
-            ))}
+            {plan.locked_constraints && Object.keys(plan.locked_constraints).length > 0 && (
+              <div>
+                <label className="text-xs font-bold text-text-muted uppercase tracking-wider block mb-2">Constraints</label>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(plan.locked_constraints).map(([key, value]) => (
+                    <span key={key} className="px-3 py-1.5 rounded-lg bg-surface-alt border border-white/5 text-xs text-text-body flex items-center gap-2">
+                      <Settings2 size={12} className="text-primary" />
+                      <span className="font-medium opacity-60">{key}:</span> {String(value)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
-      )}
 
-      {stage === 'questions' && plan.open_questions && (
-        <QuestionPanel plan={plan} onUpdated={handleUpdate} />
-      )}
-
-      {stage === 'proposals' && (
-        <ProposalPanel plan={plan} onSelected={handleUpdate} />
-      )}
-
-      {(stage === 'execution' || stage === 'completed') && plan.execution_graph && (
-        <ExecutionPanel plan={plan} onUpdated={handleUpdate} />
-      )}
-
-      {stage === 'completed' && plan.final_output && (
-        <div style={styles.result}>
-          <h3 style={styles.resultTitle}>Final Output</h3>
-          <pre style={styles.resultPre}>{JSON.stringify(plan.final_output, null, 2)}</pre>
+        {/* Progress Card */}
+        <div className="p-6 rounded-2xl bg-surface border border-white/5 shadow-xl glassmorphism">
+          <h3 className="text-sm font-bold uppercase tracking-widest text-text-muted mb-4 flex items-center gap-2">
+            <Zap size={16} className="text-warning" />
+            Execution Pulse
+          </h3>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between text-xs font-bold uppercase tracking-tighter">
+              <span>Overall Completion</span>
+              <span className="text-primary">{getCompletionPercentage(plan)}%</span>
+            </div>
+            <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden border border-white/5">
+              <div
+                className="h-full bg-primary shadow-[0_0_10px_rgba(99,102,241,0.5)] transition-all duration-1000"
+                style={{ width: `${getCompletionPercentage(plan)}%` }}
+              />
+            </div>
+          </div>
         </div>
-      )}
+      </div>
+
+      {/* Main Content: Steps and Visualizer */}
+      <div className="lg:col-span-8 flex flex-col gap-6">
+        <div className="flex items-center gap-4 mb-2">
+          <div className={cn(
+            "h-3 w-3 rounded-full",
+            stage === 'completed' ? "bg-success" : "bg-primary animate-pulse"
+          )} />
+          <h2 className="text-2xl font-bold tracking-tight">
+            {stage.charAt(0).toUpperCase() + stage.slice(1)} Stage
+          </h2>
+          <ChevronRight size={20} className="text-white/20" />
+          <span className="text-text-muted font-medium">Session {sessionId}</span>
+        </div>
+
+        {stage === 'questions' && plan.open_questions && (
+          <QuestionPanel plan={plan} onUpdated={handleUpdate} />
+        )}
+
+        {stage === 'proposals' && (
+          <ProposalPanel plan={plan} onSelected={handleUpdate} />
+        )}
+
+        {(stage === 'execution' || stage === 'completed') && (
+          <div className="flex flex-col gap-6">
+            <FlowCanvas steps={plan.execution_graph || []} />
+            <ExecutionPanel plan={plan} onUpdated={handleUpdate} />
+          </div>
+        )}
+
+        {stage === 'completed' && plan.final_output && (
+          <div className="p-8 rounded-2xl bg-surface-alt border border-success/20 shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-4 opacity-10">
+              <CheckCircle2 size={120} className="text-success" />
+            </div>
+            <h3 className="text-xl font-bold text-success mb-6 flex items-center gap-2">
+              <CheckCircle2 size={24} />
+              Solution Reached
+            </h3>
+            <div className="bg-black/30 p-6 rounded-xl border border-white/5 font-mono text-sm overflow-auto max-h-[500px]">
+              <pre className="text-text-body">{JSON.stringify(plan.final_output, null, 2)}</pre>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
+}
+
+function getCompletionPercentage(plan: Plan) {
+  if (!plan.execution_graph || plan.execution_graph.length === 0) return 0;
+  const completed = plan.execution_graph.filter(s => s.status === 'COMPLETED').length;
+  return Math.round((completed / plan.execution_graph.length) * 100);
 }
 
 type PlanStage = 'questions' | 'proposals' | 'execution' | 'completed';
 
 function getPlanStage(plan: Plan): PlanStage {
   const unansweredQuestions = plan.open_questions?.some((q) => !q.answered);
-  const hasProposals = (plan.strawman_proposals?.length ?? 0) > 0;
+  const hasProposals = (plan.strawman_proposals?.length ?? 0) > 0 && !plan.strawman_proposals?.some(p => p.selected);
   const hasExecutionGraph = (plan.execution_graph?.length ?? 0) > 0;
   const isTerminal = plan.status === 'COMPLETED' || plan.status === 'FAILED';
 
@@ -177,113 +257,3 @@ function getPlanStage(plan: Plan): PlanStage {
   return 'execution';
 }
 
-function getStatusColor(status: PlanStatus) {
-  switch (status) {
-    case 'BRAINSTORMING': return colors.warning;
-    case 'AWAITING_APPROVAL': return colors.info;
-    case 'APPROVED': return colors.success;
-    case 'EXECUTING': return colors.violet;
-    case 'COMPLETED': return colors.successSoft;
-    case 'FAILED': return colors.danger;
-    default: return colors.gray;
-  }
-}
-
-const styles: Record<string, React.CSSProperties> = {
-  container: sharedStyles.pageContainer,
-  header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '24px',
-  },
-  title: {
-    fontSize: '24px',
-    fontWeight: '600',
-    color: colors.text,
-  },
-  status: {
-    padding: '6px 12px',
-    borderRadius: '20px',
-    fontSize: '12px',
-    fontWeight: '600',
-    color: colors.text,
-  },
-  intent: {
-    ...sharedStyles.panel,
-    padding: '20px',
-    marginBottom: '20px',
-  },
-  intentLabel: {
-    fontSize: '12px',
-    fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    marginBottom: '8px',
-  },
-  intentText: {
-    color: colors.textBody,
-    fontSize: '16px',
-    lineHeight: '1.6',
-  },
-  constraints: {
-    marginBottom: '20px',
-  },
-  constraintsLabel: {
-    fontSize: '14px',
-    fontWeight: '500',
-    color: colors.textMuted,
-    marginBottom: '8px',
-  },
-  constraintsList: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '8px',
-  },
-  constraint: {
-    padding: '4px 10px',
-    borderRadius: '4px',
-    backgroundColor: colors.borderMuted,
-    color: colors.textBody,
-    fontSize: '13px',
-  },
-  loading: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '60px',
-    color: colors.textMuted,
-  },
-  spinner: {
-    width: '40px',
-    height: '40px',
-    border: `3px solid ${colors.borderMuted}`,
-    borderTopColor: colors.primary,
-    borderRadius: '50%',
-    animation: 'spin 1s linear infinite',
-    marginBottom: '16px',
-  },
-  error: { ...sharedStyles.errorBox, padding: '24px' },
-  result: {
-    marginTop: '24px',
-    backgroundColor: colors.surface,
-    borderRadius: '12px',
-    padding: '24px',
-  },
-  resultTitle: {
-    fontSize: '16px',
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: '16px',
-  },
-  resultPre: {
-    backgroundColor: colors.surfaceMuted,
-    padding: '16px',
-    borderRadius: '8px',
-    color: '#9ca3af',
-    fontSize: '13px',
-    overflow: 'auto',
-    maxHeight: '400px',
-  },
-};

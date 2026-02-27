@@ -7,6 +7,7 @@ type ActionName =
   | 'getSession'
   | 'answerQuestions'
   | 'getProposals'
+  | 'compareProposals'
   | 'selectProposal'
   | 'approvePlan'
   | 'executePlan'
@@ -55,6 +56,12 @@ export function usePlanApi() {
 
   const getProposals = useCallback(
     (sessionId: string) => runAction('getProposals', () => planApi.getProposals(sessionId)),
+    [runAction],
+  );
+
+  const compareProposals = useCallback(
+    (sessionId: string, proposalIds: string[]) =>
+      runAction('compareProposals', () => planApi.compareProposals(sessionId, proposalIds)),
     [runAction],
   );
 
@@ -109,6 +116,7 @@ export function usePlanApi() {
     getSession,
     answerQuestions,
     getProposals,
+    compareProposals,
     selectProposal,
     approvePlan,
     executePlan,

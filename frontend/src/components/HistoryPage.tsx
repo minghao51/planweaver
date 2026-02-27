@@ -1,321 +1,143 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { usePlanApi } from '../hooks/useApi';
-import { PlanStatus, SessionHistoryItem } from '../types';
-import { colors, sharedStyles, disabledStyle } from '../styles/ui';
-
-const PAGE_SIZE = 10;
-const STATUS_OPTIONS: Array<{ label: string; value: '' | PlanStatus }> = [
-  { label: 'All statuses', value: '' },
-  { label: 'Brainstorming', value: 'BRAINSTORMING' },
-  { label: 'Awaiting Approval', value: 'AWAITING_APPROVAL' },
-  { label: 'Approved', value: 'APPROVED' },
-  { label: 'Executing', value: 'EXECUTING' },
-  { label: 'Completed', value: 'COMPLETED' },
-  { label: 'Failed', value: 'FAILED' },
-];
+import { SessionHistoryItem, PlanStatus } from '../types';
+import {
+  History,
+  Search,
+  Filter,
+  ChevronRight,
+  Activity,
+  Clock,
+  ExternalLink,
+  Target
+} from 'lucide-react';
+import { cn } from '../utils';
+import { getStatusStyles } from '../lib/statusStyles';
 
 export function HistoryPage() {
   const [sessions, setSessions] = useState<SessionHistoryItem[]>([]);
+  const [q, setQ] = useState('');
+  const [status, setStatus] = useState<PlanStatus | ''>('');
   const [total, setTotal] = useState(0);
-  const [offset, setOffset] = useState(0);
-  const [status, setStatus] = useState<'' | PlanStatus>('');
-  const [searchInput, setSearchInput] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const { listSessions, isLoading, error } = usePlanApi();
+  const { listSessions, isLoading } = usePlanApi();
+  const navigate = useNavigate();
 
   useEffect(() => {
     void loadSessions();
-  }, [listSessions, offset, status, searchQuery]);
+  }, [listSessions, q, status]);
 
   async function loadSessions() {
     try {
-      const result = await listSessions({
-        limit: PAGE_SIZE,
-        offset,
-        status,
-        q: searchQuery,
-      });
+      const result = await listSessions({ q, status, limit: 50 });
       setSessions(result.sessions);
       setTotal(result.total);
-    } catch {}
+    } catch (error) {
+      console.error('Failed to load sessions:', error);
+    }
   }
-
-  function applyFilters() {
-    setOffset(0);
-    setSearchQuery(searchInput.trim());
-  }
-
-  function clearFilters() {
-    setSearchInput('');
-    setSearchQuery('');
-    setStatus('');
-    setOffset(0);
-  }
-
-  const loading = isLoading('listSessions');
-  const pageStart = sessions.length === 0 ? 0 : offset + 1;
-  const pageEnd = offset + sessions.length;
-  const canPrev = offset > 0;
-  const canNext = offset + PAGE_SIZE < total;
 
   return (
-    <section style={styles.container}>
-      <div style={styles.header}>
-        <div>
-          <h1 style={styles.title}>History</h1>
-          <p style={styles.subtitle}>Recent planning sessions and their current status.</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => void loadSessions()}
-          style={{ ...styles.refreshButton, ...disabledStyle(loading) }}
-          disabled={loading}
-        >
-          {loading ? 'Refreshing...' : 'Refresh'}
-        </button>
-      </div>
-
-      <div style={styles.filters}>
-        <input
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-          placeholder="Search intent or scenario..."
-          style={styles.searchInput}
-        />
-        <select
-          value={status}
-          onChange={(e) => {
-            setStatus(e.target.value as '' | PlanStatus);
-            setOffset(0);
-          }}
-          style={styles.statusSelect}
-        >
-          {STATUS_OPTIONS.map((option) => (
-            <option key={option.label} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <button type="button" onClick={applyFilters} style={styles.filterButton}>
-          Apply
-        </button>
-        <button type="button" onClick={clearFilters} style={styles.secondaryButton}>
-          Clear
-        </button>
-      </div>
-
-      {error && <div style={styles.error}>{error}</div>}
-
-      <div style={styles.summaryRow}>
-        <span style={styles.summaryText}>
-          {total === 0 ? 'No results' : `Showing ${pageStart}-${pageEnd} of ${total}`}
-        </span>
-        <div style={styles.pagination}>
-          <button
-            type="button"
-            onClick={() => setOffset((value) => Math.max(0, value - PAGE_SIZE))}
-            disabled={!canPrev || loading}
-            style={{ ...styles.secondaryButton, ...disabledStyle(!canPrev || loading) }}
-          >
-            Previous
-          </button>
-          <button
-            type="button"
-            onClick={() => setOffset((value) => value + PAGE_SIZE)}
-            disabled={!canNext || loading}
-            style={{ ...styles.secondaryButton, ...disabledStyle(!canNext || loading) }}
-          >
-            Next
-          </button>
+    <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-700">
+      <div className="flex items-center justify-between">
+        <div className="space-y-1">
+          <h1 className="text-3xl font-extrabold tracking-tight flex items-center gap-3">
+            <History className="text-primary" size={32} />
+            Weave History
+          </h1>
+          <p className="text-text-muted font-medium">Browse and manage your previous planning sessions ({total})</p>
         </div>
       </div>
 
-      {sessions.length === 0 && !loading ? (
-        <div style={styles.empty}>No sessions yet.</div>
+      {/* Filters */}
+      <div className="flex flex-col md:flex-row gap-4 p-6 rounded-3xl bg-surface border border-white/5 shadow-xl glassmorphism">
+        <div className="relative flex-1">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" size={18} />
+          <input
+            type="text"
+            placeholder="Search by intent or ID..."
+            className="w-full bg-surface-alt border border-white/5 rounded-2xl pl-12 pr-4 py-3 text-text-body focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-300"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </div>
+        <div className="relative w-full md:w-64">
+          <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" size={18} />
+          <select
+            className="w-full bg-surface-alt border border-white/5 rounded-2xl pl-12 pr-10 py-3 text-text-body appearance-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-300 cursor-pointer"
+            value={status}
+            onChange={(e) => setStatus(e.target.value as any)}
+          >
+            <option value="">All Statuses</option>
+            <option value="BRAINSTORMING">Brainstorming</option>
+            <option value="AWAITING_APPROVAL">Awaiting Approval</option>
+            <option value="APPROVED">Approved</option>
+            <option value="EXECUTING">Executing</option>
+            <option value="COMPLETED">Completed</option>
+            <option value="FAILED">Failed</option>
+          </select>
+        </div>
+      </div>
+
+      {isLoading('listSessions') && sessions.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 bg-surface/50 rounded-3xl border border-white/5 gap-4">
+          <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center animate-pulse">
+            <Activity className="text-primary animate-spin" size={24} />
+          </div>
+          <p className="text-text-muted font-bold tracking-widest uppercase text-xs">Retrieving Vault Data...</p>
+        </div>
+      ) : sessions.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-24 bg-surface/20 rounded-3xl border border-dashed border-white/10 text-center space-y-4">
+          <Target className="text-white/10" size={64} />
+          <div className="space-y-2">
+            <h3 className="text-xl font-bold text-white/40">No threads found</h3>
+            <p className="text-text-muted max-w-xs">Try adjusting your search filters or start a new weave.</p>
+          </div>
+        </div>
       ) : (
-        <div style={styles.list}>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {sessions.map((session) => (
-            <article key={session.session_id} style={styles.card}>
-              <div style={styles.cardTop}>
-                <span style={{ ...styles.status, backgroundColor: getStatusColor(session.status) }}>
+            <div
+              key={session.session_id}
+              onClick={() => navigate(`/plans/${session.session_id}`)}
+              className="group p-6 rounded-3xl bg-surface border border-white/5 hover:border-primary/50 hover:bg-surface-alt transition-all duration-500 cursor-pointer shadow-xl hover:shadow-primary/5 relative overflow-hidden"
+            >
+              <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                <ExternalLink size={64} />
+              </div>
+
+              <div className="flex items-center justify-between mb-4">
+                <div className={cn(
+                  "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border",
+                  getStatusStyles(session.status)
+                )}>
                   {session.status}
-                </span>
-                <span style={styles.time}>
-                  Updated {formatDateTime(session.updated_at)}
-                </span>
+                </div>
+                <div className="text-[10px] font-mono text-text-muted/60 flex items-center gap-1">
+                  <Clock size={10} />
+                  {session.updated_at ? new Date(session.updated_at).toLocaleDateString() : 'Unknown'}
+                </div>
               </div>
 
-              <p style={styles.intent}>{session.user_intent}</p>
+              <p className="text-text-body font-medium leading-relaxed italic line-clamp-3 mb-6 group-hover:text-white transition-colors">
+                "{session.user_intent}"
+              </p>
 
-              <div style={styles.meta}>
-                <span>Session: {session.session_id}</span>
-                <span>Scenario: {session.scenario_name || 'Auto'}</span>
-                <span>Created: {formatDateTime(session.created_at)}</span>
+              <div className="flex items-center justify-between pt-4 border-t border-white/5">
+                <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-tighter text-text-muted">
+                  <span className="opacity-50 font-mono">ID:</span>
+                  <span className="text-primary truncate max-w-[100px]">{session.session_id}</span>
+                </div>
+                <div className="flex items-center gap-1 text-primary text-xs font-bold opacity-0 group-hover:opacity-100 transition-all translate-x-4 group-hover:translate-x-0">
+                  Open Plan
+                  <ChevronRight size={14} />
+                </div>
               </div>
-
-              <Link to={`/plans/${session.session_id}`} style={styles.openLink}>
-                Open plan
-              </Link>
-            </article>
+            </div>
           ))}
         </div>
       )}
-    </section>
+    </div>
   );
 }
 
-function formatDateTime(value?: string | null) {
-  if (!value) return 'Unknown';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Unknown';
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(date);
-}
-
-function getStatusColor(status: SessionHistoryItem['status']) {
-  switch (status) {
-    case 'BRAINSTORMING':
-      return colors.warning;
-    case 'AWAITING_APPROVAL':
-      return colors.info;
-    case 'APPROVED':
-      return colors.success;
-    case 'EXECUTING':
-      return colors.violet;
-    case 'COMPLETED':
-      return colors.successSoft;
-    case 'FAILED':
-      return colors.danger;
-    default:
-      return colors.gray;
-  }
-}
-
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    ...sharedStyles.pageContainer,
-    paddingTop: '24px',
-  },
-  header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: '16px',
-    marginBottom: '20px',
-  },
-  title: {
-    margin: 0,
-    color: colors.text,
-    fontSize: '24px',
-    fontWeight: 600,
-  },
-  subtitle: {
-    margin: '8px 0 0',
-    color: colors.textMuted,
-    fontSize: '14px',
-  },
-  refreshButton: {
-    ...sharedStyles.primaryButton,
-    padding: '10px 14px',
-  },
-  filters: {
-    display: 'grid',
-    gridTemplateColumns: 'minmax(220px, 1fr) auto auto auto',
-    gap: '8px',
-    alignItems: 'center',
-    marginBottom: '16px',
-  },
-  searchInput: {
-    ...sharedStyles.inputBase,
-    minWidth: 0,
-  },
-  statusSelect: {
-    ...sharedStyles.inputBase,
-    backgroundColor: colors.surfaceAlt,
-  },
-  filterButton: {
-    ...sharedStyles.primaryButton,
-    padding: '10px 14px',
-  },
-  secondaryButton: {
-    padding: '10px 14px',
-    borderRadius: '8px',
-    border: `1px solid ${colors.border}`,
-    backgroundColor: 'transparent',
-    color: colors.textBody,
-    cursor: 'pointer',
-    fontSize: '14px',
-  },
-  error: {
-    ...sharedStyles.errorBox,
-    marginBottom: '16px',
-  },
-  summaryRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: '12px',
-    marginBottom: '12px',
-  },
-  summaryText: {
-    color: colors.textMuted,
-    fontSize: '13px',
-  },
-  pagination: {
-    display: 'flex',
-    gap: '8px',
-  },
-  empty: {
-    ...sharedStyles.panel,
-    color: colors.textMuted,
-  },
-  list: {
-    display: 'grid',
-    gap: '12px',
-  },
-  card: {
-    ...sharedStyles.panel,
-    padding: '16px',
-    border: `1px solid ${colors.borderMuted}`,
-  },
-  cardTop: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: '12px',
-    marginBottom: '10px',
-  },
-  status: {
-    color: colors.text,
-    borderRadius: '999px',
-    padding: '4px 10px',
-    fontSize: '12px',
-    fontWeight: 600,
-  },
-  time: {
-    color: colors.textMuted,
-    fontSize: '12px',
-  },
-  intent: {
-    margin: '0 0 12px',
-    color: colors.textBody,
-    lineHeight: 1.5,
-  },
-  meta: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '8px 16px',
-    color: colors.gray,
-    fontSize: '12px',
-    marginBottom: '12px',
-  },
-  openLink: {
-    color: colors.primary,
-    textDecoration: 'none',
-    fontWeight: 500,
-    fontSize: '14px',
-  },
-};

@@ -99,3 +99,49 @@ export interface SessionsListResponse {
   limit: number;
   offset: number;
 }
+
+// Comparison types
+export type ComplexityScore = 'Low' | 'Medium' | 'High';
+
+export interface ProposalWithAnalysis {
+  proposal_id: string;
+  title: string;
+  description: string;
+  pros: string[];
+  cons: string[];
+  selected: boolean;
+  estimated_step_count: number;
+  complexity_score: ComplexityScore;
+  estimated_time_minutes: number;
+  estimated_cost_usd: number;
+  risk_factors: string[];
+}
+
+export interface StepSummary {
+  task: string;
+  complexity: ComplexityScore;
+  estimated_time_minutes: number;
+}
+
+export interface ProposalDetail {
+  proposal_id: string;
+  full_execution_graph: ExecutionStep[];
+  accurate_time_estimate: number;
+  accurate_cost_estimate: number;
+  all_risk_factors: string[];
+  generation_error?: string;
+}
+
+export interface ProposalComparison {
+  session_id: string;
+  proposals: ProposalDetail[];
+  common_steps: StepSummary[];
+  unique_steps_by_proposal: Record<string, StepSummary[]>;
+  time_comparison: Record<string, number>;
+  cost_comparison: Record<string, number>;
+  complexity_comparison: Record<string, ComplexityScore>;
+}
+
+export interface ComparisonRequest {
+  proposal_ids: string[];
+}

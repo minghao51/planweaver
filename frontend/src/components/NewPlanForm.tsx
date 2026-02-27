@@ -1,6 +1,14 @@
 import { useState, useEffect } from 'react';
 import { usePlanApi } from '../hooks/useApi';
-import { colors, disabledStyle, sharedStyles } from '../styles/ui';
+import {
+  PlusCircle,
+  Sparkles,
+  ChevronRight,
+  Loader2,
+  Search,
+  FileText
+} from 'lucide-react';
+import { cn } from '../utils';
 
 interface NewPlanFormProps {
   onPlanCreated: (sessionId: string) => void;
@@ -19,7 +27,8 @@ export function NewPlanForm({ onPlanCreated }: NewPlanFormProps) {
   async function loadScenarios() {
     try {
       setScenarios(await listScenarios());
-    } catch {
+    } catch (error) {
+      console.error('Failed to load scenarios:', error);
       setScenarios([]);
     }
   }
@@ -31,116 +40,107 @@ export function NewPlanForm({ onPlanCreated }: NewPlanFormProps) {
     try {
       const result = await createSession(intent, scenario || undefined);
       onPlanCreated(result.session_id);
-    } catch {}
+    } catch (error) {
+      console.error('Failed to create session:', error);
+    }
   }
 
   const submitting = isLoading('createSession');
-  const loadingScenarios = isLoading('listScenarios');
   const submitDisabled = submitting || !intent.trim();
 
   return (
-    <div style={styles.container}>
-      <h1 style={styles.title}>Create New Plan</h1>
-      <p style={styles.subtitle}>Describe what you want to accomplish, and PlanWeaver will create an execution strategy.</p>
+    <div className="max-w-3xl mx-auto space-y-12 py-12 animate-in fade-in duration-700">
+      <div className="text-center space-y-4">
+        <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary mb-2 shadow-inner">
+          <PlusCircle size={28} />
+        </div>
+        <h1 className="text-4xl font-extrabold tracking-tight text-white lg:text-5xl">
+          Start a new <span className="text-primary">Plan</span>
+        </h1>
+        <p className="text-text-muted text-lg max-w-xl mx-auto">
+          Describe your objective, and PlanWeaver's dual-LLM engine will weave an execution strategy.
+        </p>
+      </div>
 
-      <form onSubmit={handleSubmit} style={styles.form}>
-        <div style={styles.field}>
-          <label style={styles.label}>What do you want to accomplish?</label>
+      <form onSubmit={handleSubmit} className="space-y-8 p-8 rounded-3xl bg-surface border border-white/5 shadow-2xl glassmorphism">
+        <div className="space-y-4">
+          <label className="text-xs font-bold uppercase tracking-widest text-text-muted flex items-center gap-2">
+            <Sparkles size={14} className="text-primary" />
+            Core Intent
+          </label>
           <textarea
-            style={styles.textarea}
-            placeholder="e.g., Refactor my Python CLI tool into a FastAPI service with tests..."
+            className="w-full bg-surface-alt border border-white/5 rounded-2xl p-6 text-text-body text-lg focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-300 min-h-[160px] placeholder:text-white/10"
+            placeholder="e.g., Architect a microservices deployment on AWS using Terraform..."
             value={intent}
             onChange={(e) => setIntent(e.target.value)}
-            rows={4}
           />
         </div>
 
-        <div style={styles.field}>
-          <label style={styles.label}>Scenario (optional)</label>
-          <select
-            style={styles.select}
-            value={scenario}
-            onChange={(e) => setScenario(e.target.value)}
-            disabled={loadingScenarios}
-          >
-            <option value="">Auto-detect from request</option>
+        <div className="space-y-4">
+          <label className="text-xs font-bold uppercase tracking-widest text-text-muted flex items-center gap-2">
+            <FileText size={14} className="text-primary" />
+            Scenario Template
+          </label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <button
+              type="button"
+              onClick={() => setScenario('')}
+              className={cn(
+                "p-4 rounded-xl border text-left transition-all duration-200",
+                scenario === ''
+                  ? "bg-primary/10 border-primary text-primary"
+                  : "bg-surface-alt border-white/5 text-text-muted hover:bg-white/5"
+              )}
+            >
+              <div className="font-bold text-sm">Auto-detect</div>
+              <div className="text-[10px] opacity-60">Let the planner choose the best scenario</div>
+            </button>
             {scenarios.map((s) => (
-              <option key={s} value={s}>{s}</option>
+              <button
+                key={s}
+                type="button"
+                onClick={() => setScenario(s)}
+                className={cn(
+                  "p-4 rounded-xl border text-left transition-all duration-200",
+                  scenario === s
+                    ? "bg-primary/10 border-primary text-primary"
+                    : "bg-surface-alt border-white/5 text-text-muted hover:bg-white/5"
+                )}
+              >
+                <div className="font-bold text-sm uppercase tracking-tighter">{s.replace('_', ' ')}</div>
+                <div className="text-[10px] opacity-60">Specific workflow for {s}</div>
+              </button>
             ))}
-          </select>
+          </div>
         </div>
 
-        {error && <div style={styles.error}>{error}</div>}
+        {error && (
+          <div className="p-4 rounded-xl bg-danger/10 border border-danger/20 text-danger text-sm flex items-center gap-2 animate-pulse">
+            <Search size={16} />
+            {error}
+          </div>
+        )}
 
         <button
           type="submit"
-          style={{ ...styles.button, ...disabledStyle(submitDisabled) }}
           disabled={submitDisabled}
+          className={cn(
+            "w-full h-16 rounded-2xl font-bold text-lg flex items-center justify-center gap-2 transition-all duration-500",
+            submitDisabled
+              ? "bg-white/5 text-text-muted opacity-50 cursor-not-allowed"
+              : "bg-primary hover:bg-primary-hover text-white shadow-lg shadow-primary/20 hover:scale-[1.01] active:scale-100"
+          )}
         >
-          {submitting ? 'Creating...' : 'Start Planning'}
+          {submitting ? (
+            <Loader2 className="animate-spin" />
+          ) : (
+            <>
+              Commence Planning
+              <ChevronRight size={20} />
+            </>
+          )}
         </button>
       </form>
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    maxWidth: '700px',
-    margin: '0 auto',
-    padding: '40px 24px',
-  },
-  title: {
-    fontSize: '28px',
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: '8px',
-  },
-  subtitle: {
-    color: colors.textMuted,
-    marginBottom: '32px',
-  },
-  form: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '24px',
-  },
-  field: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px',
-  },
-  label: {
-    ...sharedStyles.fieldLabel,
-  },
-  textarea: {
-    padding: '16px',
-    borderRadius: '8px',
-    border: `1px solid ${colors.border}`,
-    backgroundColor: colors.surfaceAlt,
-    color: colors.text,
-    fontSize: '16px',
-    resize: 'vertical',
-    minHeight: '120px',
-  },
-  select: {
-    padding: '12px 16px',
-    borderRadius: '8px',
-    border: `1px solid ${colors.border}`,
-    backgroundColor: colors.surfaceAlt,
-    color: colors.text,
-    fontSize: '16px',
-  },
-  error: sharedStyles.errorBox,
-  button: {
-    padding: '14px 24px',
-    borderRadius: '8px',
-    border: 'none',
-    backgroundColor: colors.primary,
-    color: colors.text,
-    fontSize: '16px',
-    fontWeight: '500',
-    cursor: 'pointer',
-    marginTop: '8px',
-  },
-};

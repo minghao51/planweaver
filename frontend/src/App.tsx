@@ -3,15 +3,14 @@ import { Header } from './components/Header';
 import { HistoryPage } from './components/HistoryPage';
 import { NewPlanForm } from './components/NewPlanForm';
 import { PlanView } from './components/PlanView';
-import { colors } from './styles/ui';
 
 function App() {
   const navigate = useNavigate();
 
   return (
-    <div style={styles.app}>
+    <div className="min-h-screen bg-bg text-white font-sans selection:bg-primary/30">
       <Header />
-      <main style={styles.main}>
+      <main className="container mx-auto px-6 py-8">
         <Routes>
           <Route
             path="/"
@@ -38,15 +37,5 @@ function PlanRoute() {
 
   return <PlanView sessionId={sessionId} />;
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  app: {
-    minHeight: '100vh',
-    backgroundColor: colors.bg,
-  },
-  main: {
-    paddingBottom: '60px',
-  },
-};
 
 export default App;

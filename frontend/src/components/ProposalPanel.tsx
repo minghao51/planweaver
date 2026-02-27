@@ -1,7 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { usePlanApi } from '../hooks/useApi';
-import { Plan, StrawmanProposal } from '../types';
-import { colors, disabledStyle, sharedStyles } from '../styles/ui';
+import { Plan, ProposalWithAnalysis } from '../types';
+import {
+  Lightbulb,
+  Check,
+  ShieldCheck,
+  ShieldAlert,
+  Loader2,
+  ChevronRight,
+  Scale
+} from 'lucide-react';
+import { cn } from '../utils';
+import { ProposalComparisonView } from './ProposalComparisonView';
 
 interface ProposalPanelProps {
   plan: Plan;
@@ -9,155 +19,161 @@ interface ProposalPanelProps {
 }
 
 export function ProposalPanel({ plan, onSelected }: ProposalPanelProps) {
-  const [proposals, setProposals] = useState<StrawmanProposal[]>([]);
-  const { getProposals, selectProposal, isLoading, error } = usePlanApi();
-
-  useEffect(() => {
-    void loadProposals();
-  }, [plan.session_id, getProposals]);
-
-  async function loadProposals() {
-    try {
-      const list = await getProposals(plan.session_id);
-      setProposals(list);
-    } catch {}
-  }
+  const [showComparison, setShowComparison] = useState(false);
+  const { selectProposal, isLoading, error } = usePlanApi();
 
   async function handleSelect(proposalId: string) {
     try {
       await selectProposal(plan.session_id, proposalId);
       onSelected();
-    } catch {}
+    } catch (error) {
+      console.error('Failed to select proposal:', error);
+    }
   }
 
   const selecting = isLoading('selectProposal');
 
+  // Convert proposals to ProposalWithAnalysis format
+  const proposalsWithAnalysis: ProposalWithAnalysis[] = (plan.strawman_proposals || []).map(p => ({
+    proposal_id: p.id,
+    title: p.title,
+    description: p.description,
+    pros: p.pros,
+    cons: p.cons,
+    selected: p.selected,
+    estimated_step_count: 0, // These would come from the backend if available
+    complexity_score: 'Medium' as const,
+    estimated_time_minutes: 0,
+    estimated_cost_usd: 0,
+    risk_factors: [],
+  }));
+
   return (
-    <div style={styles.container}>
-      <h2 style={styles.title}>Proposed Approaches</h2>
-      <p style={styles.subtitle}>Review and select the best approach for your needs.</p>
-      {error && <div style={styles.error}>{error}</div>}
+    <div className="space-y-8 animate-in slide-in-from-bottom-6 duration-700">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-4">
+          <div className="h-12 w-12 rounded-2xl bg-warning/10 flex items-center justify-center text-warning">
+            <Lightbulb size={24} />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight text-white">Strawman Proposals</h2>
+            <p className="text-text-muted font-medium">Select an architectural approach to proceed with execution.</p>
+          </div>
+        </div>
+        {(plan.strawman_proposals?.length ?? 0) >= 2 && (
+          <button
+            onClick={() => setShowComparison(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 font-bold text-sm transition-all duration-300"
+          >
+            <Scale size={16} />
+            Compare All
+          </button>
+        )}
+      </div>
 
-      <div style={styles.proposals}>
-        {proposals.map((p, i) => (
-          <div key={p.id} style={styles.proposal}>
-            <div style={styles.proposalHeader}>
-              <span style={styles.proposalNumber}>{i + 1}</span>
-              <h3 style={styles.proposalTitle}>{p.title}</h3>
-            </div>
-            <p style={styles.proposalDesc}>{p.description}</p>
-
-            <div style={styles.prosCons}>
-              <div style={styles.pros}>
-                <span style={styles.prosConsLabel}>Pros</span>
-                <ul style={styles.list}>
-                  {p.pros.map((pro: string, j: number) => (
-                    <li key={j} style={styles.listItem}>+ {pro}</li>
-                  ))}
-                </ul>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {plan.strawman_proposals?.map((proposal) => (
+          <div
+            key={proposal.id}
+            className={cn(
+              "flex flex-col p-8 rounded-3xl bg-surface border transition-all duration-500 group relative overflow-hidden",
+              proposal.selected
+                ? "border-primary shadow-2xl shadow-primary/10 ring-1 ring-primary/20"
+                : "border-white/5 hover:border-white/20 hover:bg-surface-alt shadow-xl"
+            )}
+          >
+            {proposal.selected && (
+              <div className="absolute top-0 right-0 p-4">
+                <Check className="text-primary h-6 w-6" />
               </div>
-              <div style={styles.cons}>
-                <span style={styles.prosConsLabel}>Cons</span>
-                <ul style={styles.list}>
-                  {p.cons.map((con: string, j: number) => (
-                    <li key={j} style={styles.listItem}>- {con}</li>
-                  ))}
-                </ul>
+            )}
+
+            <div className="space-y-6 flex-1">
+              <div>
+                <h3 className="text-xl font-bold text-white group-hover:text-primary transition-colors duration-300">
+                  {proposal.title}
+                </h3>
+                <p className="mt-3 text-text-body leading-relaxed text-sm opacity-80">
+                  {proposal.description}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-6">
+                <div className="space-y-3">
+                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-success/80 flex items-center gap-1.5">
+                    <ShieldCheck size={12} />
+                    Advantages
+                  </h4>
+                  <ul className="space-y-2">
+                    {proposal.pros.map((pro, i) => (
+                      <li key={i} className="text-xs text-text-body flex items-start gap-2">
+                        <div className="h-1 w-1 rounded-full bg-success mt-1.5 shrink-0" />
+                        {pro}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="space-y-3">
+                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-danger/80 flex items-center gap-1.5">
+                    <ShieldAlert size={12} />
+                    Trade-offs
+                  </h4>
+                  <ul className="space-y-2">
+                    {proposal.cons.map((con, i) => (
+                      <li key={i} className="text-xs text-text-body flex items-start gap-2">
+                        <div className="h-1 w-1 rounded-full bg-danger mt-1.5 shrink-0" />
+                        {con}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
             </div>
 
             <button
-              style={{ ...styles.selectButton, ...disabledStyle(selecting) }}
-              onClick={() => handleSelect(p.id)}
-              disabled={selecting}
+              onClick={() => handleSelect(proposal.id)}
+              disabled={selecting || proposal.selected}
+              className={cn(
+                "mt-8 w-full h-12 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all duration-300",
+                proposal.selected
+                  ? "bg-primary/10 text-primary border border-primary/20 cursor-default"
+                  : "bg-primary hover:bg-primary-hover text-white shadow-lg shadow-primary/10 hover:scale-[1.02] active:scale-100"
+              )}
             >
-              Select This Approach
+              {selecting ? (
+                <Loader2 className="animate-spin w-5 h-5" />
+              ) : proposal.selected ? (
+                <>
+                  <Check size={16} /> Selected
+                </>
+              ) : (
+                <>
+                  Select Approach
+                  <ChevronRight size={16} />
+                </>
+              )}
             </button>
           </div>
         ))}
       </div>
+
+      {error && (
+        <div className="p-4 rounded-xl bg-danger/10 border border-danger/20 text-danger text-sm">
+          {error}
+        </div>
+      )}
+
+      {showComparison && (
+        <ProposalComparisonView
+          sessionId={plan.session_id}
+          proposals={proposalsWithAnalysis}
+          onClose={() => setShowComparison(false)}
+          onSelectProposal={(proposalId) => {
+            handleSelect(proposalId);
+          }}
+        />
+      )}
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  container: { ...sharedStyles.panel, marginBottom: '24px' },
-  title: sharedStyles.sectionTitle,
-  subtitle: sharedStyles.sectionSubtitle,
-  error: { ...sharedStyles.errorBox, marginBottom: '16px' },
-  proposals: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '16px',
-  },
-  proposal: {
-    border: `1px solid ${colors.border}`,
-    borderRadius: '8px',
-    padding: '20px',
-  },
-  proposalHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    marginBottom: '12px',
-  },
-  proposalNumber: {
-    width: '28px',
-    height: '28px',
-    borderRadius: '50%',
-    backgroundColor: colors.primary,
-    color: colors.text,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '14px',
-    fontWeight: '600',
-  },
-  proposalTitle: {
-    fontSize: '16px',
-    fontWeight: '600',
-    color: colors.text,
-  },
-  proposalDesc: {
-    color: colors.textSubtle,
-    fontSize: '14px',
-    marginBottom: '16px',
-  },
-  prosCons: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: '16px',
-    marginBottom: '16px',
-  },
-  pros: {},
-  cons: {},
-  prosConsLabel: {
-    fontSize: '12px',
-    fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    marginBottom: '8px',
-    display: 'block',
-  },
-  list: {
-    listStyle: 'none',
-    padding: 0,
-    margin: 0,
-  },
-  listItem: {
-    fontSize: '13px',
-    color: colors.textSubtle,
-    marginBottom: '4px',
-  },
-  selectButton: {
-    width: '100%',
-    padding: '10px 16px',
-    borderRadius: '6px',
-    border: `1px solid ${colors.primary}`,
-    backgroundColor: 'transparent',
-    color: colors.primary,
-    fontSize: '14px',
-    fontWeight: '500',
-    cursor: 'pointer',
-  },
-};

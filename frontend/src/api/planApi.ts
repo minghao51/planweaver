@@ -3,6 +3,7 @@ import type {
   CreateSessionResponse,
   ModelsResponse,
   Plan,
+  ProposalComparison,
   ProposalsResponse,
   ScenariosResponse,
   SessionHistoryQuery,
@@ -75,5 +76,12 @@ export const planApi = {
 
     const suffix = params.toString();
     return fetchJson<SessionsListResponse>(`/sessions${suffix ? `?${suffix}` : ''}`);
+  },
+
+  compareProposals(sessionId: string, proposalIds: string[]) {
+    return fetchJson<ProposalComparison>(`/sessions/${sessionId}/compare-proposals`, {
+      method: 'POST',
+      body: JSON.stringify({ proposal_ids: proposalIds }),
+    });
   },
 };
