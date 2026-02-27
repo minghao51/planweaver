@@ -21,10 +21,13 @@ User Intent + External Context → Planner → Execution Graph → Executor → 
 | `ExecutionRouter` | `services/router.py` | Execute DAG steps in dependency order with retries |
 | `LLMGateway` | `services/llm_gateway.py` | LiteLLM wrapper - unified API for all models |
 | `TemplateEngine` | `services/template_engine.py` | Load/render YAML scenario templates |
-| `ContextService` | `services/context_service.py` | **NEW** - Unified manager for external context sources |
-| `GitHubAnalyzer` | `services/github_analyzer.py` | **NEW** - Extract repo structure, dependencies, key files |
-| `WebSearchService` | `services/web_search_service.py` | **NEW** - Web search with AI-summarized results (Tavily) |
-| `FileProcessorService` | `services/file_processor.py` | **NEW** - Parse PDFs, text, and code files for context |
+| `ContextService` | `services/context_service.py` | External context manager for GitHub, web search, file uploads |
+| `GitHubAnalyzer` | `services/github_analyzer.py` | Extract repo structure, dependencies, key files |
+| `WebSearchService` | `services/web_search_service.py` | Web search with AI-summarized results (Tavily) |
+| `FileProcessorService` | `services/file_processor.py` | Parse PDFs, text, and code files for context |
+| `VariantGenerator` | `services/variant_generator.py` | **NEW** - Generate AI-optimized plan variants |
+| `ModelRater` | `services/model_rater.py` | **NEW** - Rate plans using multiple AI models |
+| `OptimizerService` | `services/optimizer_service.py` | **NEW** - Orchestrate optimization workflow |
 
 ## Data Flow
 
@@ -94,6 +97,52 @@ User Intent + External Context → Planner → Execution Graph → Executor → 
                  └─────────────────────┘
 ```
 
+### Plan Optimizer Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     Proposal Selection                           │
+└─────────────────────────────────────────────────────────────────┘
+                           ↓
+                 ┌─────────────────────┐
+                 │   OptimizerStage    │
+                 │   (Frontend)        │
+                 └─────────────────────┘
+                           ↓
+        ┌──────────────────┴──────────────────┐
+        ↓                                     ↓
+┌─────────────────────┐           ┌─────────────────────┐
+│  VariantGenerator   │           │    ModelRater       │
+│  (Backend)          │           │    (Backend)        │
+├─────────────────────┤           ├─────────────────────┤
+│ • Simplified        │           │ • Claude 3.5 Sonnet │
+│ • Enhanced          │           │ • GPT-4o            │
+│ • Cost-Optimized    │           │ • DeepSeek V3       │
+└─────────────────────┘           └─────────────────────┘
+        ↓                                     ↓
+        └──────────────────┬──────────────────┘
+                           ↓
+                 ┌─────────────────────┐
+                 │  Optimized Variants │
+                 │  + Multi-Model      │
+                 │  Ratings            │
+                 └─────────────────────┘
+                           ↓
+                 ┌─────────────────────┐
+                 │  Comparison Panel   │
+                 │  (Side-by-Side)     │
+                 └─────────────────────┘
+                           ↓
+                 ┌─────────────────────┐
+                 │   User Selection    │
+                 │   + Feedback        │
+                 └─────────────────────┘
+                           ↓
+                 ┌─────────────────────┐
+                 │   Execution Phase   │
+                 └─────────────────────┘
+```
+
 ## Plan Status Lifecycle
 
 ```
@@ -127,6 +176,16 @@ PENDING → IN_PROGRESS → COMPLETED
 | POST | `/api/v1/sessions/{id}/context/web-search` | Add web search results (auto-query or manual) |
 | POST | `/api/v1/sessions/{id}/context/upload` | Upload file for context extraction |
 | GET | `/api/v1/sessions/{id}/context` | List all external contexts for session |
+
+### New API Endpoints (Plan Optimizer)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/optimizer/optimize` | Generate optimized variants and rate plans |
+| GET | `/api/v1/optimizer/results/{session_id}` | Get optimization results for session |
+| POST | `/api/v1/optimizer/rate` | Rate plans with multiple AI models |
+| POST | `/api/v1/optimizer/user-rating` | Save user feedback on plans |
+| GET | `/api/v1/optimizer/state/{session_id}` | Get current optimization state |
 
 ## Technology Stack
 
@@ -166,6 +225,44 @@ ExternalContext
 ├── source_url: str | None
 ├── content_summary: str  # Planner-ready formatted content
 ├── metadata: dict  # Source-specific data
+└── created_at: datetime
+
+# Plan optimizer models
+OptimizedVariant
+├── id: str
+├── session_id: str
+├── proposal_id: str
+├── variant_type: "simplified" | "enhanced" | "cost-optimized"
+├── execution_graph: list[ExecutionStep]
+├── variant_metadata: dict
+│   ├── step_count: int
+│   ├── complexity_score: str
+│   ├── optimization_notes: str
+│   ├── estimated_time_minutes: int
+│   └── estimated_cost_usd: float
+└── created_at: datetime
+
+PlanRating
+├── id: str
+├── session_id: str
+├── plan_id: str
+├── model_name: str
+├── ratings: dict
+│   ├── feasibility: float (1-10)
+│   ├── cost_efficiency: float (1-10)
+│   ├── time_efficiency: float (1-10)
+│   ├── complexity: float (1-10)
+│   └── risk_level: float (1-10)
+├── reasoning: str
+└── created_at: datetime
+
+UserRating
+├── id: str
+├── session_id: str
+├── plan_id: str
+├── rating: int (1-5)
+├── comment: str | None
+├── rationale: str | None
 └── created_at: datetime
 ```
 
