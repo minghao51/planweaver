@@ -48,8 +48,8 @@ export function usePlanApi() {
   }, []);
 
   const createSession = useCallback(
-    (userIntent: string, scenarioName?: string) =>
-      runAction('createSession', () => planApi.createSession(userIntent, scenarioName)),
+    (userIntent: string, scenarioName?: string, plannerModel?: string, executorModel?: string) =>
+      runAction('createSession', () => planApi.createSession(userIntent, scenarioName, plannerModel, executorModel)),
     [runAction],
   );
 

@@ -8,15 +8,21 @@ import type {
   ScenariosResponse,
   SessionHistoryQuery,
   SessionsListResponse,
+  OptimizerResponse,
+  RatePlansResponse,
+  UserRatingResponse,
+  OptimizationState,
 } from '../types';
 
 export const planApi = {
-  createSession(userIntent: string, scenarioName?: string) {
+  createSession(userIntent: string, scenarioName?: string, plannerModel?: string, executorModel?: string) {
     return fetchJson<CreateSessionResponse>('/sessions', {
       method: 'POST',
       body: JSON.stringify({
         user_intent: userIntent,
         scenario_name: scenarioName,
+        planner_model: plannerModel,
+        executor_model: executorModel,
       }),
     });
   },
@@ -83,5 +89,49 @@ export const planApi = {
       method: 'POST',
       body: JSON.stringify({ proposal_ids: proposalIds }),
     });
+  },
+
+  // ==================== Optimizer APIs ====================
+
+  optimizePlan(proposalId: string, optimizationTypes: string[] = ['simplified', 'enhanced'], userContext?: string) {
+    return fetchJson<OptimizerResponse>('/optimizer/optimize', {
+      method: 'POST',
+      body: JSON.stringify({
+        selected_proposal_id: proposalId,
+        optimization_types: optimizationTypes,
+        user_context: userContext,
+      }),
+    });
+  },
+
+  getOptimizationResults(sessionId: string) {
+    return fetchJson<Record<string, unknown>>(`/optimizer/results/${sessionId}`);
+  },
+
+  ratePlans(planIds: string[], models?: string[], criteria?: string[]) {
+    return fetchJson<RatePlansResponse>('/optimizer/rate', {
+      method: 'POST',
+      body: JSON.stringify({
+        plan_ids: planIds,
+        models: models || ['claude-3.5-sonnet', 'gpt-4o', 'deepseek-chat'],
+        criteria: criteria || ['feasibility', 'cost_efficiency', 'time_efficiency', 'complexity'],
+      }),
+    });
+  },
+
+  saveUserRating(planId: string, rating: number, comment?: string, rationale?: string) {
+    return fetchJson<UserRatingResponse>('/optimizer/user-rating', {
+      method: 'POST',
+      body: JSON.stringify({
+        plan_id: planId,
+        rating,
+        comment,
+        rationale,
+      }),
+    });
+  },
+
+  getOptimizationState(sessionId: string) {
+    return fetchJson<OptimizationState>(`/optimizer/state/${sessionId}`);
   },
 };
