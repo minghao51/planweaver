@@ -2,11 +2,12 @@
 Script to scrape free models from OpenRouter using Playwright.
 Run manually: uv run python -m planweaver.scripts.scrape_openrouter_models
 """
+
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import List, Dict, Any, Optional
-from playwright.async_api import async_playwright, Browser, Page
+from typing import List, Dict, Any
+from playwright.async_api import async_playwright
 from sqlalchemy.exc import IntegrityError
 
 from ..db.database import get_session
@@ -38,7 +39,11 @@ class OpenRouterScraper:
 
             try:
                 logger.info(f"Navigating to {self.FREE_MODELS_URL}")
-                await page.goto(self.FREE_MODELS_URL, wait_until="networkidle", timeout=self.timeout_ms)
+                await page.goto(
+                    self.FREE_MODELS_URL,
+                    wait_until="networkidle",
+                    timeout=self.timeout_ms,
+                )
                 await asyncio.sleep(2)  # Wait for dynamic content
 
                 # Extract model data using JavaScript
@@ -101,9 +106,11 @@ class OpenRouterScraper:
                 model_data["context_length"] = None
                 model_data["is_active"] = True
 
-                existing = session.query(AvailableModel).filter_by(
-                    model_id=model_data["model_id"]
-                ).first()
+                existing = (
+                    session.query(AvailableModel)
+                    .filter_by(model_id=model_data["model_id"])
+                    .first()
+                )
 
                 if existing:
                     # Update existing model
@@ -122,7 +129,9 @@ class OpenRouterScraper:
                 session.commit()
 
             except IntegrityError as e:
-                logger.warning(f"Integrity error for model {model_data.get('model_id')}: {e}")
+                logger.warning(
+                    f"Integrity error for model {model_data.get('model_id')}: {e}"
+                )
                 session.rollback()
                 stats["failed"] += 1
             except Exception as e:
@@ -138,7 +147,7 @@ async def main():
     """Main entry point."""
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
     scraper = OpenRouterScraper()
