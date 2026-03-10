@@ -17,17 +17,61 @@ vi.mock('../../hooks/useToast', () => ({
 describe('OptimizerStage', () => {
   const mockOptimizePlan = vi.fn();
   const mockSaveUserRating = vi.fn();
+  const mockSubmitManualPlan = vi.fn();
+  const mockEvaluatePlans = vi.fn();
+  const mockComparePlans = vi.fn();
   const mockShowSuccess = vi.fn();
   const mockShowError = vi.fn();
+  const mockShowInfo = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockOptimizePlan.mockResolvedValue({
+      variants: [],
+      ratings: {},
+    });
+    mockSubmitManualPlan.mockResolvedValue({
+      normalized_plan: {
+        id: 'manual-1',
+        session_id: 'session-1',
+        source_type: 'manual',
+        source_model: 'human',
+        planning_style: 'manual',
+        title: 'Manual baseline',
+        summary: 'Summary',
+        assumptions: [],
+        constraints: [],
+        success_criteria: [],
+        risks: [],
+        fallbacks: [],
+        estimated_time_minutes: 0,
+        estimated_cost_usd: 0,
+        steps: [],
+        metadata: {},
+        normalization_warnings: [],
+      },
+      evaluations: {},
+      ranking: [],
+    });
+    mockEvaluatePlans.mockResolvedValue({
+      normalized_plans: [],
+      evaluations: {},
+      ranking: [],
+    });
+    mockComparePlans.mockResolvedValue({
+      normalized_plans: [],
+      evaluations: {},
+      comparisons: [],
+      ranking: [],
+    });
 
     // Mock useOptimizer
     vi.spyOn(hooks, 'useOptimizer').mockReturnValue({
       optimizePlan: mockOptimizePlan,
       saveUserRating: mockSaveUserRating,
-      loading: false,
+      submitManualPlan: mockSubmitManualPlan,
+      evaluatePlans: mockEvaluatePlans,
+      comparePlans: mockComparePlans,
       isLoading: vi.fn(() => false),
       error: null,
     } as any);
@@ -48,9 +92,9 @@ describe('OptimizerStage', () => {
 
     // Mock useToast
     vi.spyOn(toastHooks, 'useToast').mockReturnValue({
-      showSuccess: mockShowSuccess,
-      showError: mockShowError,
-      showInfo: vi.fn(),
+      success: mockShowSuccess,
+      error: mockShowError,
+      info: mockShowInfo,
     } as any);
   });
 
@@ -66,8 +110,8 @@ describe('OptimizerStage', () => {
       />
     );
 
-    expect(screen.getByText('Plan Optimizer')).toBeInTheDocument();
-    expect(screen.getByText(/AI-generated variants/i)).toBeInTheDocument();
+    expect(screen.getByText('Planning Workbench')).toBeInTheDocument();
+    expect(screen.getByText(/manual baselines, rubric evaluation/i)).toBeInTheDocument();
   });
 
   it('should call optimizePlan on mount', async () => {
@@ -98,7 +142,10 @@ describe('OptimizerStage', () => {
   it('should show loading state while optimizing', () => {
     vi.spyOn(hooks, 'useOptimizer').mockReturnValue({
       optimizePlan: mockOptimizePlan,
-      loading: true,
+      saveUserRating: mockSaveUserRating,
+      submitManualPlan: mockSubmitManualPlan,
+      evaluatePlans: mockEvaluatePlans,
+      comparePlans: mockComparePlans,
       isLoading: vi.fn(() => true),
       error: null,
     } as any);
@@ -115,6 +162,24 @@ describe('OptimizerStage', () => {
     );
 
     expect(screen.getByText(/Generating Optimized Variants/i)).toBeInTheDocument();
+  });
+
+  it('should render workbench tabs', () => {
+    render(
+      <OptimizerStage
+        sessionId="session-1"
+        selectedProposalId="proposal-1"
+        selectedProposalTitle="Test Proposal"
+        selectedProposalDescription="A test proposal"
+        onComplete={vi.fn()}
+        onBack={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /variants/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /manual plan/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /evaluate/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /compare/i })).toBeInTheDocument();
   });
 
   it('should call onBack when back button clicked', () => {
@@ -165,9 +230,7 @@ describe('OptimizerStage', () => {
       />
     );
 
-    const continueButton = screen.getByRole('button', { name: /continue/i });
-    // Button should be disabled when no plan is selected
-    expect(continueButton).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /continue/i })).not.toBeInTheDocument();
     expect(mockOnComplete).not.toHaveBeenCalled();
   });
 

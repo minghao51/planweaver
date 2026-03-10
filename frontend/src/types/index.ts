@@ -106,6 +106,10 @@ export interface SessionsListResponse {
 
 // Comparison types
 export type ComplexityScore = 'Low' | 'Medium' | 'High';
+export type PlanSourceType = 'llm_generated' | 'manual' | 'optimized_variant';
+export type EvaluationVerdict = 'strong' | 'acceptable' | 'weak' | 'reject';
+export type DisagreementLevel = 'low' | 'medium' | 'high';
+export type ComparisonMargin = 'narrow' | 'moderate' | 'clear';
 
 export interface ProposalWithAnalysis {
   proposal_id: string;
@@ -240,6 +244,116 @@ export interface OptimizationState {
   status: OptimizationStatus;
   progress: number;
   message?: string;
+}
+
+export interface NormalizedStep {
+  step_id: string;
+  description: string;
+  dependencies: string[];
+  validation: string[];
+  tools: string[];
+  owner_model?: string | null;
+  estimated_time_minutes?: number | null;
+}
+
+export interface NormalizedPlan {
+  id: string;
+  session_id?: string | null;
+  source_type: PlanSourceType;
+  source_model: string;
+  planning_style: string;
+  title: string;
+  summary: string;
+  assumptions: string[];
+  constraints: string[];
+  success_criteria: string[];
+  risks: string[];
+  fallbacks: string[];
+  estimated_time_minutes?: number | null;
+  estimated_cost_usd?: number | string | null;
+  steps: NormalizedStep[];
+  metadata: Record<string, unknown>;
+  normalization_warnings: string[];
+}
+
+export interface RubricPlanEvaluation {
+  plan_id: string;
+  judge_model: string;
+  rubric_scores: Record<string, number>;
+  overall_score: number;
+  strengths: string[];
+  weaknesses: string[];
+  blocking_issues: string[];
+  confidence: number;
+  verdict: EvaluationVerdict;
+}
+
+export interface RankedPlan {
+  plan_id: string;
+  final_score: number;
+  rank: number;
+  confidence: number;
+  disagreement_level: DisagreementLevel;
+  recommendation_reason: string;
+}
+
+export interface PairwisePlanComparison {
+  left_plan_id: string;
+  right_plan_id: string;
+  judge_model: string;
+  winner_plan_id: string;
+  margin: ComparisonMargin;
+  rationale: string;
+  preference_factors: string[];
+}
+
+export interface ManualPlanRequest {
+  session_id?: string;
+  title: string;
+  summary?: string;
+  plan_text?: string;
+  assumptions?: string[];
+  constraints?: string[];
+  success_criteria?: string[];
+  risks?: string[];
+  fallbacks?: string[];
+  steps?: NormalizedStep[];
+  estimated_time_minutes?: number;
+  estimated_cost_usd?: number;
+  metadata?: Record<string, unknown>;
+  judge_models?: string[];
+}
+
+export interface ManualPlanResponse {
+  normalized_plan: NormalizedPlan;
+  evaluations: Record<string, RubricPlanEvaluation>;
+  ranking: RankedPlan[];
+}
+
+export interface NormalizePlanRequest {
+  session_id?: string;
+  plan: Record<string, unknown>;
+  source_type?: PlanSourceType;
+  source_model?: string;
+  planning_style?: string;
+  persist?: boolean;
+}
+
+export interface NormalizePlanResponse {
+  normalized_plan: NormalizedPlan;
+}
+
+export interface PlanEvaluationResponse {
+  normalized_plans: NormalizedPlan[];
+  evaluations: Record<string, Record<string, RubricPlanEvaluation>>;
+  ranking: RankedPlan[];
+}
+
+export interface PairwiseComparisonResponse {
+  normalized_plans: NormalizedPlan[];
+  evaluations: Record<string, Record<string, RubricPlanEvaluation>>;
+  comparisons: PairwisePlanComparison[];
+  ranking: RankedPlan[];
 }
 
 export interface OptimizerStageData {

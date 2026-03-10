@@ -12,6 +12,12 @@ import type {
   RatePlansResponse,
   UserRatingResponse,
   OptimizationState,
+  ManualPlanRequest,
+  ManualPlanResponse,
+  NormalizePlanRequest,
+  NormalizePlanResponse,
+  PlanEvaluationResponse,
+  PairwiseComparisonResponse,
 } from '../types';
 
 export const planApi = {
@@ -133,5 +139,41 @@ export const planApi = {
 
   getOptimizationState(sessionId: string) {
     return fetchJson<OptimizationState>(`/optimizer/state/${sessionId}`);
+  },
+
+  submitManualPlan(payload: ManualPlanRequest) {
+    return fetchJson<ManualPlanResponse>('/optimizer/manual', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  normalizePlan(payload: NormalizePlanRequest) {
+    return fetchJson<NormalizePlanResponse>('/optimizer/normalize', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  evaluatePlans(plans: Record<string, unknown>[], sessionId?: string, judgeModels?: string[]) {
+    return fetchJson<PlanEvaluationResponse>('/optimizer/evaluate', {
+      method: 'POST',
+      body: JSON.stringify({
+        session_id: sessionId,
+        plans,
+        judge_models: judgeModels || [],
+      }),
+    });
+  },
+
+  comparePlans(plans: Record<string, unknown>[], sessionId?: string, judgeModels?: string[]) {
+    return fetchJson<PairwiseComparisonResponse>('/optimizer/compare', {
+      method: 'POST',
+      body: JSON.stringify({
+        session_id: sessionId,
+        plans,
+        judge_models: judgeModels || [],
+      }),
+    });
   },
 };

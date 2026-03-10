@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { API_BASE } from '../api/client';
 
 interface SSEEvents {
   onConnected?: (data: { session_id: string }) => void;
@@ -13,12 +14,21 @@ export function useSSE(sessionId: string, events: SSEEvents = {}) {
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const eventsRef = useRef(events);
+
+  useEffect(() => {
+    eventsRef.current = events;
+  }, [events]);
 
   useEffect(() => {
     if (!sessionId) return;
 
-    const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000/api/v1';
-    const eventSource = new EventSource(`${API_BASE}/sessions/${sessionId}/stream`);
+    const configuredBase = import.meta.env.VITE_API_BASE || API_BASE;
+    const streamUrl = new URL(
+      `${configuredBase.replace(/\/$/, '')}/sessions/${sessionId}/stream`,
+      window.location.origin
+    ).toString();
+    const eventSource = new EventSource(streamUrl);
 
     eventSourceRef.current = eventSource;
 
@@ -31,13 +41,14 @@ export function useSSE(sessionId: string, events: SSEEvents = {}) {
       console.error('SSE connection error:', err);
       setConnected(false);
       setError('Connection error');
+      events.onError?.({ message: 'Connection error' });
     };
 
     // Listen for connected event
     eventSource.addEventListener('connected', (e: MessageEvent) => {
       try {
         const data = JSON.parse(e.data);
-        events.onConnected?.(data);
+        eventsRef.current.onConnected?.(data);
       } catch (err) {
         console.error('Failed to parse connected event:', err);
       }
@@ -47,7 +58,7 @@ export function useSSE(sessionId: string, events: SSEEvents = {}) {
     eventSource.addEventListener('step_completed', (e: MessageEvent) => {
       try {
         const data = JSON.parse(e.data);
-        events.onStepCompleted?.(data);
+        eventsRef.current.onStepCompleted?.(data);
       } catch (err) {
         console.error('Failed to parse step_completed event:', err);
       }
@@ -57,7 +68,7 @@ export function useSSE(sessionId: string, events: SSEEvents = {}) {
     eventSource.addEventListener('step_failed', (e: MessageEvent) => {
       try {
         const data = JSON.parse(e.data);
-        events.onStepFailed?.(data);
+        eventsRef.current.onStepFailed?.(data);
       } catch (err) {
         console.error('Failed to parse step_failed event:', err);
       }
@@ -67,7 +78,7 @@ export function useSSE(sessionId: string, events: SSEEvents = {}) {
     eventSource.addEventListener('execution_complete', (e: MessageEvent) => {
       try {
         const data = JSON.parse(e.data);
-        events.onExecutionComplete?.(data);
+        eventsRef.current.onExecutionComplete?.(data);
       } catch (err) {
         console.error('Failed to parse execution_complete event:', err);
       }
@@ -77,7 +88,7 @@ export function useSSE(sessionId: string, events: SSEEvents = {}) {
     eventSource.addEventListener('execution_failed', (e: MessageEvent) => {
       try {
         const data = JSON.parse(e.data);
-        events.onExecutionFailed?.(data);
+        eventsRef.current.onExecutionFailed?.(data);
       } catch (err) {
         console.error('Failed to parse execution_failed event:', err);
       }
@@ -85,10 +96,13 @@ export function useSSE(sessionId: string, events: SSEEvents = {}) {
 
     // Listen for error events
     eventSource.addEventListener('error', (e: MessageEvent) => {
+      if (!e.data) {
+        return;
+      }
       try {
         const data = JSON.parse(e.data);
         setError(data.message);
-        events.onError?.(data);
+        eventsRef.current.onError?.(data);
       } catch (err) {
         console.error('Failed to parse error event:', err);
       }

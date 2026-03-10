@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { planApi } from '../api/planApi';
+import { RateLimitError } from '../api/client';
 import type { SessionHistoryQuery } from '../types';
 
 type ActionName =
@@ -17,18 +18,31 @@ type ActionName =
 
 type LoadingState = Partial<Record<ActionName, boolean>>;
 
-const getErrorMessage = (error: unknown): string => {
-  if (error instanceof Error) return error.message;
-  if (typeof error === 'string') return error;
-  if (error && typeof error === 'object' && 'detail' in error) {
-    return String(error.detail);
+export type ApiError = {
+  message: string;
+  isRateLimit: boolean;
+  retryAfter: number;
+};
+
+const getErrorMessage = (error: unknown): ApiError => {
+  if (error instanceof RateLimitError) {
+    return {
+      message: error.message,
+      isRateLimit: true,
+      retryAfter: error.retryAfter,
+    };
   }
-  return 'An unexpected error occurred. Please try again.';
+  if (error instanceof Error) return { message: error.message, isRateLimit: false, retryAfter: 0 };
+  if (typeof error === 'string') return { message: error, isRateLimit: false, retryAfter: 0 };
+  if (error && typeof error === 'object' && 'detail' in error) {
+    return { message: String(error.detail), isRateLimit: false, retryAfter: 0 };
+  }
+  return { message: 'An unexpected error occurred. Please try again.', isRateLimit: false, retryAfter: 0 };
 };
 
 export function usePlanApi() {
   const [loadingByAction, setLoadingByAction] = useState<LoadingState>({});
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
 
   const runAction = useCallback(async <T,>(
     action: ActionName,
@@ -39,8 +53,8 @@ export function usePlanApi() {
     try {
       return await request();
     } catch (e) {
-      const message = getErrorMessage(e);
-      setError(message);
+      const errorInfo = getErrorMessage(e);
+      setError(errorInfo);
       throw e;
     } finally {
       setLoadingByAction((prev) => ({ ...prev, [action]: false }));

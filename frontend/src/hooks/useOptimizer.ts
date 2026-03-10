@@ -6,6 +6,7 @@ import type {
   VariantType,
   OptimizationStatus,
   OptimizerStageData,
+  ManualPlanRequest,
 } from '../types';
 
 type OptimizerActionName =
@@ -13,7 +14,11 @@ type OptimizerActionName =
   | 'getResults'
   | 'ratePlans'
   | 'saveUserRating'
-  | 'getState';
+  | 'getState'
+  | 'submitManualPlan'
+  | 'normalizePlan'
+  | 'evaluatePlans'
+  | 'comparePlans';
 
 type LoadingState = Partial<Record<OptimizerActionName, boolean>>;
 
@@ -91,6 +96,52 @@ export function useOptimizer() {
     [runAction]
   );
 
+  const submitManualPlan = useCallback(
+    (payload: ManualPlanRequest) =>
+      runAction('submitManualPlan', () => planApi.submitManualPlan(payload)),
+    [runAction]
+  );
+
+  const normalizePlan = useCallback(
+    (
+      plan: Record<string, unknown>,
+      options?: {
+        sessionId?: string;
+        sourceType?: 'llm_generated' | 'manual' | 'optimized_variant';
+        sourceModel?: string;
+        planningStyle?: string;
+        persist?: boolean;
+      }
+    ) =>
+      runAction('normalizePlan', () =>
+        planApi.normalizePlan({
+          session_id: options?.sessionId,
+          plan,
+          source_type: options?.sourceType,
+          source_model: options?.sourceModel,
+          planning_style: options?.planningStyle,
+          persist: options?.persist ?? true,
+        })
+      ),
+    [runAction]
+  );
+
+  const evaluatePlans = useCallback(
+    (plans: Record<string, unknown>[], sessionId?: string, judgeModels?: string[]) =>
+      runAction('evaluatePlans', () =>
+        planApi.evaluatePlans(plans, sessionId, judgeModels)
+      ),
+    [runAction]
+  );
+
+  const comparePlans = useCallback(
+    (plans: Record<string, unknown>[], sessionId?: string, judgeModels?: string[]) =>
+      runAction('comparePlans', () =>
+        planApi.comparePlans(plans, sessionId, judgeModels)
+      ),
+    [runAction]
+  );
+
   const loading = useMemo(
     () => Object.values(loadingByAction).some(Boolean),
     [loadingByAction]
@@ -111,6 +162,10 @@ export function useOptimizer() {
     ratePlans,
     saveUserRating,
     getOptimizationState,
+    submitManualPlan,
+    normalizePlan,
+    evaluatePlans,
+    comparePlans,
   };
 }
 

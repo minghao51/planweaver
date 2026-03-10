@@ -6,7 +6,8 @@ import {
   HelpCircle,
   Send,
   MessageSquare,
-  Loader2
+  Loader2,
+  Clock
 } from 'lucide-react';
 import { cn } from '../utils';
 
@@ -67,9 +68,20 @@ export function QuestionPanel({ plan, onUpdated }: QuestionPanelProps) {
         ))}
 
         {error && (
-          <div className="p-4 rounded-xl bg-danger/10 border border-danger/20 text-danger text-sm flex items-center gap-2">
-            <MessageSquare size={16} />
-            {error}
+          <div className="p-4 rounded-xl bg-danger/10 border border-danger/20 text-danger text-sm">
+            {error.isRateLimit ? (
+              <div className="flex items-center gap-2">
+                <Clock size={16} />
+                <span>
+                  {error.message} Please wait <strong>{error.retryAfter} seconds</strong>.
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <MessageSquare size={16} />
+                {error.message}
+              </div>
+            )}
           </div>
         )}
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Activity, History, PlusCircle } from 'lucide-react';
+import { Activity, History, Layers3, PlusCircle } from 'lucide-react';
 import { cn } from '../utils';
 
 export const Header: React.FC = () => {
@@ -8,6 +8,7 @@ export const Header: React.FC = () => {
 
   const navItems = [
     { path: '/', label: 'New Plan', icon: PlusCircle },
+    { path: '/workbench', label: 'Workbench', icon: Layers3 },
     { path: '/history', label: 'History', icon: History },
   ];
 

@@ -9,12 +9,15 @@ import { FlowCanvas } from './FlowCanvas';
 import { OptimizerStage } from './optimizer';
 import {
   Target,
-  Settings2,
+  Lightbulb,
+  Play,
   CheckCircle2,
-  AlertCircle,
   Loader2,
+  AlertCircle,
+  Clock,
   ChevronRight,
-  Zap
+  Settings2,
+  Zap,
 } from 'lucide-react';
 import { cn } from '../utils';
 import { getStatusStyles } from '../lib/statusStyles';
@@ -88,9 +91,20 @@ export function PlanView({ sessionId }: PlanViewProps) {
 
   if (error) {
     return (
-      <div className="p-6 rounded-2xl bg-danger/10 border border-danger/20 text-danger flex items-center gap-3">
-        <AlertCircle size={20} />
-        <p>Error in session {sessionId}: {error}</p>
+      <div className="p-6 rounded-2xl bg-danger/10 border border-danger/20 text-danger">
+        {error.isRateLimit ? (
+          <div className="flex items-center gap-3">
+            <Clock size={20} />
+            <p>
+              {error.message} Please wait <strong>{error.retryAfter} seconds</strong> before trying again.
+            </p>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <AlertCircle size={20} />
+            <p>Error in session {sessionId}: {error.message}</p>
+          </div>
+        )}
       </div>
     );
   }
@@ -263,4 +277,3 @@ function getPlanStage(plan: Plan): PlanStage {
   if (unansweredQuestions) return 'questions';
   return 'execution';
 }
-

@@ -6,7 +6,8 @@ import {
   PlayCircle,
   AlertCircle,
   ChevronRight,
-  Cpu
+  Cpu,
+  Clock
 } from 'lucide-react';
 import { cn } from '../utils';
 import { getStepStyles } from '../lib/statusStyles';
@@ -144,9 +145,20 @@ export function ExecutionPanel({ plan, onUpdated }: ExecutionPanelProps) {
       </div>
 
       {error && (
-        <div className="p-4 rounded-xl bg-danger/10 border border-danger/20 text-danger text-sm flex items-center gap-2">
-          <AlertCircle size={16} />
-          {error}
+        <div className="p-4 rounded-xl bg-danger/10 border border-danger/20 text-danger text-sm">
+          {error.isRateLimit ? (
+            <div className="flex items-center gap-2">
+              <Clock size={16} />
+              <span>
+                {error.message} Please wait <strong>{error.retryAfter} seconds</strong>.
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <AlertCircle size={16} />
+              {error.message}
+            </div>
+          )}
         </div>
       )}
     </div>

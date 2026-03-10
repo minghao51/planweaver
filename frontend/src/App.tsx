@@ -1,9 +1,11 @@
 import { Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { Header } from './components/Header';
+import { DemoBanner } from './components/DemoBanner';
 import { HistoryPage } from './components/HistoryPage';
 import { NewPlanForm } from './components/NewPlanForm';
 import { PlanView } from './components/PlanView';
+import { WorkbenchPage } from './components/WorkbenchPage';
 import { Toast } from './components/Toast';
 import { useToast } from './hooks/useToast';
 
@@ -14,6 +16,7 @@ function App() {
   return (
     <div className="app-shell min-h-screen bg-bg text-text-body font-sans selection:bg-primary/30">
       <Header />
+      <DemoBanner />
       <main className="container mx-auto px-4 py-8 sm:px-6 sm:py-10">
         <Routes>
           <Route
@@ -25,6 +28,7 @@ function App() {
             }
           />
           <Route path="/plans/:sessionId" element={<PlanRoute />} />
+          <Route path="/workbench" element={<WorkbenchPage />} />
           <Route path="/history" element={<HistoryPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

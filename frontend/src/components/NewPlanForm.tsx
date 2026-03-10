@@ -8,7 +8,8 @@ import {
   Loader2,
   Search,
   FileText,
-  Cpu
+  Cpu,
+  Clock
 } from 'lucide-react';
 import { cn } from '../utils';
 import type { Model } from '../types';
@@ -221,9 +222,20 @@ export function NewPlanForm({ onPlanCreated }: NewPlanFormProps) {
         )}
 
         {error && (
-          <div className="p-4 rounded-xl bg-danger/10 border border-danger/20 text-danger text-sm flex items-center gap-2 animate-pulse">
-            <Search size={16} />
-            {error}
+          <div className="p-4 rounded-xl bg-danger/10 border border-danger/20 text-danger text-sm animate-pulse">
+            {error.isRateLimit ? (
+              <div className="flex items-center gap-2">
+                <Clock size={16} />
+                <span>
+                  {error.message} Please wait <strong>{error.retryAfter} seconds</strong> before trying again.
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Search size={16} />
+                {error.message}
+              </div>
+            )}
           </div>
         )}
 
