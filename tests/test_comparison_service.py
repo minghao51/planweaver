@@ -9,7 +9,6 @@ from planweaver.models.plan import (
     ExecutionStep,
     StepStatus,
     ProposalDetail,
-    StepSummary,
 )
 from planweaver.services.comparison_service import ProposalComparisonService
 
@@ -18,16 +17,18 @@ class TestProposalComparisonService:
     @pytest.fixture
     def mock_planner(self):
         planner = Mock()
-        planner.decompose_into_steps = Mock(return_value=[
-            ExecutionStep(
-                step_id=1,
-                task="Install dependencies",
-                prompt_template_id="default",
-                assigned_model="gemini-2.5-flash",
-                dependencies=[],
-                status=StepStatus.PENDING,
-            )
-        ])
+        planner.decompose_into_steps = Mock(
+            return_value=[
+                ExecutionStep(
+                    step_id=1,
+                    task="Install dependencies",
+                    prompt_template_id="default",
+                    assigned_model="gemini-2.5-flash",
+                    dependencies=[],
+                    status=StepStatus.PENDING,
+                )
+            ]
+        )
         return planner
 
     @pytest.fixture
@@ -41,8 +42,7 @@ class TestProposalComparisonService:
     @pytest.fixture
     def sample_plan_with_proposals(self):
         plan = Plan(
-            user_intent="Add authentication to API",
-            status=PlanStatus.BRAINSTORMING
+            user_intent="Add authentication to API", status=PlanStatus.BRAINSTORMING
         )
         plan.strawman_proposals = [
             StrawmanProposal(
@@ -50,15 +50,15 @@ class TestProposalComparisonService:
                 title="JWT Approach",
                 description="Use JWT tokens",
                 pros=["Scalable", "Standard"],
-                cons=["Stateless"]
+                cons=["Stateless"],
             ),
             StrawmanProposal(
                 id="prop-2",
                 title="Session Approach",
                 description="Use server sessions",
                 pros=["Simple", "Secure"],
-                cons=["Server state"]
-            )
+                cons=["Server state"],
+            ),
         ]
         return plan
 
@@ -74,8 +74,7 @@ class TestProposalComparisonService:
     ):
         """Should create comparison with valid structure"""
         result = comparison_service.compare_proposals(
-            sample_plan_with_proposals,
-            ["prop-1", "prop-2"]
+            sample_plan_with_proposals, ["prop-1", "prop-2"]
         )
 
         assert result.session_id == sample_plan_with_proposals.session_id
@@ -189,7 +188,7 @@ class TestProposalComparisonService:
                 assigned_model="gemini-2.5-flash",
                 dependencies=[],
                 status=StepStatus.PENDING,
-            )
+            ),
         ]
 
         risks = comparison_service._extract_risks(steps)
@@ -268,7 +267,7 @@ class TestProposalComparisonService:
             ],
             accurate_time_estimate=10,
             accurate_cost_estimate=Decimal("0.01"),
-            all_risk_factors=[]
+            all_risk_factors=[],
         )
 
         low_proposal = ProposalDetail(
@@ -286,7 +285,7 @@ class TestProposalComparisonService:
             ],
             accurate_time_estimate=10,
             accurate_cost_estimate=Decimal("0.01"),
-            all_risk_factors=[]
+            all_risk_factors=[],
         )
 
         high_score = comparison_service._calculate_complexity_score(high_proposal)

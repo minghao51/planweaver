@@ -15,7 +15,7 @@ class VariantGenerator:
         self,
         proposal: Dict[str, Any],
         variant_type: Literal["simplified", "enhanced", "cost-optimized"],
-        user_context: str = ""
+        user_context: str = "",
     ) -> Dict[str, Any]:
         """
         Generate a single variant of a proposal
@@ -35,18 +35,19 @@ class VariantGenerator:
 
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
+            {"role": "user", "content": user_prompt},
         ]
 
         response = self.llm_gateway.complete(
             model="claude-3.5-sonnet",
             messages=messages,
             json_mode=True,
-            max_tokens=4096
+            max_tokens=4096,
         )
 
         try:
             import json
+
             variant_data = json.loads(response["content"])
             logger.info(f"Successfully generated {variant_type} variant")
             return variant_data
@@ -83,25 +84,22 @@ Return a JSON object with:
 
 Return a JSON object with:
 - execution_graph: optimized execution steps
-- metadata: {step_count, complexity_score, optimization_notes, estimated_time_minutes, estimated_cost_usd}"""
+- metadata: {step_count, complexity_score, optimization_notes, estimated_time_minutes, estimated_cost_usd}""",
         }
         return prompts.get(variant_type, prompts["simplified"])
 
     def _build_user_prompt(
-        self,
-        proposal: Dict[str, Any],
-        variant_type: str,
-        user_context: str
+        self, proposal: Dict[str, Any], variant_type: str, user_context: str
     ) -> str:
         """Build the user prompt for variant generation"""
         prompt = f"""Generate a {variant_type} variant of this plan:
 
-**Title:** {proposal.get('title', 'N/A')}
+**Title:** {proposal.get("title", "N/A")}
 
-**Description:** {proposal.get('description', 'N/A')}
+**Description:** {proposal.get("description", "N/A")}
 
 **Execution Graph:**
-{self._format_execution_graph(proposal.get('execution_graph', []))}"""
+{self._format_execution_graph(proposal.get("execution_graph", []))}"""
 
         if user_context:
             prompt += f"\n\n**Additional Context:**\n{user_context}"

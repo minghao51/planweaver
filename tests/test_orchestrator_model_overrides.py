@@ -8,7 +8,10 @@ from planweaver.orchestrator import Orchestrator
 
 @pytest.fixture
 def orchestrator_with_mocks():
-    with patch("planweaver.orchestrator.Planner") as planner_cls, patch("planweaver.orchestrator.ExecutionRouter") as router_cls:
+    with (
+        patch("planweaver.orchestrator.Planner") as planner_cls,
+        patch("planweaver.orchestrator.ExecutionRouter") as router_cls,
+    ):
         planner = Mock()
         planner.create_initial_plan.return_value = Plan(user_intent="Test intent")
         planner.generate_strawman_proposals.return_value = []
@@ -41,7 +44,9 @@ def test_start_session_stores_only_explicit_overrides(orchestrator_with_mocks):
     assert plan.executor_model == "executor-override"
 
 
-def test_start_session_without_overrides_keeps_override_fields_empty(orchestrator_with_mocks):
+def test_start_session_without_overrides_keeps_override_fields_empty(
+    orchestrator_with_mocks,
+):
     orchestrator, planner, _ = orchestrator_with_mocks
 
     plan = orchestrator.start_session("Test intent")
@@ -76,7 +81,11 @@ def test_follow_up_planner_calls_use_plan_override(orchestrator_with_mocks):
 @pytest.mark.asyncio
 async def test_execute_uses_executor_override_when_present(orchestrator_with_mocks):
     orchestrator, _, router = orchestrator_with_mocks
-    plan = Plan(user_intent="Test intent", status=PlanStatus.APPROVED, executor_model="executor-override")
+    plan = Plan(
+        user_intent="Test intent",
+        status=PlanStatus.APPROVED,
+        executor_model="executor-override",
+    )
     router.execute_plan.return_value = plan
 
     await orchestrator.execute(plan, {"k": "v"})
@@ -91,7 +100,9 @@ async def test_execute_uses_executor_override_when_present(orchestrator_with_moc
 @pytest.mark.asyncio
 async def test_execute_uses_step_assigned_models_as_fallback(orchestrator_with_mocks):
     orchestrator, _, router = orchestrator_with_mocks
-    plan = Plan(user_intent="Test intent", status=PlanStatus.APPROVED, executor_model=None)
+    plan = Plan(
+        user_intent="Test intent", status=PlanStatus.APPROVED, executor_model=None
+    )
     router.execute_plan.return_value = plan
 
     await orchestrator.execute(plan)

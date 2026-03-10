@@ -1,4 +1,5 @@
 """File processing service for context extraction"""
+
 import os
 from io import BytesIO
 from typing import Any, Dict
@@ -16,14 +17,24 @@ class FileProcessorService:
     def __init__(self, max_size_mb: int = 10, allowed_types: list = None):
         self.max_size_mb = max_size_mb
         self.allowed_types = allowed_types or [
-            ".pdf", ".txt", ".md", ".py", ".js", ".ts", ".json", ".yaml", ".yml"
+            ".pdf",
+            ".txt",
+            ".md",
+            ".py",
+            ".js",
+            ".ts",
+            ".json",
+            ".yaml",
+            ".yml",
         ]
         self._allowed_types_set = set(self.allowed_types)
 
     def _validate_file(self, filename: str, content: bytes) -> str:
         size_mb = len(content) / (1024 * 1024)
         if size_mb > self.max_size_mb:
-            raise ValueError(f"File too large: {size_mb:.2f}MB (max: {self.max_size_mb}MB)")
+            raise ValueError(
+                f"File too large: {size_mb:.2f}MB (max: {self.max_size_mb}MB)"
+            )
 
         file_ext = os.path.splitext(filename)[1].lower()
         if file_ext not in self._allowed_types_set:
@@ -54,7 +65,7 @@ class FileProcessorService:
             "file_type": file_ext,
             "content": text_content,
             "summary": summary,
-            "size_bytes": len(content)
+            "size_bytes": len(content),
         }
 
     def _extract_pdf(self, content: bytes) -> str:

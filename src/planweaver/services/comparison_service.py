@@ -10,7 +10,7 @@ from planweaver.models.plan import (
     ProposalDetail,
     ProposalComparison,
     StepSummary,
-    ExecutionStep
+    ExecutionStep,
 )
 
 logger = logging.getLogger(__name__)
@@ -27,14 +27,11 @@ class ProposalComparisonService:
         self.planner = planner
         self.llm = llm_gateway
         self._graph_cache: TTLCache[Tuple[str, str], List[ExecutionStep]] = TTLCache(
-            maxsize=_CACHE_MAX_SIZE,
-            ttl=_CACHE_TTL_SECONDS
+            maxsize=_CACHE_MAX_SIZE, ttl=_CACHE_TTL_SECONDS
         )
 
     def compare_proposals(
-        self,
-        plan: Plan,
-        proposal_ids: List[str]
+        self, plan: Plan, proposal_ids: List[str]
     ) -> ProposalComparison:
         """Generate detailed comparison of selected proposals.
 
@@ -62,37 +59,42 @@ class ProposalComparisonService:
                 cost_est = self._estimate_cost(graph)
                 risks = self._extract_risks(graph)
 
-                proposal_details.append(ProposalDetail(
-                    proposal_id=prop_id,
-                    full_execution_graph=graph,
-                    accurate_time_estimate=time_est,
-                    accurate_cost_estimate=cost_est,
-                    all_risk_factors=risks
-                ))
+                proposal_details.append(
+                    ProposalDetail(
+                        proposal_id=prop_id,
+                        full_execution_graph=graph,
+                        accurate_time_estimate=time_est,
+                        accurate_cost_estimate=cost_est,
+                        all_risk_factors=risks,
+                    )
+                )
             except Exception as e:
                 logger.error(f"Failed to generate details for proposal {prop_id}: {e}")
                 # Add partial result with error
-                proposal_details.append(ProposalDetail(
-                    proposal_id=prop_id,
-                    full_execution_graph=[],
-                    accurate_time_estimate=0,
-                    accurate_cost_estimate=Decimal("0"),
-                    all_risk_factors=[],
-                    generation_error=str(e)
-                ))
+                proposal_details.append(
+                    ProposalDetail(
+                        proposal_id=prop_id,
+                        full_execution_graph=[],
+                        accurate_time_estimate=0,
+                        accurate_cost_estimate=Decimal("0"),
+                        all_risk_factors=[],
+                        generation_error=str(e),
+                    )
+                )
 
         # Compute diff between proposals
         common_steps = self._find_common_steps(proposal_details)
         unique_steps = self._find_unique_steps(proposal_details, common_steps)
 
         # Build comparison metrics
-        time_comparison = {p.proposal_id: p.accurate_time_estimate
-                          for p in proposal_details}
-        cost_comparison = {p.proposal_id: p.accurate_cost_estimate
-                          for p in proposal_details}
+        time_comparison = {
+            p.proposal_id: p.accurate_time_estimate for p in proposal_details
+        }
+        cost_comparison = {
+            p.proposal_id: p.accurate_cost_estimate for p in proposal_details
+        }
         complexity_comparison = {
-            p.proposal_id: self._calculate_complexity_score(p)
-            for p in proposal_details
+            p.proposal_id: self._calculate_complexity_score(p) for p in proposal_details
         }
 
         return ProposalComparison(
@@ -102,13 +104,11 @@ class ProposalComparisonService:
             unique_steps_by_proposal=unique_steps,
             time_comparison=time_comparison,
             cost_comparison=cost_comparison,
-            complexity_comparison=complexity_comparison
+            complexity_comparison=complexity_comparison,
         )
 
     def _generate_or_get_execution_graph(
-        self,
-        plan: Plan,
-        proposal_id: str
+        self, plan: Plan, proposal_id: str
     ) -> List[ExecutionStep]:
         """Generate execution graph or retrieve from cache."""
         cache_key = (plan.session_id, proposal_id)
@@ -126,13 +126,13 @@ class ProposalComparisonService:
         constraints = {
             **plan.locked_constraints,
             "selected_approach": proposal.title,
-            "approach_description": proposal.description
+            "approach_description": proposal.description,
         }
 
         graph = self.planner.decompose_into_steps(
             user_intent=plan.user_intent,
             locked_constraints=constraints,
-            scenario_name=plan.scenario_name
+            scenario_name=plan.scenario_name,
         )
 
         # Cache with TTL (automatic expiration handled by TTLCache)
@@ -141,10 +141,7 @@ class ProposalComparisonService:
 
         return graph
 
-    def _find_common_steps(
-        self,
-        proposals: List[ProposalDetail]
-    ) -> List[StepSummary]:
+    def _find_common_steps(self, proposals: List[ProposalDetail]) -> List[StepSummary]:
         """Find steps common to all proposals using fuzzy matching."""
         if not proposals:
             return []
@@ -159,18 +156,18 @@ class ProposalComparisonService:
                     break
 
             if is_common:
-                common.append(StepSummary(
-                    task=step.task,
-                    complexity=self._infer_step_complexity(step),
-                    estimated_time_minutes=2  # Default
-                ))
+                common.append(
+                    StepSummary(
+                        task=step.task,
+                        complexity=self._infer_step_complexity(step),
+                        estimated_time_minutes=2,  # Default
+                    )
+                )
 
         return common
 
     def _has_similar_step(
-        self,
-        step: ExecutionStep,
-        steps: List[ExecutionStep]
+        self, step: ExecutionStep, steps: List[ExecutionStep]
     ) -> bool:
         """Check if a similar step exists in the list."""
         step_lower = step.task.lower()
@@ -185,8 +182,7 @@ class ProposalComparisonService:
                 return True
 
             # Fuzzy match (if one contains the other)
-            if (len(step_lower) > 5 and
-                (step_lower in s_lower or s_lower in step_lower)):
+            if len(step_lower) > 5 and (step_lower in s_lower or s_lower in step_lower):
                 return True
 
             # Word overlap match (if they share significant words)
@@ -200,9 +196,7 @@ class ProposalComparisonService:
         return False
 
     def _find_unique_steps(
-        self,
-        proposals: List[ProposalDetail],
-        common_steps: List[StepSummary]
+        self, proposals: List[ProposalDetail], common_steps: List[StepSummary]
     ) -> Dict[str, List[StepSummary]]:
         """Find steps unique to each proposal."""
         common_tasks = {s.task.lower() for s in common_steps}
@@ -212,16 +206,20 @@ class ProposalComparisonService:
             unique = []
             for step in prop.full_execution_graph:
                 if step.task.lower() not in common_tasks:
-                    unique.append(StepSummary(
-                        task=step.task,
-                        complexity=self._infer_step_complexity(step),
-                        estimated_time_minutes=2
-                    ))
+                    unique.append(
+                        StepSummary(
+                            task=step.task,
+                            complexity=self._infer_step_complexity(step),
+                            estimated_time_minutes=2,
+                        )
+                    )
             unique_by_proposal[prop.proposal_id] = unique
 
         return unique_by_proposal
 
-    def _infer_step_complexity(self, step: ExecutionStep) -> Literal["Low", "Medium", "High"]:
+    def _infer_step_complexity(
+        self, step: ExecutionStep
+    ) -> Literal["Low", "Medium", "High"]:
         """Infer complexity from step description."""
         task_lower = step.task.lower()
 
@@ -242,12 +240,16 @@ class ProposalComparisonService:
 
         return "Medium"
 
-    def _calculate_complexity_score(self, prop: ProposalDetail) -> Literal["Low", "Medium", "High"]:
+    def _calculate_complexity_score(
+        self, prop: ProposalDetail
+    ) -> Literal["Low", "Medium", "High"]:
         """Calculate overall complexity score for proposal."""
         if not prop.full_execution_graph:
             return "Medium"
 
-        complexities = [self._infer_step_complexity(s) for s in prop.full_execution_graph]
+        complexities = [
+            self._infer_step_complexity(s) for s in prop.full_execution_graph
+        ]
 
         high_count = complexities.count("High")
         if high_count >= len(complexities) / 2:
@@ -300,8 +302,12 @@ class ProposalComparisonService:
         # Try prefix match (e.g., "gemini-" -> 0.15)
         else:
             price_per_m = next(
-                (v for k, v in pricing.items() if model.startswith(k) or k.endswith(model)),
-                0.15  # Default conservative estimate
+                (
+                    v
+                    for k, v in pricing.items()
+                    if model.startswith(k) or k.endswith(model)
+                ),
+                0.15,  # Default conservative estimate
             )
 
         total_tokens = len(steps) * tokens_per_step

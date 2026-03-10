@@ -1,4 +1,5 @@
 """GitHub repository context analyzer"""
+
 import json
 import re
 from github import Github, GithubException
@@ -28,7 +29,7 @@ class GitHubAnalyzer:
                 "description": repo.description or "",
                 "language": repo.language or "",
                 "stars": repo.stargazers_count,
-                "url": repo.html_url
+                "url": repo.html_url,
             }
 
             # Get file structure
@@ -50,7 +51,7 @@ class GitHubAnalyzer:
                 "file_structure": file_structure,
                 "key_files": key_files,
                 "dependencies": dependencies,
-                "content_summary": content_summary
+                "content_summary": content_summary,
             }
 
         except GithubException as e:
@@ -75,7 +76,7 @@ class GitHubAnalyzer:
         """Parse GitHub URL to extract owner and repo name"""
         patterns = [
             r"github\.com/([^/]+)/([^/]+?)(\.git)?$",
-            r"github\.com/([^/]+)/([^/]+)$"
+            r"github\.com/([^/]+)/([^/]+)$",
         ]
 
         for pattern in patterns:
@@ -111,7 +112,9 @@ class GitHubAnalyzer:
 
         try:
             readme = repo.get_readme()
-            key_files["README.md"] = readme.decoded_content.decode()[: self._max_readme_chars]
+            key_files["README.md"] = readme.decoded_content.decode()[
+                : self._max_readme_chars
+            ]
         except (GithubException, UnicodeDecodeError, AttributeError):
             pass
 
@@ -153,7 +156,7 @@ class GitHubAnalyzer:
         metadata: Dict[str, Any],
         file_structure: List[str],
         key_files: Dict[str, str],
-        dependencies: Dict[str, List[str]]
+        dependencies: Dict[str, List[str]],
     ) -> str:
         """Build a comprehensive summary for the planner"""
         lines = [
@@ -172,9 +175,15 @@ class GitHubAnalyzer:
 
         lines.extend(["", "### Dependencies:"])
         if dependencies["python"]:
-            lines.append("**Python:** " + ", ".join(dependencies["python"][: self._max_summary_list_items]))
+            lines.append(
+                "**Python:** "
+                + ", ".join(dependencies["python"][: self._max_summary_list_items])
+            )
         if dependencies["javascript"]:
-            lines.append("**JavaScript:** " + ", ".join(dependencies["javascript"][: self._max_summary_list_items]))
+            lines.append(
+                "**JavaScript:** "
+                + ", ".join(dependencies["javascript"][: self._max_summary_list_items])
+            )
 
         lines.extend(["", "### Key Files:"])
         for filename, content in key_files.items():

@@ -35,25 +35,25 @@ class OutputSchema(BaseModel):
     def validate_output(self, output: Any) -> bool:
         if output is None:
             return False
-        
+
         if self.type == SchemaType.STRING:
             return isinstance(output, str) and len(output) > 0
-        
+
         if self.type == SchemaType.ARRAY:
             return isinstance(output, list)
-        
+
         if self.type == SchemaType.OBJECT:
             return isinstance(output, dict)
-        
+
         if self.type == SchemaType.INTEGER:
             return isinstance(output, int)
-        
+
         if self.type == SchemaType.FLOAT:
             return isinstance(output, (int, float))
-        
+
         if self.type == SchemaType.BOOLEAN:
             return isinstance(output, bool)
-        
+
         if self.fields:
             if not isinstance(output, dict):
                 return False
@@ -61,7 +61,7 @@ class OutputSchema(BaseModel):
                 if field.required and field.name not in output:
                     return False
             return True
-        
+
         return True
 
 

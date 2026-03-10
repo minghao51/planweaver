@@ -4,7 +4,7 @@ Universal LLM Planning & Execution Engine
 
 ## What is PlanWeaver?
 
-PlanWeaver separates LLM reasoning from execution using a two-stage pattern. A planning model (DeepSeek) analyzes intent, asks clarifying questions, and decomposes tasks into a dependency graph. An execution model (Claude) then runs each step in the correct order.
+PlanWeaver separates LLM reasoning from execution using a two-stage pattern. A planning model (gemini-2.5-flash) analyzes intent, asks clarifying questions, and decomposes tasks into a dependency graph. An execution model (gemini-3-flash) then runs each step in the correct order.
 
 ## Features
 
@@ -154,4 +154,4 @@ Pre-built templates in `scenarios/`:
 - `market_analysis.yaml` - Competitor analysis
 - `data_analysis.yaml` - Analyze datasets
 
-See `docs/architecture.md` for system design details.
+See `docs/architecture.md` for comprehensive system design details and component documentation.

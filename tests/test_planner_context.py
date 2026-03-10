@@ -19,9 +19,9 @@ def test_planner_includes_context_in_prompt(planner):
         external_contexts=[
             ExternalContext(
                 source_type="github",
-                content_summary="## GitHub Repo: test-repo\nLanguage: Python"
+                content_summary="## GitHub Repo: test-repo\nLanguage: Python",
             )
-        ]
+        ],
     )
 
     prompt = planner._build_planner_prompt("Refactor this repo", plan)
@@ -37,7 +37,7 @@ def test_planner_without_context(planner):
         session_id="test-123",
         status=PlanStatus.BRAINSTORMING,
         user_intent="Test intent",
-        external_contexts=[]
+        external_contexts=[],
     )
 
     prompt = planner._build_planner_prompt("Test intent", plan)
@@ -55,13 +55,13 @@ def test_planner_with_multiple_contexts(planner):
         external_contexts=[
             ExternalContext(
                 source_type="github",
-                content_summary="## GitHub Repo: my-app\nLanguage: TypeScript"
+                content_summary="## GitHub Repo: my-app\nLanguage: TypeScript",
             ),
             ExternalContext(
                 source_type="web_search",
-                content_summary="## Web Search: FastAPI best practices\n..."
-            )
-        ]
+                content_summary="## Web Search: FastAPI best practices\n...",
+            ),
+        ],
     )
 
     prompt = planner._build_planner_prompt("Build API", plan)

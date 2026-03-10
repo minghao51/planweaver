@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from planweaver.models.plan import ExternalContext, Plan, PlanStatus
 from planweaver.orchestrator import Orchestrator
 
@@ -13,7 +13,7 @@ def mock_orchestrator():
         mock_planner.create_initial_plan.return_value = Plan(
             session_id="test-123",
             status=PlanStatus.BRAINSTORMING,
-            user_intent="Test intent"
+            user_intent="Test intent",
         )
         mock_planner_class.return_value = mock_planner
 
@@ -28,10 +28,7 @@ def test_add_external_context(mock_orchestrator):
     plan = mock_orchestrator.start_session("Test intent")
 
     # Create context
-    context = ExternalContext(
-        source_type="github",
-        content_summary="Test repo content"
-    )
+    context = ExternalContext(source_type="github", content_summary="Test repo content")
 
     # Add context
     updated_plan = mock_orchestrator.add_external_context(plan.session_id, context)
@@ -45,7 +42,7 @@ def test_start_session_with_contexts(mock_orchestrator):
     """Test starting session with external contexts"""
     contexts = [
         ExternalContext(source_type="github", content_summary="Repo 1"),
-        ExternalContext(source_type="web_search", content_summary="Search results")
+        ExternalContext(source_type="web_search", content_summary="Search results"),
     ]
 
     plan = mock_orchestrator.start_session("Test intent", external_contexts=contexts)

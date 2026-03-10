@@ -14,13 +14,15 @@ def cli():
 @click.argument("intent")
 @click.option("--scenario", "-s", default=None, help="Scenario name to use")
 @click.option("--planner", "-p", default="deepseek/deepseek-chat", help="Planner model")
-@click.option("--executor", "-e", default="anthropic/claude-3-5-sonnet-20241022", help="Executor model")
+@click.option(
+    "--executor",
+    "-e",
+    default="anthropic/claude-3-5-sonnet-20241022",
+    help="Executor model",
+)
 def plan(intent: str, scenario: str, planner: str, executor: str):
     """Start an interactive planning session"""
-    orchestrator = Orchestrator(
-        planner_model=planner,
-        executor_model=executor
-    )
+    orchestrator = Orchestrator(planner_model=planner, executor_model=executor)
 
     plan = orchestrator.start_session(intent, scenario)
     click.echo(f"Session created: {plan.session_id}")
@@ -63,7 +65,12 @@ def plan(intent: str, scenario: str, planner: str, executor: str):
 
 @cli.command()
 @click.argument("session_id")
-@click.option("--executor", "-e", default="anthropic/claude-3-5-sonnet-20241022", help="Executor model")
+@click.option(
+    "--executor",
+    "-e",
+    default="anthropic/claude-3-5-sonnet-20241022",
+    help="Executor model",
+)
 def execute(session_id: str, executor: str):
     """Execute an approved plan"""
     orchestrator = Orchestrator(executor_model=executor)

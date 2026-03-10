@@ -65,7 +65,7 @@ async def upload_file_context(
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=400,
-            detail=f"File size exceeds 10MB limit. Got {len(content) / 1024 / 1024:.2f}MB"
+            detail=f"File size exceeds 10MB limit. Got {len(content) / 1024 / 1024:.2f}MB",
         )
 
     # Validate MIME type
@@ -81,7 +81,7 @@ async def upload_file_context(
     if file.content_type not in ALLOWED_MIME_TYPES:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid file type '{file.content_type}'. Allowed types: {', '.join(sorted(ALLOWED_MIME_TYPES))}"
+            detail=f"Invalid file type '{file.content_type}'. Allowed types: {', '.join(sorted(ALLOWED_MIME_TYPES))}",
         )
 
     try:

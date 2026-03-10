@@ -9,7 +9,9 @@ from google import genai
 from google.genai import types
 
 logger = logging.getLogger(__name__)
-JSON_ONLY_INSTRUCTION = "You must output valid JSON only. No markdown formatting, no code blocks."
+JSON_ONLY_INSTRUCTION = (
+    "You must output valid JSON only. No markdown formatting, no code blocks."
+)
 
 
 class LLMResponse(BaseModel):
@@ -27,7 +29,9 @@ class LLMGateway:
         if self._gemini_client is None:
             api_key = self.settings.google_api_key or self.settings.gemini_api_key
             if not api_key:
-                raise ValueError("GOOGLE_API_KEY or GEMINI_API_KEY is required for Gemini models")
+                raise ValueError(
+                    "GOOGLE_API_KEY or GEMINI_API_KEY is required for Gemini models"
+                )
             self._gemini_client = genai.Client(api_key=api_key)
         return self._gemini_client
 
@@ -42,10 +46,7 @@ class LLMGateway:
                 role = "user"
             elif role == "assistant":
                 role = "model"
-            converted.append({
-                "role": role,
-                "parts": [{"text": msg["content"]}]
-            })
+            converted.append({"role": role, "parts": [{"text": msg["content"]}]})
         return converted
 
     def _prepare_messages(self, messages: list[dict], json_mode: bool) -> list[dict]:
@@ -54,7 +55,9 @@ class LLMGateway:
             prepared.append({"role": "system", "content": JSON_ONLY_INSTRUCTION})
         return prepared
 
-    def _format_response(self, model: str, content: Optional[str], usage: Optional[Dict[str, Any]] = None) -> dict:
+    def _format_response(
+        self, model: str, content: Optional[str], usage: Optional[Dict[str, Any]] = None
+    ) -> dict:
         return {
             "content": content or "",
             "model": model,
@@ -75,7 +78,7 @@ class LLMGateway:
         model: str,
         messages: list[dict],
         json_mode: bool = False,
-        max_tokens: int = 4096
+        max_tokens: int = 4096,
     ) -> dict:
         if self._is_gemini_model(model):
             return self._complete_gemini(model, messages, json_mode, max_tokens)
@@ -83,12 +86,12 @@ class LLMGateway:
         prepared_messages = self._prepare_messages(messages, json_mode)
 
         response = completion(
-            model=model,
-            messages=prepared_messages,
-            max_tokens=max_tokens
+            model=model, messages=prepared_messages, max_tokens=max_tokens
         )
 
-        content = self._normalize_content(response.choices[0].message.content, json_mode)
+        content = self._normalize_content(
+            response.choices[0].message.content, json_mode
+        )
         return self._format_response(model, content, self._extract_usage(response))
 
     def _complete_gemini(
@@ -96,7 +99,7 @@ class LLMGateway:
         model: str,
         messages: list[dict],
         json_mode: bool = False,
-        max_tokens: int = 4096
+        max_tokens: int = 4096,
     ) -> dict:
         client = self._get_gemini_client()
 
@@ -109,9 +112,7 @@ class LLMGateway:
         generation_config = types.GenerateContentConfig(**config_kwargs)
 
         response = client.models.generate_content(
-            model=model,
-            contents=gemini_messages,
-            config=generation_config
+            model=model, contents=gemini_messages, config=generation_config
         )
 
         content = response.text if hasattr(response, "text") else str(response)
@@ -122,7 +123,7 @@ class LLMGateway:
         model: str,
         messages: list[dict],
         json_mode: bool = False,
-        max_tokens: int = 4096
+        max_tokens: int = 4096,
     ) -> dict:
         if self._is_gemini_model(model):
             return self._complete_gemini(model, messages, json_mode, max_tokens)
@@ -130,34 +131,24 @@ class LLMGateway:
         prepared_messages = self._prepare_messages(messages, json_mode)
 
         response = await acompletion(
-            model=model,
-            messages=prepared_messages,
-            max_tokens=max_tokens
+            model=model, messages=prepared_messages, max_tokens=max_tokens
         )
 
-        content = self._normalize_content(response.choices[0].message.content, json_mode)
+        content = self._normalize_content(
+            response.choices[0].message.content, json_mode
+        )
         return self._format_response(model, content, self._extract_usage(response))
 
     def stream_complete(
-        self,
-        model: str,
-        messages: list[dict],
-        json_mode: bool = False
+        self, model: str, messages: list[dict], json_mode: bool = False
     ) -> AsyncIterator[dict]:
         prepared_messages = self._prepare_messages(messages, json_mode)
 
-        response = completion(
-            model=model,
-            messages=prepared_messages,
-            stream=True
-        )
+        response = completion(model=model, messages=prepared_messages, stream=True)
 
         for chunk in response:
             if chunk.choices[0].delta.content:
-                yield {
-                    "content": chunk.choices[0].delta.content,
-                    "model": model
-                }
+                yield {"content": chunk.choices[0].delta.content, "model": model}
 
     def _repair_json(self, content: Optional[str]) -> str:
         if content is None:
@@ -167,12 +158,15 @@ class LLMGateway:
             if isinstance(repaired, str):
                 return repaired
             import json
+
             return json.dumps(repaired)
         except Exception as e:
             logger.warning(f"JSON repair failed: {e}")
             return content
 
-    def parse_json_response(self, content: str, schema: Optional[type[BaseModel]] = None) -> Dict[str, Any]:
+    def parse_json_response(
+        self, content: str, schema: Optional[type[BaseModel]] = None
+    ) -> Dict[str, Any]:
         content = self._repair_json(content)
         try:
             data = json.loads(content)
@@ -208,7 +202,7 @@ class LLMGateway:
                         "provider": m.provider,
                         "is_free": m.is_free,
                         "pricing_info": m.pricing_info,
-                        "context_length": m.context_length
+                        "context_length": m.context_length,
                     }
                     for m in db_models
                 ]
@@ -217,7 +211,9 @@ class LLMGateway:
                 logger.info("No models in database, using fallback list")
                 return self._get_fallback_models()
         except Exception as e:
-            logger.warning(f"Error fetching models from database: {e}, using fallback list")
+            logger.warning(
+                f"Error fetching models from database: {e}, using fallback list"
+            )
             return self._get_fallback_models()
         finally:
             session.close()
@@ -229,13 +225,58 @@ class LLMGateway:
             List of model dictionaries
         """
         return [
-            {"id": "gemini-2.5-flash", "name": "Gemini 2.5 Flash", "type": "planner", "provider": "google"},
-            {"id": "gemini-2.5-flash-latest", "name": "Gemini 2.5 Flash Latest", "type": "planner", "provider": "google"},
-            {"id": "gemini-3-flash", "name": "Gemini 3 Flash", "type": "executor", "provider": "google"},
-            {"id": "gemini-3-pro", "name": "Gemini 3 Pro", "type": "executor", "provider": "google"},
-            {"id": "deepseek/deepseek-chat", "name": "DeepSeek Chat", "type": "planner", "provider": "deepseek"},
-            {"id": "anthropic/claude-3-5-sonnet-20241022", "name": "Claude 3.5 Sonnet", "type": "executor", "provider": "anthropic"},
-            {"id": "anthropic/claude-3-opus-20240229", "name": "Claude 3 Opus", "type": "executor", "provider": "anthropic"},
-            {"id": "openai/gpt-4o", "name": "GPT-4o", "type": "executor", "provider": "openai"},
-            {"id": "ollama/llama2", "name": "Llama 2 (Ollama)", "type": "planner", "provider": "ollama"},
+            {
+                "id": "gemini-2.5-flash",
+                "name": "Gemini 2.5 Flash",
+                "type": "planner",
+                "provider": "google",
+            },
+            {
+                "id": "gemini-2.5-flash-latest",
+                "name": "Gemini 2.5 Flash Latest",
+                "type": "planner",
+                "provider": "google",
+            },
+            {
+                "id": "gemini-3-flash",
+                "name": "Gemini 3 Flash",
+                "type": "executor",
+                "provider": "google",
+            },
+            {
+                "id": "gemini-3-pro",
+                "name": "Gemini 3 Pro",
+                "type": "executor",
+                "provider": "google",
+            },
+            {
+                "id": "deepseek/deepseek-chat",
+                "name": "DeepSeek Chat",
+                "type": "planner",
+                "provider": "deepseek",
+            },
+            {
+                "id": "anthropic/claude-3-5-sonnet-20241022",
+                "name": "Claude 3.5 Sonnet",
+                "type": "executor",
+                "provider": "anthropic",
+            },
+            {
+                "id": "anthropic/claude-3-opus-20240229",
+                "name": "Claude 3 Opus",
+                "type": "executor",
+                "provider": "anthropic",
+            },
+            {
+                "id": "openai/gpt-4o",
+                "name": "GPT-4o",
+                "type": "executor",
+                "provider": "openai",
+            },
+            {
+                "id": "ollama/llama2",
+                "name": "Llama 2 (Ollama)",
+                "type": "planner",
+                "provider": "ollama",
+            },
         ]

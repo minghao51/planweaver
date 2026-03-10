@@ -1,4 +1,5 @@
 """Web search service for planning context"""
+
 from tavily import TavilyClient
 from typing import Dict, Any, List
 
@@ -26,7 +27,7 @@ class WebSearchService:
                 max_results=max_results,
                 search_depth="basic",
                 include_answer=True,
-                include_raw_content=False
+                include_raw_content=False,
             )
 
             results = response.get("results", [])
@@ -38,16 +39,13 @@ class WebSearchService:
                 "query": query,
                 "results": formatted_results,
                 "answer": answer,
-                "summary": summary
+                "summary": summary,
             }
         except Exception as e:
             raise ValueError(f"Web search failed: {str(e)}") from e
 
     def _build_summary(
-        self,
-        query: str,
-        results: List[Dict[str, str]],
-        answer: str
+        self, query: str, results: List[Dict[str, str]], answer: str
     ) -> str:
         """Build search summary for planner"""
         summary = f"## Web Search Results for: {query}\n\n"

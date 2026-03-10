@@ -1,5 +1,5 @@
 """Context service for managing external context sources"""
-from typing import Optional
+
 from ..models.plan import ExternalContext
 from ..config import Settings
 from ..services.llm_gateway import LLMGateway
@@ -20,8 +20,7 @@ class ContextService:
         else:
             self.web_search = None
         self.file_processor = FileProcessorService(
-            max_size_mb=config.max_file_size_mb,
-            allowed_types=config.allowed_file_types
+            max_size_mb=config.max_file_size_mb, allowed_types=config.allowed_file_types
         )
 
     async def add_github_context(self, repo_url: str) -> ExternalContext:
@@ -40,8 +39,8 @@ class ContextService:
                     "language": analysis["metadata"]["language"],
                     "stars": analysis["metadata"]["stars"],
                     "dependencies": analysis["dependencies"],
-                    "file_structure": analysis["file_structure"]
-                }
+                    "file_structure": analysis["file_structure"],
+                },
             )
 
             return context
@@ -66,8 +65,8 @@ class ContextService:
                 metadata={
                     "query": query,
                     "result_count": len(search_results["results"]),
-                    "answer": search_results["answer"]
-                }
+                    "answer": search_results["answer"],
+                },
             )
 
             return context
@@ -89,8 +88,8 @@ class ContextService:
                     "filename": file_data["filename"],
                     "file_type": file_data["file_type"],
                     "size_bytes": file_data["size_bytes"],
-                    "full_content": file_data["content"]
-                }
+                    "full_content": file_data["content"],
+                },
             )
 
             return context

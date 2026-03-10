@@ -1,3 +1,11 @@
+"""
+PlanWeaver Planner Service
+
+The Planner service handles task decomposition, intent analysis,
+and proposal generation. It uses LLMs to break down user intents
+into structured execution plans with context awareness.
+"""
+
 from typing import Dict, Any, Optional, List
 import json
 from decimal import Decimal
@@ -15,18 +23,30 @@ from .template_engine import TemplateEngine
 
 
 class Planner:
+    """
+    Analyzes user intents and decomposes them into executable plans.
+
+    The Planner is responsible for:
+    - Analyzing user intents to identify constraints and missing information
+    - Generating clarifying questions to refine requirements
+    - Creating strawman proposals with different approaches
+    - Decomposing approved approaches into execution DAGs
+    - Incorporating external context for context-aware planning
+
+    Attributes:
+        llm: LLM gateway for model interactions
+        template_engine: Scenario template manager for prompts
+    """
     def __init__(
         self,
         llm_gateway: Optional[LLMGateway] = None,
-        template_engine: Optional[TemplateEngine] = None
+        template_engine: Optional[TemplateEngine] = None,
     ):
         self.llm = llm_gateway or LLMGateway()
         self.template_engine = template_engine or TemplateEngine()
 
     def _analyze_proposals_lightweight(
-        self,
-        user_intent: str,
-        proposals: List[dict]
+        self, user_intent: str, proposals: List[dict]
     ) -> Dict[str, dict]:
         """Generate lightweight analysis for proposals without full execution graph.
 
@@ -67,11 +87,12 @@ Return JSON only, no explanation:
             response = self.llm.complete(
                 model="gemini-2.5-flash",
                 messages=[{"role": "user", "content": prompt}],
-                json_mode=True
+                json_mode=True,
             )
 
             # Parse JSON response
             import json
+
             cleaned = response.get("content", "").strip()
             if cleaned.startswith("```"):
                 cleaned = cleaned.split("```")[1]
@@ -93,7 +114,7 @@ Return JSON only, no explanation:
                     "complexity_score": "Medium",
                     "estimated_time_minutes": 10,
                     "estimated_cost_usd": 0.005,
-                    "risk_factors": ["Unknown - analysis failed"]
+                    "risk_factors": ["Unknown - analysis failed"],
                 }
                 for i in range(1, len(proposals) + 1)
             }
@@ -103,16 +124,12 @@ Return JSON only, no explanation:
         formatted = []
         for i, p in enumerate(proposals, 1):
             formatted.append(f"""
-Proposal {i}: {p.get('title', 'Untitled')}
-Approach: {p.get('description', 'N/A')}
+Proposal {i}: {p.get("title", "Untitled")}
+Approach: {p.get("description", "N/A")}
 """)
         return "\n".join(formatted)
 
-    def _build_planner_prompt(
-        self,
-        user_intent: str,
-        plan: Plan
-    ) -> str:
+    def _build_planner_prompt(self, user_intent: str, plan: Plan) -> str:
         """Build planner prompt with external context"""
         if not plan.external_contexts:
             return f"User Request: {user_intent}"
@@ -151,7 +168,9 @@ Approach: {p.get('description', 'N/A')}
             "estimated_complexity": "unknown",
         }
 
-    def _parse_execution_steps(self, steps_data: Any, default_model: str) -> List[ExecutionStep]:
+    def _parse_execution_steps(
+        self, steps_data: Any, default_model: str
+    ) -> List[ExecutionStep]:
         if not isinstance(steps_data, list):
             return self._fallback_execution_steps(default_model)
 
@@ -186,7 +205,11 @@ Approach: {p.get('description', 'N/A')}
         if not isinstance(proposals_data, list):
             return []
         try:
-            return [StrawmanProposal(**proposal) for proposal in proposals_data if isinstance(proposal, dict)]
+            return [
+                StrawmanProposal(**proposal)
+                for proposal in proposals_data
+                if isinstance(proposal, dict)
+            ]
         except TypeError:
             return []
 
@@ -195,7 +218,7 @@ Approach: {p.get('description', 'N/A')}
         user_intent: str,
         plan: Plan,
         scenario_name: Optional[str] = None,
-        model: str = "deepseek/deepseek-chat"
+        model: str = "deepseek/deepseek-chat",
     ) -> Dict[str, Any]:
         prompt = self._build_planner_prompt(user_intent, plan)
 
@@ -219,17 +242,19 @@ Provide your analysis in JSON format:
         response = self.llm.complete(
             model=model,
             messages=[{"role": "user", "content": full_prompt}],
-            json_mode=True
+            json_mode=True,
         )
 
-        return self._parse_json_or_default(response["content"], self._analysis_fallback())
+        return self._parse_json_or_default(
+            response["content"], self._analysis_fallback()
+        )
 
     def decompose_into_steps(
         self,
         user_intent: str,
         locked_constraints: Dict[str, Any],
         scenario_name: Optional[str] = None,
-        model: str = "deepseek/deepseek-chat"
+        model: str = "deepseek/deepseek-chat",
     ) -> List[ExecutionStep]:
         constraints_str = json.dumps(locked_constraints, indent=2)
         prompt = f"""
@@ -256,18 +281,14 @@ Example output:
 Output only valid JSON array, no markdown, no explanation.
 """
         response = self.llm.complete(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-            json_mode=True
+            model=model, messages=[{"role": "user", "content": prompt}], json_mode=True
         )
 
         steps_data = self._parse_json_or_default(response["content"], [])
         return self._parse_execution_steps(steps_data, model)
 
     def generate_strawman_proposals(
-        self,
-        user_intent: str,
-        model: str = "deepseek/deepseek-chat"
+        self, user_intent: str, model: str = "deepseek/deepseek-chat"
     ) -> List[StrawmanProposal]:
         """Generate strawman proposals with lightweight analysis."""
         prompt = f"""
@@ -287,9 +308,7 @@ Return JSON array:
 ]
 """
         response = self.llm.complete(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-            json_mode=True
+            model=model, messages=[{"role": "user", "content": prompt}], json_mode=True
         )
 
         proposals_data = self._parse_json_or_default(response["content"], [])
@@ -302,13 +321,16 @@ Return JSON array:
         proposals_with_analysis = []
         for i, raw_prop in enumerate(raw_proposals, 1):
             prop_id = str(i)  # Use string index as ID
-            _analysis_data = analysis.get(str(i), {
-                "estimated_step_count": 5,
-                "complexity_score": "Medium",
-                "estimated_time_minutes": 10,
-                "estimated_cost_usd": Decimal("0.005"),
-                "risk_factors": []
-            })
+            _analysis_data = analysis.get(
+                str(i),
+                {
+                    "estimated_step_count": 5,
+                    "complexity_score": "Medium",
+                    "estimated_time_minutes": 10,
+                    "estimated_cost_usd": Decimal("0.005"),
+                    "risk_factors": [],
+                },
+            )
 
             # Create StrawmanProposal (for backwards compatibility)
             proposal = StrawmanProposal(
@@ -316,16 +338,14 @@ Return JSON array:
                 title=raw_prop.get("title", f"Proposal {i}"),
                 description=raw_prop.get("description", ""),
                 pros=raw_prop.get("pros", []),
-                cons=raw_prop.get("cons", [])
+                cons=raw_prop.get("cons", []),
             )
             proposals_with_analysis.append(proposal)
 
         return proposals_with_analysis
 
     def generate_proposals_with_analysis(
-        self,
-        user_intent: str,
-        model: str = "deepseek/deepseek-chat"
+        self, user_intent: str, model: str = "deepseek/deepseek-chat"
     ) -> List[ProposalWithAnalysis]:
         """Generate proposals with lightweight analysis for comparison."""
         # First generate the base proposals
@@ -338,27 +358,34 @@ Return JSON array:
         # Convert to ProposalWithAnalysis
         proposals_with_analysis = []
         for i, prop in enumerate(proposals, 1):
-            analysis_data = analysis.get(str(i), {
-                "estimated_step_count": 5,
-                "complexity_score": "Medium",
-                "estimated_time_minutes": 10,
-                "estimated_cost_usd": Decimal("0.005"),
-                "risk_factors": []
-            })
+            analysis_data = analysis.get(
+                str(i),
+                {
+                    "estimated_step_count": 5,
+                    "complexity_score": "Medium",
+                    "estimated_time_minutes": 10,
+                    "estimated_cost_usd": Decimal("0.005"),
+                    "risk_factors": [],
+                },
+            )
 
-            proposals_with_analysis.append(ProposalWithAnalysis(
-                proposal_id=prop.id,
-                title=prop.title,
-                description=prop.description,
-                pros=prop.pros,
-                cons=prop.cons,
-                selected=prop.selected,
-                estimated_step_count=analysis_data["estimated_step_count"],
-                complexity_score=analysis_data["complexity_score"],
-                estimated_time_minutes=analysis_data["estimated_time_minutes"],
-                estimated_cost_usd=Decimal(str(analysis_data["estimated_cost_usd"])),
-                risk_factors=analysis_data["risk_factors"]
-            ))
+            proposals_with_analysis.append(
+                ProposalWithAnalysis(
+                    proposal_id=prop.id,
+                    title=prop.title,
+                    description=prop.description,
+                    pros=prop.pros,
+                    cons=prop.cons,
+                    selected=prop.selected,
+                    estimated_step_count=analysis_data["estimated_step_count"],
+                    complexity_score=analysis_data["complexity_score"],
+                    estimated_time_minutes=analysis_data["estimated_time_minutes"],
+                    estimated_cost_usd=Decimal(
+                        str(analysis_data["estimated_cost_usd"])
+                    ),
+                    risk_factors=analysis_data["risk_factors"],
+                )
+            )
 
         return proposals_with_analysis
 
@@ -366,13 +393,13 @@ Return JSON array:
         self,
         user_intent: str,
         scenario_name: Optional[str] = None,
-        model: str = "deepseek/deepseek-chat"
+        model: str = "deepseek/deepseek-chat",
     ) -> Plan:
         # Create plan first
         plan = Plan(
             user_intent=user_intent,
             scenario_name=scenario_name,
-            status=PlanStatus.BRAINSTORMING
+            status=PlanStatus.BRAINSTORMING,
         )
 
         # Analyze with context (plan.external_contexts is empty at this point)
@@ -390,7 +417,7 @@ Return JSON array:
         self,
         plan: Plan,
         user_answers: Dict[str, str],
-        model: str = "deepseek/deepseek-chat"
+        model: str = "deepseek/deepseek-chat",
     ) -> Plan:
         for question in plan.open_questions:
             if question.id in user_answers:
@@ -403,10 +430,7 @@ Return JSON array:
         if not plan.open_questions or all(q.answered for q in plan.open_questions):
             plan.status = PlanStatus.AWAITING_APPROVAL
             steps = self.decompose_into_steps(
-                plan.user_intent,
-                plan.locked_constraints,
-                plan.scenario_name,
-                model
+                plan.user_intent, plan.locked_constraints, plan.scenario_name, model
             )
             for step in steps:
                 plan.add_step(step)

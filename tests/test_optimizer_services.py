@@ -1,4 +1,5 @@
 """Tests for optimizer services"""
+
 import pytest
 from unittest.mock import Mock, patch
 from planweaver.services.variant_generator import VariantGenerator
@@ -14,7 +15,7 @@ class TestVariantGenerator:
         generator = VariantGenerator()
         assert generator.llm_gateway is not None
 
-    @patch('planweaver.services.variant_generator.LLMGateway')
+    @patch("planweaver.services.variant_generator.LLMGateway")
     def test_get_system_prompt_simplified(self, mock_llm):
         """Test simplified variant system prompt"""
         generator = VariantGenerator()
@@ -22,7 +23,7 @@ class TestVariantGenerator:
         assert "SIMPLIFIED" in prompt
         assert "Reduces the number of steps" in prompt
 
-    @patch('planweaver.services.variant_generator.LLMGateway')
+    @patch("planweaver.services.variant_generator.LLMGateway")
     def test_get_system_prompt_enhanced(self, mock_llm):
         """Test enhanced variant system prompt"""
         generator = VariantGenerator()
@@ -30,7 +31,7 @@ class TestVariantGenerator:
         assert "ENHANCED" in prompt
         assert "error handling" in prompt
 
-    @patch('planweaver.services.variant_generator.LLMGateway')
+    @patch("planweaver.services.variant_generator.LLMGateway")
     def test_get_system_prompt_cost_optimized(self, mock_llm):
         """Test cost-optimized variant system prompt"""
         generator = VariantGenerator()
@@ -55,7 +56,7 @@ class TestModelRater:
         assert "cost_efficiency" in rater.CRITERIA
         assert "time_efficiency" in rater.CRITERIA
 
-    @patch('planweaver.services.model_rater.LLMGateway')
+    @patch("planweaver.services.model_rater.LLMGateway")
     def test_get_error_rating(self, mock_llm):
         """Test error rating generation"""
         rater = ModelRater()
@@ -73,9 +74,9 @@ class TestOptimizerService:
         """Mock database session"""
         return Mock()
 
-    @patch('planweaver.services.optimizer_service.VariantGenerator')
-    @patch('planweaver.services.optimizer_service.ModelRater')
-    @patch('planweaver.services.optimizer_service.PlanRepository')
+    @patch("planweaver.services.optimizer_service.VariantGenerator")
+    @patch("planweaver.services.optimizer_service.ModelRater")
+    @patch("planweaver.services.optimizer_service.PlanRepository")
     def test_init(self, mock_repo, mock_rater, mock_gen, mock_db):
         """Test OptimizerService initialization"""
         service = OptimizerService(mock_db)

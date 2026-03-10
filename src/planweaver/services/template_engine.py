@@ -10,6 +10,7 @@ class TemplateEngine:
     def __init__(self, scenarios_path: Optional[str] = None):
         if scenarios_path is None:
             import os
+
             package_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
             self.scenarios_path = Path(package_dir) / "scenarios"
         else:
@@ -38,41 +39,27 @@ class TemplateEngine:
         return list(self._scenarios.keys())
 
     def render_planner_prompt(
-        self,
-        scenario_name: str,
-        user_intent: str,
-        context: Dict[str, Any]
+        self, scenario_name: str, user_intent: str, context: Dict[str, Any]
     ) -> str:
         scenario = self._scenarios.get(scenario_name)
         if not scenario:
             return f"User Intent: {user_intent}\nContext: {context}"
 
         template = self.env.from_string(scenario.planner_prompt_template)
-        return template.render(
-            user_intent=user_intent,
-            **context
-        )
+        return template.render(user_intent=user_intent, **context)
 
     def render_executor_prompt(
-        self,
-        scenario_name: str,
-        step_task: str,
-        context: Dict[str, Any]
+        self, scenario_name: str, step_task: str, context: Dict[str, Any]
     ) -> str:
         scenario = self._scenarios.get(scenario_name)
         if scenario is None:
             return f"Task: {step_task}\nContext: {context}"
 
         template = self.env.from_string(scenario.executor_template)
-        return template.render(
-            task=step_task,
-            **context
-        )
+        return template.render(task=step_task, **context)
 
     def validate_input(
-        self,
-        scenario_name: str,
-        input_data: Dict[str, Any]
+        self, scenario_name: str, input_data: Dict[str, Any]
     ) -> tuple[bool, list[str]]:
         scenario = self._scenarios.get(scenario_name)
         if not scenario:
@@ -86,9 +73,7 @@ class TemplateEngine:
         return len(errors) == 0, errors
 
     def validate_output(
-        self,
-        scenario_name: str,
-        output: Any
+        self, scenario_name: str, output: Any
     ) -> tuple[bool, list[str]]:
         scenario = self._scenarios.get(scenario_name)
         if not scenario:

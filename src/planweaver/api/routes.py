@@ -1,6 +1,12 @@
 from fastapi import APIRouter
 
-from .routers import context_router, metadata_router, sessions_router, stream_router, optimizer_router
+from .routers import (
+    context_router,
+    metadata_router,
+    sessions_router,
+    stream_router,
+    optimizer_router,
+)
 
 router = APIRouter()
 router.include_router(sessions_router)

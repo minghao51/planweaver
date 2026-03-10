@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Literal
+from typing import List, Dict, Any
 from logging import getLogger
 from .llm_gateway import LLMGateway
 
@@ -12,7 +12,13 @@ class ModelRater:
     DEFAULT_MODELS = ["claude-3.5-sonnet", "gpt-4o", "deepseek-chat"]
 
     # Rating criteria
-    CRITERIA = ["feasibility", "cost_efficiency", "time_efficiency", "complexity", "risk_level"]
+    CRITERIA = [
+        "feasibility",
+        "cost_efficiency",
+        "time_efficiency",
+        "complexity",
+        "risk_level",
+    ]
 
     def __init__(self):
         self.llm_gateway = LLMGateway()
@@ -21,7 +27,7 @@ class ModelRater:
         self,
         plan: Dict[str, Any],
         models: List[str] | None = None,
-        criteria: List[str] | None = None
+        criteria: List[str] | None = None,
     ) -> Dict[str, Any]:
         """
         Rate a plan using multiple AI models
@@ -37,7 +43,9 @@ class ModelRater:
         models = models or self.DEFAULT_MODELS
         criteria = criteria or self.CRITERIA
 
-        logger.info(f"Rating plan with {len(models)} models on {len(criteria)} criteria")
+        logger.info(
+            f"Rating plan with {len(models)} models on {len(criteria)} criteria"
+        )
 
         ratings = {}
         for model in models:
@@ -52,10 +60,7 @@ class ModelRater:
         return ratings
 
     def _rate_with_model(
-        self,
-        plan: Dict[str, Any],
-        model: str,
-        criteria: List[str]
+        self, plan: Dict[str, Any], model: str, criteria: List[str]
     ) -> Dict[str, Any]:
         """Rate plan using a specific model"""
         system_prompt = self._get_rating_system_prompt(criteria)
@@ -63,18 +68,16 @@ class ModelRater:
 
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
+            {"role": "user", "content": user_prompt},
         ]
 
         response = self.llm_gateway.complete(
-            model=model,
-            messages=messages,
-            json_mode=True,
-            max_tokens=2048
+            model=model, messages=messages, json_mode=True, max_tokens=2048
         )
 
         try:
             import json
+
             rating_data = json.loads(response["content"])
 
             # Calculate overall score
@@ -85,7 +88,7 @@ class ModelRater:
                 "model_name": model,
                 "ratings": ratings,
                 "overall_score": round(overall, 2),
-                "reasoning": rating_data.get("reasoning", "")
+                "reasoning": rating_data.get("reasoning", ""),
             }
         except Exception as e:
             logger.error(f"Failed to parse rating response from {model}: {e}")
@@ -122,17 +125,17 @@ Return a JSON object with:
         """Build user prompt for rating"""
         prompt = f"""Rate this plan:
 
-**Title:** {plan.get('title', 'N/A')}
+**Title:** {plan.get("title", "N/A")}
 
-**Description:** {plan.get('description', 'N/A')}
+**Description:** {plan.get("description", "N/A")}
 
-**Execution Steps:** {len(plan.get('execution_graph', []))} steps
+**Execution Steps:** {len(plan.get("execution_graph", []))} steps
 
 **Execution Graph:**
-{self._format_execution_graph(plan.get('execution_graph', []))}
+{self._format_execution_graph(plan.get("execution_graph", []))}
 
 **Metadata:**
-{self._format_metadata(plan.get('metadata', {}))}
+{self._format_metadata(plan.get("metadata", {}))}
 
 Please rate this plan on: {", ".join(criteria)}.
 
@@ -172,5 +175,5 @@ Respond ONLY with a valid JSON object containing ratings and reasoning."""
             "model_name": "error",
             "ratings": {c: 5.0 for c in self.CRITERIA},
             "overall_score": 5.0,
-            "reasoning": f"Error during rating: {error_msg}"
+            "reasoning": f"Error during rating: {error_msg}",
         }

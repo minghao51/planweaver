@@ -8,6 +8,7 @@ import logging
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/sessions", tags=["stream"])
 
+
 @router.get("/{session_id}/stream")
 async def stream_execution(session_id: str, request: Request):
     """
@@ -18,8 +19,7 @@ async def stream_execution(session_id: str, request: Request):
 
     if not plan:
         return StreamingResponse(
-            _error_event("Session not found"),
-            media_type="text/event-stream"
+            _error_event("Session not found"), media_type="text/event-stream"
         )
 
     async def event_generator():
@@ -43,40 +43,43 @@ async def stream_execution(session_id: str, request: Request):
                     break
 
                 current_steps = len(plan.execution_graph)
-                completed = [s for s in plan.execution_graph if s.status.value == "COMPLETED"]
+                completed = [
+                    s for s in plan.execution_graph if s.status.value == "COMPLETED"
+                ]
                 failed = [s for s in plan.execution_graph if s.status.value == "FAILED"]
 
                 # Check for new completed steps
                 if len(completed) > last_step_count:
                     for step in completed[last_step_count:]:
-                        yield _sse_event("step_completed", {
-                            "step_id": step.step_id,
-                            "task": step.task,
-                            "output": step.output
-                        })
+                        yield _sse_event(
+                            "step_completed",
+                            {
+                                "step_id": step.step_id,
+                                "task": step.task,
+                                "output": step.output,
+                            },
+                        )
                     last_step_count = len(completed)
 
                 # Check for failures
                 if failed:
                     for step in failed:
-                        yield _sse_event("step_failed", {
-                            "step_id": step.step_id,
-                            "error": step.error
-                        })
+                        yield _sse_event(
+                            "step_failed",
+                            {"step_id": step.step_id, "error": step.error},
+                        )
                     break
 
                 # Check if execution complete
                 if plan.status.value == "COMPLETED":
-                    yield _sse_event("execution_complete", {
-                        "total_steps": current_steps,
-                        "completed": len(completed)
-                    })
+                    yield _sse_event(
+                        "execution_complete",
+                        {"total_steps": current_steps, "completed": len(completed)},
+                    )
                     break
 
                 if plan.status.value == "FAILED":
-                    yield _sse_event("execution_failed", {
-                        "reason": "Execution failed"
-                    })
+                    yield _sse_event("execution_failed", {"reason": "Execution failed"})
                     break
 
                 # Wait before polling again
@@ -92,13 +95,15 @@ async def stream_execution(session_id: str, request: Request):
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"  # Disable nginx buffering
-        }
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+        },
     )
+
 
 def _sse_event(event_type: str, data: dict) -> str:
     """Format SSE event"""
     return f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
+
 
 def _error_event(message: str) -> str:
     """Format error event"""

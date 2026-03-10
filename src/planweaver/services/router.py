@@ -1,3 +1,10 @@
+"""
+PlanWeaver Execution Router Service
+
+The Execution Router handles the execution of plans by running
+steps in dependency order with retry logic and error handling.
+"""
+
 from typing import Dict, Any, Optional, List
 import asyncio
 import logging
@@ -14,17 +21,33 @@ RETRY_DELAY_BASE = 1.0
 
 
 class ExecutionRouter:
+    """
+    Executes plans by running steps in dependency order.
+
+    The Router is responsible for:
+    - Determining which steps are ready to execute
+    - Executing steps with the assigned LLM model
+    - Retrying failed steps with exponential backoff
+    - Validating execution graphs for cycles and dependencies
+    - Aggregating outputs from completed steps
+
+    Attributes:
+        llm: LLM gateway for model interactions
+        template_engine: Scenario template manager for prompts
+    """
     def __init__(
         self,
         llm_gateway: Optional[LLMGateway] = None,
-        template_engine: Optional[TemplateEngine] = None
+        template_engine: Optional[TemplateEngine] = None,
     ):
         self.llm = llm_gateway or LLMGateway()
         self.template_engine = template_engine or TemplateEngine()
 
     def get_executable_steps(self, plan: Plan) -> List[ExecutionStep]:
         pending = [s for s in plan.execution_graph if s.status == StepStatus.PENDING]
-        completed_ids = {s.step_id for s in plan.execution_graph if s.status == StepStatus.COMPLETED}
+        completed_ids = {
+            s.step_id for s in plan.execution_graph if s.status == StepStatus.COMPLETED
+        }
 
         executable = []
         for step in pending:
@@ -90,9 +113,11 @@ class ExecutionRouter:
                 last_error = "Empty response"
             except Exception as exc:
                 last_error = str(exc)
-                logger.warning(f"Step {step.step_id} attempt {attempt + 1} failed: {exc}")
+                logger.warning(
+                    f"Step {step.step_id} attempt {attempt + 1} failed: {exc}"
+                )
                 if attempt < MAX_RETRIES - 1:
-                    await asyncio.sleep(RETRY_DELAY_BASE * (2 ** attempt))
+                    await asyncio.sleep(RETRY_DELAY_BASE * (2**attempt))
 
         error_message = f"Failed after {MAX_RETRIES} attempts: {last_error}"
         self._mark_step_failed(step, error_message)
@@ -124,7 +149,9 @@ class ExecutionRouter:
             if step_id in visited:
                 return
             if step_id in visiting:
-                raise ValueError(f"Execution graph contains a dependency cycle at step {step_id}")
+                raise ValueError(
+                    f"Execution graph contains a dependency cycle at step {step_id}"
+                )
 
             visiting.add(step_id)
             for dep_id in steps_by_id[step_id].dependencies:
@@ -140,7 +167,7 @@ class ExecutionRouter:
         step: ExecutionStep,
         plan: Plan,
         context: Dict[str, Any],
-        model: Optional[str] = None
+        model: Optional[str] = None,
     ) -> Dict[str, Any]:
         actual_model = model or step.assigned_model
 
@@ -148,10 +175,15 @@ class ExecutionRouter:
         self._mark_step_started(step)
         return await self._execute_with_retries(step, actual_model, prompt)
 
-    def _get_previous_outputs(self, plan: Plan, current_step: ExecutionStep) -> Dict[int, Any]:
+    def _get_previous_outputs(
+        self, plan: Plan, current_step: ExecutionStep
+    ) -> Dict[int, Any]:
         outputs = {}
         for step in plan.execution_graph:
-            if step.status == StepStatus.COMPLETED and step.step_id in current_step.dependencies:
+            if (
+                step.status == StepStatus.COMPLETED
+                and step.step_id in current_step.dependencies
+            ):
                 outputs[step.step_id] = step.output
         return outputs
 
@@ -160,7 +192,7 @@ class ExecutionRouter:
         plan: Plan,
         context: Optional[Dict[str, Any]] = None,
         max_steps: int = 100,
-        model_override: Optional[str] = None
+        model_override: Optional[str] = None,
     ) -> Plan:
         if context is None:
             context = {}
@@ -176,7 +208,9 @@ class ExecutionRouter:
                 break
 
             for step in executable_steps:
-                result = await self.execute_step(step, plan, context, model=model_override)
+                result = await self.execute_step(
+                    step, plan, context, model=model_override
+                )
                 step_count += 1
 
                 if not result["success"]:

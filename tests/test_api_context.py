@@ -6,7 +6,9 @@ from fastapi.testclient import TestClient
 class TestAPIContext:
     @pytest.fixture
     def mock_orchestrator(self):
-        with patch("src.planweaver.api.dependencies.get_orchestrator_factory") as mock_get_factory:
+        with patch(
+            "src.planweaver.api.dependencies.get_orchestrator_factory"
+        ) as mock_get_factory:
             orchestrator = Mock()
 
             mock_plan = Mock()
@@ -22,9 +24,13 @@ class TestAPIContext:
 
     @pytest.fixture
     def client(self, mock_orchestrator):
-        with patch("src.planweaver.api.dependencies.get_orchestrator_factory", return_value=mock_orchestrator):
+        with patch(
+            "src.planweaver.api.dependencies.get_orchestrator_factory",
+            return_value=mock_orchestrator,
+        ):
             with patch("src.planweaver.api.main.init_db"):
                 from src.planweaver.api.main import app
+
                 return TestClient(app)
 
     def test_add_github_context(self, client, mock_orchestrator):
@@ -34,14 +40,16 @@ class TestAPIContext:
         mock_context.source_type = "github"
         mock_context.source_url = "https://github.com/test/repo"
 
-        with patch("src.planweaver.api.routers.context.get_context_service") as mock_get_cs:
+        with patch(
+            "src.planweaver.api.routers.context.get_context_service"
+        ) as mock_get_cs:
             mock_cs = AsyncMock()
             mock_cs.add_github_context = AsyncMock(return_value=mock_context)
             mock_get_cs.return_value = mock_cs
 
             response = client.post(
                 "/api/v1/sessions/test-123/context/github",
-                json={"repo_url": "https://github.com/test/repo"}
+                json={"repo_url": "https://github.com/test/repo"},
             )
 
             assert response.status_code == 200
@@ -60,7 +68,7 @@ class TestAPIContext:
             source_url="https://github.com/test/repo",
             content_summary="Test repo",
             metadata={},
-            created_at=datetime.now(timezone.utc)
+            created_at=datetime.now(timezone.utc),
         )
         mock_plan = mock_orchestrator.get_session.return_value
         mock_plan.external_contexts = [context]
@@ -78,14 +86,16 @@ class TestAPIContext:
         mock_context.id = "ctx-456"
         mock_context.source_type = "web_search"
 
-        with patch("src.planweaver.api.routers.context.get_context_service") as mock_get_cs:
+        with patch(
+            "src.planweaver.api.routers.context.get_context_service"
+        ) as mock_get_cs:
             mock_cs = AsyncMock()
             mock_cs.add_web_search_context = AsyncMock(return_value=mock_context)
             mock_get_cs.return_value = mock_cs
 
             response = client.post(
                 "/api/v1/sessions/test-123/context/web-search",
-                json={"query": "FastAPI best practices"}
+                json={"query": "FastAPI best practices"},
             )
 
             assert response.status_code == 200
@@ -98,14 +108,16 @@ class TestAPIContext:
         mock_context.id = "ctx-789"
         mock_context.source_type = "file_upload"
 
-        with patch("src.planweaver.api.routers.context.get_context_service") as mock_get_cs:
+        with patch(
+            "src.planweaver.api.routers.context.get_context_service"
+        ) as mock_get_cs:
             mock_cs = AsyncMock()
             mock_cs.add_file_context = AsyncMock(return_value=mock_context)
             mock_get_cs.return_value = mock_cs
 
             response = client.post(
                 "/api/v1/sessions/test-123/context/upload",
-                files={"file": ("test.txt", b"test content", "text/plain")}
+                files={"file": ("test.txt", b"test content", "text/plain")},
             )
 
             assert response.status_code == 200

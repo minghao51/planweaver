@@ -1,8 +1,6 @@
 import pytest
-from unittest.mock import Mock, patch, AsyncMock
+from unittest.mock import AsyncMock
 from planweaver.services.context_service import ContextService
-from planweaver.config import Settings
-from planweaver.services.llm_gateway import LLMGateway
 
 
 @pytest.fixture
@@ -24,17 +22,27 @@ async def test_add_github_context(context_service, mocker):
     """Test adding GitHub context"""
     # Mock the analyzer
     mock_analysis = {
-        "metadata": {"name": "test-repo", "description": "Test", "language": "Python", "stars": 100, "url": "https://github.com/test/repo"},
+        "metadata": {
+            "name": "test-repo",
+            "description": "Test",
+            "language": "Python",
+            "stars": 100,
+            "url": "https://github.com/test/repo",
+        },
         "file_structure": ["README.md (1000 bytes)", "main.py (500 bytes)"],
         "key_files": {"README.md": "Test README"},
-        "dependencies": {"python": ["requests", "fastapi"], "javascript": [], "other": []},
-        "content_summary": "## GitHub Repository: test-repo\n..."
+        "dependencies": {
+            "python": ["requests", "fastapi"],
+            "javascript": [],
+            "other": [],
+        },
+        "content_summary": "## GitHub Repository: test-repo\n...",
     }
 
     mocker.patch.object(
         context_service.github_analyzer,
         "analyze_repository",
-        new=AsyncMock(return_value=mock_analysis)
+        new=AsyncMock(return_value=mock_analysis),
     )
 
     context = await context_service.add_github_context("https://github.com/test/repo")
@@ -56,16 +64,20 @@ async def test_add_web_search_context(context_service, mocker):
     mock_results = {
         "query": "FastAPI best practices",
         "results": [
-            {"title": "FastAPI Guide", "url": "https://example.com", "snippet": "Best practices..."}
+            {
+                "title": "FastAPI Guide",
+                "url": "https://example.com",
+                "snippet": "Best practices...",
+            }
         ],
         "answer": "FastAPI is a modern web framework",
-        "summary": "## Web Search Results..."
+        "summary": "## Web Search Results...",
     }
 
     mocker.patch.object(
         context_service.web_search,
         "search",
-        new=mocker.AsyncMock(return_value=mock_results)
+        new=mocker.AsyncMock(return_value=mock_results),
     )
 
     context = await context_service.add_web_search_context("FastAPI best practices")
@@ -138,5 +150,3 @@ async def test_unsupported_file_type(context_service):
 
     with pytest.raises(ValueError, match="Unsupported file type"):
         await context_service.add_file_context("test.exe", content)
-
-

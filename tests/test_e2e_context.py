@@ -1,6 +1,7 @@
 """End-to-end integration tests for external context features"""
+
 import pytest
-from unittest.mock import Mock, patch, AsyncMock
+from unittest.mock import Mock, patch
 from planweaver.models.plan import ExternalContext, Plan, PlanStatus
 from planweaver.orchestrator import Orchestrator
 
@@ -17,7 +18,7 @@ class TestE2EContextWorkflow:
             mock_planner.create_initial_plan.return_value = Plan(
                 session_id="e2e-test-123",
                 status=PlanStatus.BRAINSTORMING,
-                user_intent="Refactor this codebase"
+                user_intent="Refactor this codebase",
             )
             mock_planner_class.return_value = mock_planner
 
@@ -36,7 +37,7 @@ class TestE2EContextWorkflow:
         github_context = ExternalContext(
             source_type="github",
             source_url="https://github.com/user/javascript-app",
-            content_summary="## GitHub Repo: javascript-app\nLanguage: JavaScript\nStars: 150"
+            content_summary="## GitHub Repo: javascript-app\nLanguage: JavaScript\nStars: 150",
         )
 
         plan = mock_orchestrator.add_external_context(plan.session_id, github_context)
@@ -58,21 +59,21 @@ class TestE2EContextWorkflow:
         # 2. Add GitHub context
         github_ctx = ExternalContext(
             source_type="github",
-            content_summary="## GitHub Repo: api-project\nLanguage: Python"
+            content_summary="## GitHub Repo: api-project\nLanguage: Python",
         )
         plan = mock_orchestrator.add_external_context(plan.session_id, github_ctx)
 
         # 3. Add web search context
         search_ctx = ExternalContext(
             source_type="web_search",
-            content_summary="## Web Search: FastAPI best practices\n..."
+            content_summary="## Web Search: FastAPI best practices\n...",
         )
         plan = mock_orchestrator.add_external_context(plan.session_id, search_ctx)
 
         # 4. Add file context
         file_ctx = ExternalContext(
             source_type="file_upload",
-            content_summary="## Uploaded File: requirements.txt\n..."
+            content_summary="## Uploaded File: requirements.txt\n...",
         )
         plan = mock_orchestrator.add_external_context(plan.session_id, file_ctx)
 
@@ -85,9 +86,7 @@ class TestE2EContextWorkflow:
     def test_context_persistence_through_workflow(self, mock_orchestrator):
         """Test that contexts persist through the planning workflow"""
         # 1. Start with contexts
-        contexts = [
-            ExternalContext(source_type="github", content_summary="Repo info")
-        ]
+        contexts = [ExternalContext(source_type="github", content_summary="Repo info")]
         plan = mock_orchestrator.start_session("Add tests", external_contexts=contexts)
 
         # 2. Verify contexts in initial plan
@@ -95,8 +94,7 @@ class TestE2EContextWorkflow:
 
         # 3. Add more context later
         new_context = ExternalContext(
-            source_type="web_search",
-            content_summary="Testing best practices"
+            source_type="web_search", content_summary="Testing best practices"
         )
         plan = mock_orchestrator.add_external_context(plan.session_id, new_context)
 
