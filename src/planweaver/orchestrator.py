@@ -1,3 +1,12 @@
+"""
+PlanWeaver Orchestrator Module
+
+The Orchestrator is the main coordinator for planning sessions.
+It manages the lifecycle of plans from creation through execution,
+including handling external contexts, coordinating between the
+planner and execution router, and persisting state to the database.
+"""
+
 from typing import Dict, Any, Optional, List
 
 from .models.plan import Plan, PlanStatus, ExecutionStep, ExternalContext
@@ -9,11 +18,30 @@ from .db.repositories import PlanRepository
 
 
 class Orchestrator:
+    """
+    Main coordinator for PlanWeaver planning sessions.
+
+    The Orchestrator manages the complete lifecycle of planning sessions:
+    - Creating new plans with user intents
+    - Managing external contexts (GitHub, web search, files)
+    - Coordinating question/answer cycles
+    - Generating and selecting proposals
+    - Executing plans via the router
+
+    Attributes:
+        planner_model: Default model for planning operations
+        executor_model: Default model for execution operations
+        template_engine: Scenario template manager
+        llm: LLM gateway for model interactions
+        planner: Planning service instance
+        router: Execution router instance
+        plan_repository: Database repository for plans
+    """
     def __init__(
         self,
         planner_model: str = "gemini-2.5-flash",
         executor_model: str = "gemini-3-flash",
-        scenarios_path: str = "scenarios"
+        scenarios_path: str = "scenarios",
     ):
         self.planner_model = planner_model
         self.executor_model = executor_model
@@ -29,15 +57,13 @@ class Orchestrator:
         scenario_name: Optional[str] = None,
         external_contexts: Optional[List[ExternalContext]] = None,
         planner_model: Optional[str] = None,
-        executor_model: Optional[str] = None
+        executor_model: Optional[str] = None,
     ) -> Plan:
         # Use override for this call when provided, otherwise defaults.
         planner = planner_model or self.planner_model
 
         plan = self.planner.create_initial_plan(
-            user_intent=user_intent,
-            scenario_name=scenario_name,
-            model=planner
+            user_intent=user_intent, scenario_name=scenario_name, model=planner
         )
         # Persist explicit user overrides only; step-assigned models remain the fallback.
         plan.planner_model = planner_model
@@ -63,11 +89,7 @@ class Orchestrator:
             query=query,
         )
 
-    def add_external_context(
-        self,
-        session_id: str,
-        context: ExternalContext
-    ) -> Plan:
+    def add_external_context(self, session_id: str, context: ExternalContext) -> Plan:
         """Add external context to a planning session"""
         plan = self.plan_repository.get(session_id)
         if not plan:
@@ -83,8 +105,7 @@ class Orchestrator:
 
     def get_strawman_proposals(self, plan: Plan) -> List[Dict[str, Any]]:
         proposals = self.planner.generate_strawman_proposals(
-            plan.user_intent,
-            model=plan.planner_model or self.planner_model
+            plan.user_intent, model=plan.planner_model or self.planner_model
         )
         plan.strawman_proposals = proposals
         self.plan_repository.save(plan)
@@ -100,15 +121,11 @@ class Orchestrator:
         self.plan_repository.save(plan)
         return plan
 
-    def answer_questions(
-        self,
-        plan: Plan,
-        answers: Dict[str, str]
-    ) -> Plan:
+    def answer_questions(self, plan: Plan, answers: Dict[str, str]) -> Plan:
         plan = self.planner.refine_plan(
             plan=plan,
             user_answers=answers,
-            model=plan.planner_model or self.planner_model
+            model=plan.planner_model or self.planner_model,
         )
         self.plan_repository.save(plan)
         return plan
@@ -118,18 +135,20 @@ class Orchestrator:
         self.plan_repository.save(plan)
         return plan
 
-    async def execute(self, plan: Plan, context: Optional[Dict[str, Any]] = None) -> Plan:
+    async def execute(
+        self, plan: Plan, context: Optional[Dict[str, Any]] = None
+    ) -> Plan:
         if plan.status != PlanStatus.APPROVED:
             raise ValueError("Plan must be APPROVED before execution")
 
         plan = await self.router.execute_plan(
-            plan=plan,
-            context=context or {},
-            model_override=plan.executor_model
+            plan=plan, context=context or {}, model_override=plan.executor_model
         )
 
         self.plan_repository.save(plan)
         return plan
 
     def get_next_executable_step(self, plan: Plan) -> Optional[ExecutionStep]:
-        return self.router.get_executable_steps(plan)[0] if plan.execution_graph else None
+        return (
+            self.router.get_executable_steps(plan)[0] if plan.execution_graph else None
+        )

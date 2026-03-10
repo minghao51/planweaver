@@ -1,10 +1,11 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import or_
 
 from .database import get_session
 from .models import SessionModel as DBSession
+from ..config import get_settings
 from ..models.plan import (
     ExecutionStep,
     ExternalContext,
@@ -19,6 +20,10 @@ EXECUTOR_OVERRIDE_KEY = "__executor_model_override__"
 
 
 class PlanRepository:
+    def __init__(self, db_session=None):
+        self._db_session = db_session
+        self._settings = get_settings()
+
     def list_summaries(
         self,
         limit: int = 50,
@@ -26,7 +31,7 @@ class PlanRepository:
         status: Optional[str] = None,
         query: Optional[str] = None,
     ) -> dict:
-        db_session = get_session()
+        db_session = self._db_session or get_session()
         try:
             db_query = db_session.query(DBSession)
 
@@ -56,8 +61,12 @@ class PlanRepository:
                         "status": row.status,
                         "user_intent": row.user_intent,
                         "scenario_name": row.scenario_name,
-                        "created_at": row.created_at.isoformat() if row.created_at else None,
-                        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+                        "created_at": row.created_at.isoformat()
+                        if row.created_at
+                        else None,
+                        "updated_at": row.updated_at.isoformat()
+                        if row.updated_at
+                        else None,
                     }
                     for row in rows
                 ],
@@ -66,20 +75,22 @@ class PlanRepository:
                 "offset": offset,
             }
         finally:
-            db_session.close()
+            if self._db_session is not db_session:
+                db_session.close()
 
     def get(self, session_id: str) -> Optional[Plan]:
-        db_session = get_session()
+        db_session = self._db_session or get_session()
         try:
             db_plan = db_session.query(DBSession).filter_by(id=session_id).first()
             if not db_plan:
                 return None
             return self._db_to_plan(db_plan)
         finally:
-            db_session.close()
+            if self._db_session is not db_session:
+                db_session.close()
 
     def save(self, plan: Plan) -> None:
-        db_session = get_session()
+        db_session = self._db_session or get_session()
         try:
             existing = db_session.query(DBSession).filter_by(id=plan.session_id).first()
 
@@ -93,7 +104,8 @@ class PlanRepository:
 
             db_session.commit()
         finally:
-            db_session.close()
+            if self._db_session is not db_session:
+                db_session.close()
 
     def _plan_to_db_payload(self, plan: Plan) -> dict:
         locked_constraints = dict(plan.locked_constraints)
@@ -101,6 +113,12 @@ class PlanRepository:
             locked_constraints[PLANNER_OVERRIDE_KEY] = plan.planner_model
         if plan.executor_model:
             locked_constraints[EXECUTOR_OVERRIDE_KEY] = plan.executor_model
+
+        expires_at = None
+        if self._settings.session_ttl_days > 0:
+            expires_at = datetime.now(timezone.utc) + timedelta(
+                days=self._settings.session_ttl_days
+            )
 
         return {
             "user_intent": plan.user_intent,
@@ -110,7 +128,10 @@ class PlanRepository:
             "open_questions": [q.model_dump() for q in plan.open_questions],
             "strawman_proposals": [p.model_dump() for p in plan.strawman_proposals],
             "execution_graph": [s.model_dump() for s in plan.execution_graph],
-            "external_contexts": [c.model_dump(mode="json") for c in plan.external_contexts],
+            "external_contexts": [
+                c.model_dump(mode="json") for c in plan.external_contexts
+            ],
+            "expires_at": expires_at,
             "final_output": plan.final_output,
         }
 
@@ -126,9 +147,15 @@ class PlanRepository:
             scenario_name=db_plan.scenario_name,
             locked_constraints=locked_constraints,
             open_questions=[OpenQuestion(**q) for q in (db_plan.open_questions or [])],
-            strawman_proposals=[StrawmanProposal(**p) for p in (db_plan.strawman_proposals or [])],
-            execution_graph=[ExecutionStep(**s) for s in (db_plan.execution_graph or [])],
-            external_contexts=[ExternalContext(**c) for c in (db_plan.external_contexts or [])],
+            strawman_proposals=[
+                StrawmanProposal(**p) for p in (db_plan.strawman_proposals or [])
+            ],
+            execution_graph=[
+                ExecutionStep(**s) for s in (db_plan.execution_graph or [])
+            ],
+            external_contexts=[
+                ExternalContext(**c) for c in (db_plan.external_contexts or [])
+            ],
             planner_model=planner_model,
             executor_model=executor_model,
             final_output=db_plan.final_output,

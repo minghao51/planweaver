@@ -86,6 +86,7 @@ class ExecutionStep(BaseModel):
 
 class ExternalContext(BaseModel):
     """External context source for planning enhancement"""
+
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     source_type: Literal["github", "web_search", "file_upload"]
     source_url: Optional[str] = None
@@ -103,9 +104,16 @@ class Plan(BaseModel):
     open_questions: List[OpenQuestion] = Field(default_factory=list)
     strawman_proposals: List[StrawmanProposal] = Field(default_factory=list)
     execution_graph: List[ExecutionStep] = Field(default_factory=list)
-    external_contexts: List[ExternalContext] = Field(default_factory=list, description="External context sources for enhanced planning")
-    planner_model: Optional[str] = Field(default=None, description="User-selected planner model override")
-    executor_model: Optional[str] = Field(default=None, description="Executor model to use for this plan")
+    external_contexts: List[ExternalContext] = Field(
+        default_factory=list,
+        description="External context sources for enhanced planning",
+    )
+    planner_model: Optional[str] = Field(
+        default=None, description="User-selected planner model override"
+    )
+    executor_model: Optional[str] = Field(
+        default=None, description="Executor model to use for this plan"
+    )
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     final_output: Optional[Any] = None
@@ -135,6 +143,7 @@ class Plan(BaseModel):
 
 class StepSummary(BaseModel):
     """Simplified step for comparison display"""
+
     task: str
     complexity: Literal["Low", "Medium", "High"]
     estimated_time_minutes: int
@@ -142,6 +151,7 @@ class StepSummary(BaseModel):
 
 class ProposalDetail(BaseModel):
     """Full proposal with execution graph for comparison"""
+
     proposal_id: str
     full_execution_graph: List[ExecutionStep]
     accurate_time_estimate: int
@@ -152,6 +162,7 @@ class ProposalDetail(BaseModel):
 
 class ProposalComparison(BaseModel):
     """Detailed comparison of selected proposals"""
+
     session_id: str
     proposals: List[ProposalDetail]
     common_steps: List[StepSummary]
@@ -163,8 +174,111 @@ class ProposalComparison(BaseModel):
 
 class ComparisonRequest(BaseModel):
     """Request to compare proposals"""
+
     proposal_ids: List[str] = Field(
         min_length=2,
         max_length=10,
-        description="List of proposal IDs to compare (2-10)"
+        description="List of proposal IDs to compare (2-10)",
     )
+
+
+class PlanSourceType(str, Enum):
+    LLM_GENERATED = "llm_generated"
+    MANUAL = "manual"
+    OPTIMIZED_VARIANT = "optimized_variant"
+
+
+class EvaluationVerdict(str, Enum):
+    STRONG = "strong"
+    ACCEPTABLE = "acceptable"
+    WEAK = "weak"
+    REJECT = "reject"
+
+
+class DisagreementLevel(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+class ComparisonMargin(str, Enum):
+    NARROW = "narrow"
+    MODERATE = "moderate"
+    CLEAR = "clear"
+
+
+class NormalizedStep(BaseModel):
+    step_id: str
+    description: str
+    dependencies: List[str] = Field(default_factory=list)
+    validation: List[str] = Field(default_factory=list)
+    tools: List[str] = Field(default_factory=list)
+    owner_model: Optional[str] = None
+    estimated_time_minutes: Optional[int] = None
+
+
+class NormalizedPlan(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    session_id: Optional[str] = None
+    source_type: PlanSourceType
+    source_model: str
+    planning_style: str = "baseline"
+    title: str
+    summary: str
+    assumptions: List[str] = Field(default_factory=list)
+    constraints: List[str] = Field(default_factory=list)
+    success_criteria: List[str] = Field(default_factory=list)
+    risks: List[str] = Field(default_factory=list)
+    fallbacks: List[str] = Field(default_factory=list)
+    estimated_time_minutes: Optional[int] = None
+    estimated_cost_usd: Optional[Decimal] = None
+    steps: List[NormalizedStep] = Field(default_factory=list)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    normalization_warnings: List[str] = Field(default_factory=list)
+
+
+class PlanEvaluation(BaseModel):
+    plan_id: str
+    judge_model: str
+    rubric_scores: Dict[str, float]
+    overall_score: float
+    strengths: List[str] = Field(default_factory=list)
+    weaknesses: List[str] = Field(default_factory=list)
+    blocking_issues: List[str] = Field(default_factory=list)
+    confidence: float
+    verdict: EvaluationVerdict
+
+
+class PairwisePlanComparison(BaseModel):
+    left_plan_id: str
+    right_plan_id: str
+    judge_model: str
+    winner_plan_id: str
+    margin: ComparisonMargin
+    rationale: str
+    preference_factors: List[str] = Field(default_factory=list)
+
+
+class RankedPlanResult(BaseModel):
+    plan_id: str
+    final_score: float
+    rank: int
+    confidence: float
+    disagreement_level: DisagreementLevel
+    recommendation_reason: str
+
+
+class ManualPlanSubmission(BaseModel):
+    session_id: Optional[str] = None
+    title: str
+    summary: str = ""
+    plan_text: Optional[str] = None
+    assumptions: List[str] = Field(default_factory=list)
+    constraints: List[str] = Field(default_factory=list)
+    success_criteria: List[str] = Field(default_factory=list)
+    risks: List[str] = Field(default_factory=list)
+    fallbacks: List[str] = Field(default_factory=list)
+    steps: List[NormalizedStep] = Field(default_factory=list)
+    estimated_time_minutes: Optional[int] = None
+    estimated_cost_usd: Optional[Decimal] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)

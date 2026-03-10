@@ -33,22 +33,27 @@ def create_session(request: Request, body: CreateSessionRequest):
             body.user_intent,
             body.scenario_name,
             planner_model=body.planner_model,
-            executor_model=body.executor_model
+            executor_model=body.executor_model,
         )
         return serialize_plan_summary(plan)
     except ValueError as e:
         logger.warning(f"Validation error: {e}")
-        raise HTTPException(status_code=400, detail=f"Cannot complete operation: {str(e)}")
+        raise HTTPException(
+            status_code=400, detail=f"Cannot complete operation: {str(e)}"
+        )
     except HTTPException:
         raise
-    except Exception as e:
-        logger.exception(f"Unexpected error creating session")
-        raise HTTPException(status_code=500, detail="Operation failed. Please try again.")
+    except Exception:
+        logger.exception("Unexpected error creating session")
+        raise HTTPException(
+            status_code=500, detail="Operation failed. Please try again."
+        )
 
 
 @router.get("/sessions")
 @limiter.limit("60/minute")
-def list_sessions(request: Request,
+def list_sessions(
+    request: Request,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     status: Optional[str] = Query(default=None),
@@ -72,14 +77,18 @@ def get_session(request: Request, session_id: str):
         return serialize_plan_detail(plan)
     except HTTPException:
         raise
-    except Exception as e:
-        logger.exception(f"Unexpected error getting session")
-        raise HTTPException(status_code=500, detail="Operation failed. Please try again.")
+    except Exception:
+        logger.exception("Unexpected error getting session")
+        raise HTTPException(
+            status_code=500, detail="Operation failed. Please try again."
+        )
 
 
 @router.post("/sessions/{session_id}/questions")
 @limiter.limit("30/minute")
-def answer_questions(request: Request, session_id: str, answers: AnswerQuestionsRequest):
+def answer_questions(
+    request: Request, session_id: str, answers: AnswerQuestionsRequest
+):
     orch, plan = get_plan_or_404(session_id)
     updated_plan = orch.answer_questions(plan, answers.answers)
     return {
@@ -110,7 +119,10 @@ def approve_plan(session_id: str):
     try:
         orch, plan = get_plan_or_404(session_id)
         if not plan.execution_graph:
-            raise HTTPException(status_code=400, detail="No execution steps to approve. Please select a proposal first.")
+            raise HTTPException(
+                status_code=400,
+                detail="No execution steps to approve. Please select a proposal first.",
+            )
 
         updated_plan = orch.approve_plan(plan)
         return {
@@ -119,18 +131,24 @@ def approve_plan(session_id: str):
         }
     except HTTPException:
         raise
-    except Exception as e:
-        logger.exception(f"Unexpected error approving plan")
-        raise HTTPException(status_code=500, detail="Operation failed. Please try again.")
+    except Exception:
+        logger.exception("Unexpected error approving plan")
+        raise HTTPException(
+            status_code=500, detail="Operation failed. Please try again."
+        )
 
 
 @router.post("/sessions/{session_id}/execute")
 @limiter.limit("10/hour")
-async def execute_plan(request: Request, session_id: str, body: Optional[ExecutePlanRequest] = None):
+async def execute_plan(
+    request: Request, session_id: str, body: Optional[ExecutePlanRequest] = None
+):
     try:
         orch, plan = get_plan_or_404(session_id)
         if plan.status != PlanStatus.APPROVED:
-            raise HTTPException(status_code=400, detail="Plan must be approved before execution")
+            raise HTTPException(
+                status_code=400, detail="Plan must be approved before execution"
+            )
 
         result = await orch.execute(plan, body.context if body else {})
         return {
@@ -140,18 +158,22 @@ async def execute_plan(request: Request, session_id: str, body: Optional[Execute
         }
     except HTTPException:
         raise
-    except Exception as e:
-        logger.exception(f"Unexpected error executing plan")
-        raise HTTPException(status_code=500, detail="Operation failed. Please try again.")
+    except Exception:
+        logger.exception("Unexpected error executing plan")
+        raise HTTPException(
+            status_code=500, detail="Operation failed. Please try again."
+        )
 
 
-@router.post("/sessions/{session_id}/compare-proposals", response_model=ProposalComparison)
+@router.post(
+    "/sessions/{session_id}/compare-proposals", response_model=ProposalComparison
+)
 @limiter.limit("10/hour")
 def compare_proposals(
     http_request: Request,
     session_id: str,
     request: ComparisonRequest,
-    comparison_service: ProposalComparisonService = Depends(get_comparison_service)
+    comparison_service: ProposalComparisonService = Depends(get_comparison_service),
 ):
     """Compare detailed execution graphs for selected proposals.
 
@@ -174,26 +196,24 @@ def compare_proposals(
 
     if invalid_ids:
         raise HTTPException(
-            status_code=404,
-            detail=f"Proposals not found: {sorted(invalid_ids)}"
+            status_code=404, detail=f"Proposals not found: {sorted(invalid_ids)}"
         )
 
     if len(request.proposal_ids) < 2:
         raise HTTPException(
             status_code=400,
-            detail=f"Comparison requires at least 2 proposals. Got {len(request.proposal_ids)}"
+            detail=f"Comparison requires at least 2 proposals. Got {len(request.proposal_ids)}",
         )
 
     if len(request.proposal_ids) > 10:
         raise HTTPException(
             status_code=400,
-            detail=f"Comparison supports a maximum of 10 proposals. Got {len(request.proposal_ids)}"
+            detail=f"Comparison supports a maximum of 10 proposals. Got {len(request.proposal_ids)}",
         )
 
     try:
         comparison = comparison_service.compare_proposals(
-            plan=plan,
-            proposal_ids=request.proposal_ids
+            plan=plan, proposal_ids=request.proposal_ids
         )
         return comparison
     except ValueError as e:
@@ -201,6 +221,5 @@ def compare_proposals(
     except Exception as e:
         logger.error(f"Comparison failed: {e}")
         raise HTTPException(
-            status_code=500,
-            detail="Unable to generate comparison. Please try again."
+            status_code=500, detail="Unable to generate comparison. Please try again."
         )

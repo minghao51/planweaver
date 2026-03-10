@@ -1,4 +1,14 @@
-from sqlalchemy import Column, String, Text, DateTime, JSON, Integer, ForeignKey, Boolean
+from sqlalchemy import (
+    Column,
+    String,
+    Text,
+    DateTime,
+    JSON,
+    Integer,
+    ForeignKey,
+    Boolean,
+    Float,
+)
 from sqlalchemy.orm import declarative_base
 from datetime import datetime, timezone
 import enum
@@ -29,7 +39,12 @@ class SessionModel(Base):
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+    expires_at = Column(DateTime, nullable=True, index=True)
     user_intent = Column(Text, nullable=False)
     scenario_name = Column(String(255), nullable=True)
     status = Column(String(50), default=PlanStatusDB.BRAINSTORMING.value)
@@ -47,7 +62,11 @@ class PlanModel(Base):
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     session_id = Column(String(36), ForeignKey("sessions.id"), nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
     status = Column(String(50), default=PlanStatusDB.BRAINSTORMING.value)
     locked_constraints = Column(JSON, default=dict)
     execution_graph = Column(JSON, default=list)
@@ -81,7 +100,11 @@ class AvailableModel(Base):
     pricing_info = Column(JSON, nullable=True)
     context_length = Column(Integer, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False, index=True)
-    last_updated = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    last_updated = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
@@ -89,12 +112,20 @@ class OptimizedVariant(Base):
     __tablename__ = "optimized_variants"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    session_id = Column(String(36), ForeignKey("sessions.id"), nullable=False, index=True)
+    session_id = Column(
+        String(36), ForeignKey("sessions.id"), nullable=False, index=True
+    )
     proposal_id = Column(String(36), nullable=False, index=True)
-    variant_type = Column(String(50), nullable=False)  # 'simplified', 'enhanced', 'cost-optimized'
+    variant_type = Column(
+        String(50), nullable=False
+    )  # 'simplified', 'enhanced', 'cost-optimized'
     execution_graph = Column(JSON, nullable=False)
-    variant_metadata = Column(JSON, nullable=True)  # {step_count, complexity_score, optimization_notes, etc}
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    variant_metadata = Column(
+        JSON, nullable=True
+    )  # {step_count, complexity_score, optimization_notes, etc}
+    created_at = Column(
+        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+    )
 
     def to_dict(self):
         return {
@@ -112,12 +143,22 @@ class PlanRating(Base):
     __tablename__ = "plan_ratings"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    session_id = Column(String(36), ForeignKey("sessions.id"), nullable=False, index=True)
-    plan_id = Column(String(36), nullable=False, index=True)  # Can be proposal or variant ID
-    model_name = Column(String(100), nullable=False, index=True)  # 'claude-3.5-sonnet', 'gpt-4o', etc
-    ratings = Column(JSON, nullable=False)  # {feasibility: 8.5, cost_efficiency: 7.0, ...}
+    session_id = Column(
+        String(36), ForeignKey("sessions.id"), nullable=False, index=True
+    )
+    plan_id = Column(
+        String(36), nullable=False, index=True
+    )  # Can be proposal or variant ID
+    model_name = Column(
+        String(100), nullable=False, index=True
+    )  # 'claude-3.5-sonnet', 'gpt-4o', etc
+    ratings = Column(
+        JSON, nullable=False
+    )  # {feasibility: 8.5, cost_efficiency: 7.0, ...}
     reasoning = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    created_at = Column(
+        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+    )
 
     def to_dict(self):
         return {
@@ -135,12 +176,16 @@ class UserRating(Base):
     __tablename__ = "user_ratings"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    session_id = Column(String(36), ForeignKey("sessions.id"), nullable=False, index=True)
+    session_id = Column(
+        String(36), ForeignKey("sessions.id"), nullable=False, index=True
+    )
     plan_id = Column(String(36), nullable=False, index=True)
     rating = Column(Integer, nullable=False)  # 1-5 stars
     comment = Column(Text, nullable=True)
     rationale = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    created_at = Column(
+        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+    )
 
     def to_dict(self):
         return {
@@ -150,5 +195,100 @@ class UserRating(Base):
             "rating": self.rating,
             "comment": self.comment,
             "rationale": self.rationale,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class NormalizedPlanRecord(Base):
+    __tablename__ = "normalized_plans"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    session_id = Column(String(36), ForeignKey("sessions.id"), nullable=True, index=True)
+    source_type = Column(String(50), nullable=False)
+    source_model = Column(String(100), nullable=False)
+    planning_style = Column(String(100), nullable=False)
+    title = Column(String(255), nullable=False)
+    normalized_payload = Column(JSON, nullable=False)
+    normalization_warnings = Column(JSON, nullable=False, default=list)
+    created_at = Column(
+        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "session_id": self.session_id,
+            "source_type": self.source_type,
+            "source_model": self.source_model,
+            "planning_style": self.planning_style,
+            "title": self.title,
+            "normalized_payload": self.normalized_payload,
+            "normalization_warnings": self.normalization_warnings,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class PlanEvaluationRecord(Base):
+    __tablename__ = "plan_evaluations"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    session_id = Column(String(36), ForeignKey("sessions.id"), nullable=True, index=True)
+    plan_id = Column(String(36), nullable=False, index=True)
+    judge_model = Column(String(100), nullable=False, index=True)
+    rubric_scores = Column(JSON, nullable=False)
+    overall_score = Column(Float, nullable=False)
+    strengths = Column(JSON, nullable=False, default=list)
+    weaknesses = Column(JSON, nullable=False, default=list)
+    blocking_issues = Column(JSON, nullable=False, default=list)
+    confidence = Column(Float, nullable=False)
+    verdict = Column(String(50), nullable=False)
+    created_at = Column(
+        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "session_id": self.session_id,
+            "plan_id": self.plan_id,
+            "judge_model": self.judge_model,
+            "rubric_scores": self.rubric_scores,
+            "overall_score": self.overall_score,
+            "strengths": self.strengths,
+            "weaknesses": self.weaknesses,
+            "blocking_issues": self.blocking_issues,
+            "confidence": self.confidence,
+            "verdict": self.verdict,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class PairwiseComparisonRecord(Base):
+    __tablename__ = "pairwise_plan_comparisons"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    session_id = Column(String(36), ForeignKey("sessions.id"), nullable=True, index=True)
+    left_plan_id = Column(String(36), nullable=False, index=True)
+    right_plan_id = Column(String(36), nullable=False, index=True)
+    judge_model = Column(String(100), nullable=False)
+    winner_plan_id = Column(String(36), nullable=False)
+    margin = Column(String(50), nullable=False)
+    rationale = Column(Text, nullable=False)
+    preference_factors = Column(JSON, nullable=False, default=list)
+    created_at = Column(
+        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "session_id": self.session_id,
+            "left_plan_id": self.left_plan_id,
+            "right_plan_id": self.right_plan_id,
+            "judge_model": self.judge_model,
+            "winner_plan_id": self.winner_plan_id,
+            "margin": self.margin,
+            "rationale": self.rationale,
+            "preference_factors": self.preference_factors,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
