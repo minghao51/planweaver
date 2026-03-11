@@ -1,6 +1,6 @@
 """
-Script to scrape free models from OpenRouter using Playwright.
-Run manually: uv run python -m planweaver.scripts.scrape_openrouter_models
+Maintenance script to scrape free models from OpenRouter using Playwright.
+Run manually from the repository root: uv run python scripts/maintenance/openrouter_models.py
 """
 
 import asyncio
@@ -10,8 +10,8 @@ from typing import List, Dict, Any
 from playwright.async_api import async_playwright
 from sqlalchemy.exc import IntegrityError
 
-from ..db.database import get_session
-from ..db.models import AvailableModel
+from planweaver.db.database import get_session
+from planweaver.db.models import AvailableModel
 
 logger = logging.getLogger(__name__)
 

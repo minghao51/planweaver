@@ -92,6 +92,18 @@ Located in `src/planweaver/api/routers/optimizer.py`:
    - Gets optimization state
    - Response: `OptimizationStateResponse`
 
+6. `POST /api/v1/optimizer/manual`
+   - Accepts a manually supplied plan and returns normalization plus evaluation output
+
+7. `POST /api/v1/optimizer/normalize`
+   - Converts raw plan payloads into the canonical internal structure
+
+8. `POST /api/v1/optimizer/evaluate`
+   - Scores one or more plans with the rubric-based evaluator
+
+9. `POST /api/v1/optimizer/compare`
+   - Performs pairwise comparison and ranking across multiple plans
+
 ### Frontend Components
 
 #### TypeScript Types

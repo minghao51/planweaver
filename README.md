@@ -1,157 +1,65 @@
 # PlanWeaver
 
-Universal LLM Planning & Execution Engine
+Universal LLM Planning and execution engine.
 
-## What is PlanWeaver?
+## Overview
 
-PlanWeaver separates LLM reasoning from execution using a two-stage pattern. A planning model (gemini-2.5-flash) analyzes intent, asks clarifying questions, and decomposes tasks into a dependency graph. An execution model (gemini-3-flash) then runs each step in the correct order.
+PlanWeaver separates planning from execution. A planning model decomposes the request into a structured graph, then execution models run the approved steps with retries, routing, and optional external context.
 
 ## Features
 
-- **Interactive Planning** - Planner asks clarifying questions before execution
-- **Strawman Proposals** - Get multiple approach options to choose from
-- **DAG Execution** - Tasks run in dependency order with retry logic
-- **Model Agnostic** - Swap planners/executors via LiteLLM (DeepSeek, Claude, GPT-4o, etc.)
-- **Scenario Templates** - Define reusable workflows in YAML
-- **External Context** - Enhance planning with GitHub repos, web search, and uploaded files
+- Interactive planning with clarifying questions
+- Strawman proposals before execution
+- DAG-based execution with retries
+- External context from GitHub, web search, and file uploads
+- Manual plan normalization, evaluation, and comparison
+- React frontend for planning, history, and optimizer flows
 
 ## Quick Start
 
 ```bash
-# Install
-pip install -r requirements.txt
-cp .env.example .env  # Add your API keys
+uv sync
+cp .env.example .env
 
-# Run the API server
-planweaver serve
+# API server
+uv run uvicorn src.planweaver.api.main:app --reload
+
+# Optional CLI workflow
+uv run python -m src.planweaver.cli plan "Build a Python CLI to scrape weather data"
 ```
 
-## CLI Usage
-
-```bash
-# Start an interactive planning session
-planweaver plan "Build a Python CLI to scrape weather data"
-
-# Execute an existing plan
-planweaver execute <session_id>
-```
-
-## Python API
-
-```python
-from planweaver import Orchestrator
-
-orchestrator = Orchestrator(
-    planner_model="deepseek/deepseek-chat",
-    executor_model="anthropic/claude-3-5-sonnet-20241022"
-)
-
-# Start planning
-plan = orchestrator.start_session("Build a REST API for inventory management")
-
-# Answer clarifying questions
-if plan.open_questions:
-    answers = {q.id: "Use FastAPI" for q in plan.open_questions if not q.answered}
-    plan = orchestrator.answer_questions(plan, answers)
-
-# Get approach options
-proposals = orchestrator.get_strawman_proposals(plan)
-
-# Approve and execute
-plan = orchestrator.approve_plan(plan)
-result = orchestrator.execute(plan)
-print(result.final_output)
-```
-
-## External Context Sources
-
-PlanWeaver can enhance planning by incorporating external context:
-
-### GitHub Repositories
-
-```bash
-curl -X POST http://localhost:8000/api/v1/sessions/{id}/context/github \
-  -H "Content-Type: application/json" \
-  -d '{"repo_url": "https://github.com/user/repo"}'
-```
-
-The planner will analyze the repository structure, dependencies, and key files to generate context-aware questions and steps.
-
-### Web Search
-
-```bash
-curl -X POST http://localhost:8000/api/v1/sessions/{id}/context/web-search \
-  -H "Content-Type: application/json" \
-  -d '{"query": "FastAPI best practices 2025"}'
-```
-
-Or let the planner generate the query:
-```bash
-curl -X POST http://localhost:8000/api/v1/sessions/{id}/context/web-search
-```
-
-### File Uploads
-
-```bash
-curl -X POST http://localhost:8000/api/v1/sessions/{id}/context/upload \
-  -F "file=@document.pdf"
-```
-
-Supported formats: PDF, TXT, MD, PY, JS, TS, JSON, YAML
-
-### Python API for External Context
-
-```python
-from planweaver import Orchestrator
-from planweaver.services.context_service import ContextService
-
-orchestrator = Orchestrator()
-context_service = ContextService(config, llm_gateway)
-
-# Start session
-plan = orchestrator.start_session("Refactor to TypeScript")
-
-# Add GitHub context
-github_context = await context_service.add_github_context(
-    "https://github.com/user/react-app"
-)
-plan = orchestrator.add_external_context(plan.session_id, github_context)
-
-# Add web search context
-search_context = await context_service.add_web_search_context(
-    "TypeScript migration best practices"
-)
-plan = orchestrator.add_external_context(plan.session_id, search_context)
-
-# Add file context
-with open("requirements.txt", "rb") as f:
-    file_context = await context_service.add_file_context("requirements.txt", f.read())
-plan = orchestrator.add_external_context(plan.session_id, file_context)
-```
-
-See `docs/external-context-guide.md` for detailed documentation.
+The API is available at `http://localhost:8000`, with interactive docs at `http://localhost:8000/docs`.
 
 ## Configuration
 
-Set these in `.env`:
+Set these in `.env` as needed:
 
 | Variable | Description |
 |----------|-------------|
-| `GOOGLE_API_KEY` | For Gemini models (recommended - default) |
-| `ANTHROPIC_API_KEY` | For Claude executor |
-| `OPENAI_API_KEY` | For GPT models |
-| `OPENROUTER_API_KEY` | For DeepSeek + other models |
+| `GOOGLE_API_KEY` | Gemini models |
+| `ANTHROPIC_API_KEY` | Claude models |
+| `OPENAI_API_KEY` | GPT models |
+| `OPENROUTER_API_KEY` | DeepSeek and other OpenRouter models |
+| `GITHUB_TOKEN` | Private GitHub repository access |
+| `TAVILY_API_KEY` | Web search |
 
-**Default Models:**
-- Planner: `gemini-2.5-flash` (price-performance)
-- Executor: `gemini-3-flash` (latest balanced)
+Defaults in [`src/planweaver/config.py`](/Users/minghao/Desktop/personal/planweaver/src/planweaver/config.py) use `gemini-2.5-flash` for planning and `gemini-3-flash` for execution.
 
-## Scenarios
+## Project Layout
 
-Pre-built templates in `scenarios/`:
-- `code_refactoring.yaml` - Refactor legacy code
-- `blog_generation.yaml` - Generate blog content
-- `market_analysis.yaml` - Competitor analysis
-- `data_analysis.yaml` - Analyze datasets
+- [`src/planweaver`](/Users/minghao/Desktop/personal/planweaver/src/planweaver) contains the backend package
+- [`frontend`](/Users/minghao/Desktop/personal/planweaver/frontend) contains the React app
+- [`scenarios`](/Users/minghao/Desktop/personal/planweaver/scenarios) contains reusable YAML workflows
+- [`docs/README.md`](/Users/minghao/Desktop/personal/planweaver/docs/README.md) is the documentation entry point
+- [`scripts/README.md`](/Users/minghao/Desktop/personal/planweaver/scripts/README.md) documents maintenance scripts
 
-See `docs/architecture.md` for comprehensive system design details and component documentation.
+## Documentation
+
+- Architecture: [`docs/reference/architecture.md`](/Users/minghao/Desktop/personal/planweaver/docs/reference/architecture.md)
+- API reference: [`docs/reference/api.md`](/Users/minghao/Desktop/personal/planweaver/docs/reference/api.md)
+- Testing: [`docs/reference/testing.md`](/Users/minghao/Desktop/personal/planweaver/docs/reference/testing.md)
+- Deployment: [`docs/guides/deployment.md`](/Users/minghao/Desktop/personal/planweaver/docs/guides/deployment.md)
+- External context: [`docs/guides/external-context.md`](/Users/minghao/Desktop/personal/planweaver/docs/guides/external-context.md)
+- Optimizer: [`docs/guides/optimizer.md`](/Users/minghao/Desktop/personal/planweaver/docs/guides/optimizer.md)
+
+Historical notes and implementation plans live under [`docs/archive`](/Users/minghao/Desktop/personal/planweaver/docs/archive).

@@ -186,6 +186,10 @@ PENDING → IN_PROGRESS → COMPLETED
 | POST | `/api/v1/optimizer/rate` | Rate plans with multiple AI models |
 | POST | `/api/v1/optimizer/user-rating` | Save user feedback on plans |
 | GET | `/api/v1/optimizer/state/{session_id}` | Get current optimization state |
+| POST | `/api/v1/optimizer/manual` | Submit a manual plan for normalization and evaluation |
+| POST | `/api/v1/optimizer/normalize` | Normalize a raw plan payload into the canonical schema |
+| POST | `/api/v1/optimizer/evaluate` | Evaluate one or more normalized plans |
+| POST | `/api/v1/optimizer/compare` | Compare and rank multiple candidate plans |
 
 ## Technology Stack
 

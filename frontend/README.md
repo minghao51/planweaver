@@ -410,5 +410,5 @@ npm install
 
 For frontend-specific issues:
 - Check the main [README.md](../README.md)
-- See [deployment-guide.md](../docs/deployment-guide.md)
-- Review [architecture.md](../docs/architecture.md)
+- See [deployment.md](../docs/guides/deployment.md)
+- Review [architecture.md](../docs/reference/architecture.md)

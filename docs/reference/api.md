@@ -412,18 +412,22 @@ Generates optimized plan variants and multi-model ratings.
 **Request Body:**
 ```json
 {
-  "session_id": "uuid-string",
-  "proposal_id": "1"
+  "selected_proposal_id": "proposal-123",
+  "optimization_types": ["simplified", "enhanced"],
+  "user_context": "Prefer lower cost over speed"
 }
 ```
 
 **Response:** `200 OK`
 ```json
 {
+  "optimization_id": "uuid-string",
+  "status": "completed",
   "session_id": "uuid-string",
   "variants": [
     {
       "id": "var-1",
+      "proposal_id": "proposal-123",
       "variant_type": "simplified",
       "execution_graph": [...],
       "metadata": {
@@ -434,20 +438,25 @@ Generates optimized plan variants and multi-model ratings.
       }
     }
   ],
-  "ratings": [
-    {
+  "ratings": {
+    "var-1": {
       "plan_id": "var-1",
-      "model_name": "claude-3.5-sonnet",
       "ratings": {
-        "feasibility": 8.5,
-        "cost_efficiency": 9.0,
-        "time_efficiency": 7.5,
-        "complexity": 8.0,
-        "risk_level": 7.0
+        "claude-3.5-sonnet": {
+          "model_name": "claude-3.5-sonnet",
+          "ratings": {
+            "feasibility": 8.5,
+            "cost_efficiency": 9.0,
+            "time_efficiency": 7.5,
+            "complexity": 8.0
+          },
+          "overall_score": 8.25,
+          "reasoning": "..."
+        }
       },
-      "reasoning": "..."
+      "average_score": 8.25
     }
-  ]
+  }
 }
 ```
 
@@ -480,31 +489,34 @@ Rates plans using multiple AI models.
 **Request Body:**
 ```json
 {
-  "session_id": "uuid-string",
-  "plans": [
-    {
-      "plan_id": "var-1",
-      "execution_graph": [...]
-    }
-  ]
+  "plan_ids": ["var-1", "var-2"],
+  "models": ["claude-3.5-sonnet", "gpt-4o"],
+  "criteria": ["feasibility", "cost_efficiency", "time_efficiency", "complexity"]
 }
 ```
 
 **Response:** `200 OK`
 ```json
 {
-  "ratings": [
-    {
+  "rating_id": "uuid-string",
+  "status": "completed",
+  "ratings": {
+    "var-1": {
       "plan_id": "var-1",
-      "model_name": "gpt-4o",
       "ratings": {
-        "feasibility": 8.0,
-        "cost_efficiency": 8.5,
-        ...
+        "gpt-4o": {
+          "model_name": "gpt-4o",
+          "ratings": {
+            "feasibility": 8.0,
+            "cost_efficiency": 8.5
+          },
+          "overall_score": 8.25,
+          "reasoning": "..."
+        }
       },
-      "reasoning": "..."
+      "average_score": 8.25
     }
-  ]
+  }
 }
 ```
 
@@ -519,7 +531,6 @@ Submits user feedback on a plan.
 **Request Body:**
 ```json
 {
-  "session_id": "uuid-string",
   "plan_id": "var-1",
   "rating": 5,
   "comment": "Excellent plan, very clear",
@@ -527,14 +538,11 @@ Submits user feedback on a plan.
 }
 ```
 
-**Response:** `201 Created`
+**Response:** `200 OK`
 ```json
 {
-  "id": "rating-id",
-  "session_id": "uuid-string",
-  "plan_id": "var-1",
-  "rating": 5,
-  "created_at": "2025-02-28T10:10:00Z"
+  "saved": true,
+  "rating_id": "rating-id"
 }
 ```
 
@@ -549,15 +557,110 @@ Gets current optimization state for a session.
 **Response:** `200 OK`
 ```json
 {
-  "session_id": "uuid-string",
-  "status": "completed",
-  "variants_generated": 3,
-  "ratings_received": 6,
-  "user_feedback_count": 1
+  "status": "idle",
+  "progress": 0.0,
+  "message": "Optimization not started"
 }
 ```
 
 ---
+
+### Submit Manual Plan
+
+**POST** `/api/v1/optimizer/manual`
+
+Normalizes, evaluates, and ranks a manually supplied plan.
+
+**Request Body:**
+```json
+{
+  "session_id": "uuid-string",
+  "title": "Two-phase migration plan",
+  "summary": "Move the service to FastAPI with staged rollout",
+  "plan_text": "1. Audit current routes\n2. Port handlers\n3. Run shadow traffic",
+  "assumptions": ["Current API behavior is documented"],
+  "constraints": ["No production downtime"],
+  "success_criteria": ["Feature parity", "Passing regression tests"],
+  "risks": ["Migration gaps"],
+  "fallbacks": ["Rollback to prior release"],
+  "steps": [],
+  "estimated_time_minutes": 180,
+  "estimated_cost_usd": 12.5,
+  "metadata": {},
+  "judge_models": ["gemini-2.5-flash"]
+}
+```
+
+---
+
+### Normalize Plan
+
+**POST** `/api/v1/optimizer/normalize`
+
+Converts a raw plan payload into the canonical plan schema.
+
+**Request Body:**
+```json
+{
+  "session_id": "uuid-string",
+  "plan": {
+    "title": "Candidate plan",
+    "steps": ["Inspect current API", "Refactor routes"]
+  },
+  "source_type": "llm_generated",
+  "source_model": "gemini-2.5-flash",
+  "planning_style": "baseline",
+  "persist": true
+}
+```
+
+---
+
+### Evaluate Plans
+
+**POST** `/api/v1/optimizer/evaluate`
+
+Evaluates one or more candidate plans with the rubric-based evaluator.
+
+**Request Body:**
+```json
+{
+  "session_id": "uuid-string",
+  "plans": [
+    {
+      "title": "Candidate plan",
+      "steps": ["Inspect current API", "Refactor routes"]
+    }
+  ],
+  "judge_models": ["gemini-2.5-flash"]
+}
+```
+
+---
+
+### Compare Plans
+
+**POST** `/api/v1/optimizer/compare`
+
+Normalizes, evaluates, compares, and ranks multiple candidate plans.
+
+**Request Body:**
+```json
+{
+  "session_id": "uuid-string",
+  "plans": [
+    {
+      "title": "Candidate plan A",
+      "steps": ["Inspect current API", "Refactor routes"]
+    },
+    {
+      "title": "Candidate plan B",
+      "steps": ["Add compatibility layer", "Migrate incrementally"]
+    }
+  ],
+  "judge_models": ["gemini-2.5-flash"]
+}
+```
 
 ## Utilities
 
@@ -737,7 +840,7 @@ Coming soon: Real-time execution updates via WebSocket connection.
 
 For live testing and interactive documentation:
 
-1. Start the server: `uv run planweaver serve`
+1. Start the server: `uv run uvicorn src.planweaver.api.main:app --reload`
 2. Open: `http://localhost:8000/docs`
 3. Use Swagger UI to test endpoints
 
@@ -746,6 +849,6 @@ For live testing and interactive documentation:
 ## Support
 
 For API issues:
-- Check [troubleshooting.md](troubleshooting.md)
 - Review [architecture.md](architecture.md)
+- Check [../guides/deployment.md](../guides/deployment.md)
 - Open an issue on GitHub

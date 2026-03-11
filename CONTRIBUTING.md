@@ -208,7 +208,7 @@ Include:
 
 ```bash
 # Backend API server
-uv run planweaver serve
+uv run uvicorn src.planweaver.api.main:app --reload
 
 # Frontend dev server (in separate terminal)
 cd frontend
@@ -226,7 +226,7 @@ rm planweaver.db
 
 ### Adding New Scenarios
 
-Create YAML files in the `scenarios/` directory following the existing templates. See `docs/architecture.md` for details.
+Create YAML files in the `scenarios/` directory following the existing templates. See `docs/reference/architecture.md` for details.
 
 ### Adding New API Endpoints
 

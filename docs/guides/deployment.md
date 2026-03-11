@@ -36,7 +36,7 @@ cp .env.example .env
 # Edit .env with your API keys
 
 # Run the server
-uv run planweaver serve
+uv run uvicorn src.planweaver.api.main:app --host 0.0.0.0 --port 8000
 ```
 
 The API server will be available at `http://localhost:8000`
@@ -378,8 +378,8 @@ Enable debug logging:
 # .env
 LOG_LEVEL=debug
 
-# Or pass via CLI
-uv run planweaver serve --log-level debug
+# Or pass via Uvicorn
+uv run uvicorn src.planweaver.api.main:app --reload --log-level debug
 ```
 
 ---
@@ -449,7 +449,7 @@ docker-compose logs backend > logs.txt
 
 For deployment issues:
 
-1. Check [troubleshooting.md](troubleshooting.md)
+1. Review [../reference/api.md](../reference/api.md) and [../reference/architecture.md](../reference/architecture.md)
 2. Search existing [GitHub Issues](https://github.com/your-org/planweaver/issues)
 3. Create new issue with details
 
@@ -457,6 +457,6 @@ For deployment issues:
 
 ## Next Steps
 
-- Read [architecture.md](architecture.md) for system design
+- Read [architecture.md](../reference/architecture.md) for system design
 - See [CONTRIBUTING.md](../CONTRIBUTING.md) for development setup
-- Check [external-context-guide.md](external-context-guide.md) for advanced features
+- Check [external-context.md](external-context.md) for advanced features
