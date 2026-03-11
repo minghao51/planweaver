@@ -203,7 +203,9 @@ class NormalizedPlanRecord(Base):
     __tablename__ = "normalized_plans"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    session_id = Column(String(36), ForeignKey("sessions.id"), nullable=True, index=True)
+    session_id = Column(
+        String(36), ForeignKey("sessions.id"), nullable=True, index=True
+    )
     source_type = Column(String(50), nullable=False)
     source_model = Column(String(100), nullable=False)
     planning_style = Column(String(100), nullable=False)
@@ -232,7 +234,9 @@ class PlanEvaluationRecord(Base):
     __tablename__ = "plan_evaluations"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    session_id = Column(String(36), ForeignKey("sessions.id"), nullable=True, index=True)
+    session_id = Column(
+        String(36), ForeignKey("sessions.id"), nullable=True, index=True
+    )
     plan_id = Column(String(36), nullable=False, index=True)
     judge_model = Column(String(100), nullable=False, index=True)
     rubric_scores = Column(JSON, nullable=False)
@@ -267,7 +271,9 @@ class PairwiseComparisonRecord(Base):
     __tablename__ = "pairwise_plan_comparisons"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    session_id = Column(String(36), ForeignKey("sessions.id"), nullable=True, index=True)
+    session_id = Column(
+        String(36), ForeignKey("sessions.id"), nullable=True, index=True
+    )
     left_plan_id = Column(String(36), nullable=False, index=True)
     right_plan_id = Column(String(36), nullable=False, index=True)
     judge_model = Column(String(100), nullable=False)

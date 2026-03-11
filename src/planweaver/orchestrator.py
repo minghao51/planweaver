@@ -37,6 +37,7 @@ class Orchestrator:
         router: Execution router instance
         plan_repository: Database repository for plans
     """
+
     def __init__(
         self,
         planner_model: str = "gemini-2.5-flash",

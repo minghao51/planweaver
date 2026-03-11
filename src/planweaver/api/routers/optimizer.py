@@ -12,6 +12,7 @@ from ..schemas import (
     NormalizePlanResponse,
     PairwiseComparisonRequest,
     PairwiseComparisonResponse,
+    PlanRatingsSchema,
     PlanEvaluationRequest,
     PlanEvaluationResponse,
     OptimizerRequest,
@@ -24,7 +25,7 @@ from ..schemas import (
 )
 from ..middleware import limiter
 from ...db.models import UserRating
-from ...models.plan import ManualPlanSubmission, PlanSourceType
+from ...models.plan import ManualPlanSubmission, NormalizedStep, PlanSourceType
 
 logger = logging.getLogger(__name__)
 
@@ -127,13 +128,17 @@ def rate_plans(request: Request, body: RatePlansRequest):
     for comparison on various criteria.
     """
     try:
-        ratings_by_plan = {}
+        ratings_by_plan: dict[str, PlanRatingsSchema] = {}
 
         for plan_id in body.plan_ids:
             # For now, we need plan data
             # In production, you'd fetch from database
             logger.warning(f"Rating plan {plan_id} - needs plan data from database")
-            ratings_by_plan[plan_id] = {"ratings": {}, "average_score": 5.0}
+            ratings_by_plan[plan_id] = PlanRatingsSchema(
+                plan_id=plan_id,
+                ratings={},
+                average_score=5.0,
+            )
 
         return RatePlansResponse(
             rating_id=str(uuid.uuid4()), status="completed", ratings=ratings_by_plan
@@ -217,7 +222,7 @@ def submit_manual_plan(request: Request, body: ManualPlanRequest):
                 success_criteria=body.success_criteria,
                 risks=body.risks,
                 fallbacks=body.fallbacks,
-                steps=[step.model_dump() for step in body.steps],
+                steps=[NormalizedStep(**step.model_dump()) for step in body.steps],
                 estimated_time_minutes=body.estimated_time_minutes,
                 estimated_cost_usd=body.estimated_cost_usd,
                 metadata=body.metadata,
@@ -229,9 +234,7 @@ def submit_manual_plan(request: Request, body: ManualPlanRequest):
         raise
     except Exception:
         logger.exception("Unexpected error submitting manual plan")
-        raise HTTPException(
-            status_code=500, detail="Failed to process manual plan."
-        )
+        raise HTTPException(status_code=500, detail="Failed to process manual plan.")
 
 
 @router.post("/normalize", response_model=NormalizePlanResponse)

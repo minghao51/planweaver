@@ -363,8 +363,18 @@ class TestAPIValidation:
         ) as mock_get_service:
             mock_service = Mock()
             mock_service.normalize_plan_payload.side_effect = [
-                Mock(model_dump=Mock(return_value=mocked_response["normalized_plans"][0]), id="plan-a"),
-                Mock(model_dump=Mock(return_value=mocked_response["normalized_plans"][1]), id="plan-b"),
+                Mock(
+                    model_dump=Mock(
+                        return_value=mocked_response["normalized_plans"][0]
+                    ),
+                    id="plan-a",
+                ),
+                Mock(
+                    model_dump=Mock(
+                        return_value=mocked_response["normalized_plans"][1]
+                    ),
+                    id="plan-b",
+                ),
             ]
             mock_service.evaluate_normalized_plans.return_value = {}
             mock_service.compare_plans.return_value = [

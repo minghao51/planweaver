@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from statistics import mean, pstdev
-from typing import Dict, List
+from typing import Dict, List, TypedDict
 
 from ..models.plan import (
     ComparisonMargin,
@@ -11,6 +11,14 @@ from ..models.plan import (
     PlanEvaluation,
     RankedPlanResult,
 )
+
+
+class _ScoredPlan(TypedDict):
+    plan: NormalizedPlan
+    final_score: float
+    confidence: float
+    disagreement_level: DisagreementLevel
+    recommendation_reason: str
 
 
 class PairwiseComparisonService:
@@ -23,8 +31,12 @@ class PairwiseComparisonService:
         left_evaluations: Dict[str, PlanEvaluation],
         right_evaluations: Dict[str, PlanEvaluation],
     ) -> PairwisePlanComparison:
-        left_score = mean(evaluation.overall_score for evaluation in left_evaluations.values())
-        right_score = mean(evaluation.overall_score for evaluation in right_evaluations.values())
+        left_score = mean(
+            evaluation.overall_score for evaluation in left_evaluations.values()
+        )
+        right_score = mean(
+            evaluation.overall_score for evaluation in right_evaluations.values()
+        )
 
         if left_score >= right_score:
             winner_plan = left_plan
@@ -66,7 +78,7 @@ class PairwiseComparisonService:
         plans: List[NormalizedPlan],
         evaluations_by_plan: Dict[str, Dict[str, PlanEvaluation]],
     ) -> List[RankedPlanResult]:
-        scored = []
+        scored: List[_ScoredPlan] = []
         for plan in plans:
             evaluations = evaluations_by_plan.get(plan.id, {})
             if not evaluations:
@@ -79,11 +91,15 @@ class PairwiseComparisonService:
                     "plan": plan,
                     "final_score": round(avg_score, 2),
                     "confidence": round(
-                        mean(evaluation.confidence for evaluation in evaluations.values()),
+                        mean(
+                            evaluation.confidence for evaluation in evaluations.values()
+                        ),
                         2,
                     ),
                     "disagreement_level": disagreement,
-                    "recommendation_reason": self._recommendation_reason(plan, evaluations),
+                    "recommendation_reason": self._recommendation_reason(
+                        plan, evaluations
+                    ),
                 }
             )
 
@@ -152,7 +168,4 @@ class PairwiseComparisonService:
         for evaluation in evaluations.values():
             for criterion, score in evaluation.rubric_scores.items():
                 rubric_totals.setdefault(criterion, []).append(score)
-        return {
-            criterion: mean(scores)
-            for criterion, scores in rubric_totals.items()
-        }
+        return {criterion: mean(scores) for criterion, scores in rubric_totals.items()}

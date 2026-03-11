@@ -34,6 +34,7 @@ async def lifespan(_: FastAPI):
     bootstrap_database()
     yield
 
+
 app = FastAPI(
     title="PlanWeaver API",
     description="Universal LLM Planning & Execution Engine",

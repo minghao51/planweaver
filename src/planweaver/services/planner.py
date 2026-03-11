@@ -37,6 +37,7 @@ class Planner:
         llm: LLM gateway for model interactions
         template_engine: Scenario template manager for prompts
     """
+
     def __init__(
         self,
         llm_gateway: Optional[LLMGateway] = None,

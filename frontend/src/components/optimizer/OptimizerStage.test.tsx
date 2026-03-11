@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { OptimizerStage } from './OptimizerStage';
 import * as hooks from '../../hooks/useOptimizer';
@@ -26,10 +26,9 @@ describe('OptimizerStage', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockOptimizePlan.mockResolvedValue({
-      variants: [],
-      ratings: {},
-    });
+    mockOptimizePlan.mockImplementation(
+      () => new Promise(() => undefined)
+    );
     mockSubmitManualPlan.mockResolvedValue({
       normalized_plan: {
         id: 'manual-1',
@@ -266,5 +265,76 @@ describe('OptimizerStage', () => {
     // Verify stars are rendered
     const stars = screen.getAllByRole('button').filter(b => b.querySelector('svg'));
     expect(stars.length).toBeGreaterThan(0);
+  });
+
+  it('should add a manual plan and show normalization warnings', async () => {
+    mockSubmitManualPlan.mockResolvedValue({
+      normalized_plan: {
+        id: 'manual-1',
+        session_id: 'session-1',
+        source_type: 'manual',
+        source_model: 'human',
+        planning_style: 'manual',
+        title: 'Operator checklist baseline',
+        summary: 'Roll out the checklist in one team first.',
+        assumptions: [],
+        constraints: [],
+        success_criteria: ['Checklist adopted'],
+        risks: ['Stakeholder drift'],
+        fallbacks: [],
+        estimated_time_minutes: 45,
+        estimated_cost_usd: 10,
+        steps: [
+          {
+            step_id: '1',
+            description: 'Audit the current checklist',
+            dependencies: [],
+            validation: [],
+            tools: [],
+          },
+        ],
+        metadata: {},
+        normalization_warnings: ['Inferred rollout order from free-form steps.'],
+      },
+      evaluations: {},
+      ranking: [],
+    });
+
+    render(
+      <OptimizerStage
+        sessionId="session-1"
+        selectedProposalId="proposal-1"
+        selectedProposalTitle="Test Proposal"
+        selectedProposalDescription="A test proposal"
+        onComplete={vi.fn()}
+        onBack={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /manual plan/i }));
+    fireEvent.change(screen.getByLabelText(/^title$/i), {
+      target: { value: 'Operator checklist baseline' },
+    });
+    fireEvent.change(screen.getByLabelText(/summary/i), {
+      target: { value: 'Roll out the checklist in one team first.' },
+    });
+    fireEvent.change(screen.getByLabelText(/plan steps/i), {
+      target: { value: 'Audit the current checklist' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /add manual plan/i }));
+
+    await waitFor(() => {
+      expect(mockSubmitManualPlan).toHaveBeenCalledWith({
+        session_id: 'session-1',
+        title: 'Operator checklist baseline',
+        summary: 'Roll out the checklist in one team first.',
+        plan_text: 'Audit the current checklist',
+        success_criteria: [],
+        risks: [],
+      });
+    });
+
+    expect(mockShowSuccess).toHaveBeenCalledWith('Manual plan added to the candidate pool.');
+    expect(screen.getAllByRole('button', { name: /evaluate/i }).length).toBeGreaterThan(0);
   });
 });
