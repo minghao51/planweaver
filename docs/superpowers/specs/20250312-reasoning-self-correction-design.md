@@ -53,33 +53,55 @@ Both features work together: reasoning traces provide the context needed for int
 
 ### Database Extensions
 
-**New Tables:**
+**Complete SQL Schema:**
 
 ```sql
 -- Reasoning traces (planning, proposals, execution)
-reasoning_traces
-├── id (PK)
-├── plan_id (FK)
-├── proposal_id (FK, nullable)
-├── step_id (FK, nullable)
-├── trace_type (planning | proposal | execution)
-├── thoughts (JSON) - List<Thought>
-├── decisions (JSON) - List<Decision>
-├── confidence_score
-├── created_at
+CREATE TABLE reasoning_traces (
+    id VARCHAR(36) PRIMARY KEY,
+    plan_id VARCHAR(36) NOT NULL,
+    proposal_id VARCHAR(36),
+    step_id VARCHAR(36),
+    trace_type VARCHAR(20) NOT NULL,  -- 'planning' | 'proposal' | 'execution'
+    thoughts JSON NOT NULL,  -- List<Thought>
+    decisions JSON,  -- List<Decision> (optional)
+    confidence_score FLOAT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE CASCADE,
+    FOREIGN KEY (proposal_id) REFERENCES proposals(id) ON DELETE CASCADE,
+    FOREIGN KEY (step_id) REFERENCES execution_steps(id) ON DELETE CASCADE
+);
+
+-- Indexes for performance
+CREATE INDEX idx_reasoning_traces_plan_id ON reasoning_traces(plan_id);
+CREATE INDEX idx_reasoning_traces_proposal_id ON reasoning_traces(proposal_id);
+CREATE INDEX idx_reasoning_traces_step_id ON reasoning_traces(step_id);
+CREATE INDEX idx_reasoning_traces_type ON reasoning_traces(trace_type);
 
 -- Autonomous corrections applied during execution
-corrections
-├── id (PK)
-├── plan_id (FK)
-├── step_id (FK)
-├── failure_reason
-├── reasoning_used (FK to reasoning_traces)
-├── original_approach (JSON)
-├── corrected_approach (JSON)
-├── correction_rationale
-├── applied_at
-├── success (boolean)
+CREATE TABLE corrections (
+    id VARCHAR(36) PRIMARY KEY,
+    plan_id VARCHAR(36) NOT NULL,
+    step_id VARCHAR(36) NOT NULL,
+    failure_reason TEXT NOT NULL,
+    reasoning_used_id VARCHAR(36),
+    original_approach JSON NOT NULL,
+    corrected_approach JSON NOT NULL,
+    correction_rationale TEXT NOT NULL,
+    applied_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    success BOOLEAN NOT NULL DEFAULT FALSE,
+
+    FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE CASCADE,
+    FOREIGN KEY (step_id) REFERENCES execution_steps(id) ON DELETE CASCADE,
+    FOREIGN KEY (reasoning_used_id) REFERENCES reasoning_traces(id) ON DELETE SET NULL
+);
+
+-- Indexes for performance
+CREATE INDEX idx_corrections_plan_id ON corrections(plan_id);
+CREATE INDEX idx_corrections_step_id ON corrections(step_id);
+CREATE INDEX idx_corrections_success ON corrections(success);
+CREATE INDEX idx_corrections_applied_at ON corrections(applied_at);
 ```
 
 ## Data Structures
@@ -130,6 +152,87 @@ ProposalReasoning {
     trade_offs: Dict[str, str]
     rejected_approaches: List[Tuple[str, str]]  # (approach, reason)
 }
+```
+
+### StepReasoning
+
+```python
+StepReasoning {
+    step_id: str
+    step_description: str
+    thoughts: List[Thought]
+    expected_outcome: str
+    approach_rationale: str
+    alternatives_considered: List[str]
+    timestamp: datetime
+}
+```
+
+### FullReasoningTrace
+
+```python
+FullReasoningTrace {
+    plan_id: str
+    planning_trace: ReasoningTrace
+    proposal_traces: Dict[str, ProposalReasoning]  # proposal_id -> reasoning
+    step_traces: Dict[str, StepReasoning]  # step_id -> reasoning
+    created_at: datetime
+    updated_at: datetime
+}
+```
+
+### Correction-Related Types
+
+```python
+class StepResult(BaseModel):
+    step_id: str
+    status: "success" | "failure" | "partial"
+    output: Optional[str]
+    error: Optional[str]
+    retry_count: int
+    execution_time: float
+
+class Correction(BaseModel):
+    correction_id: str
+    step_id: str
+    modification_type: "prompt_template" | "model" | "parameters" | "strategy"
+    original_value: Dict[str, Any]
+    corrected_value: Dict[str, Any]
+    rationale: str
+
+class CorrectionAnalysis(BaseModel):
+    failure_cause: str
+    suggested_correction_type: str
+    confidence: float
+    reasoning_context_used: str
+    alternative_approaches: List[str]
+
+class CorrectionResult(BaseModel):
+    success: bool
+    correction_applied: bool
+    new_step_status: Optional[StepResult]
+    error_message: Optional[str]
+    retry_count: int
+```
+
+### Existing Type References
+
+```python
+# From existing codebase (referenced for completeness)
+class LLMResponse(BaseModel):
+    content: str
+    model: str
+    tokens_used: int
+    finish_reason: str
+    raw_response: Optional[Dict[str, Any]]
+
+class ExecutionStep(BaseModel):
+    id: str
+    step_type: str
+    prompt_template: str
+    assigned_model: str
+    parameters: Dict[str, Any]
+    dependencies: List[str]
 ```
 
 ## Data Flow
@@ -195,6 +298,137 @@ ProposalReasoning {
       f. Retry step with correction
       ↓
 4. Continue until completion or max retries
+```
+
+## Integration Details
+
+### Planner Integration
+
+**Location:** `src/planweaver/services/planner.py`
+
+**Integration Point 1: After Intent Analysis**
+```python
+class Planner:
+    async def analyze_intent(self, intent: str) -> IntentAnalysis:
+        # Existing intent analysis
+        analysis = await self._llm.analyze(intent)
+
+        # NEW: Capture reasoning about intent
+        await self.reasoning_engine.capture_planning_reasoning(
+            intent=intent,
+            context=self.context,
+            alternatives_considered=[]  # None yet
+        )
+
+        return analysis
+```
+
+**Integration Point 2: After Proposal Generation**
+```python
+class Planner:
+    async def generate_strawman_proposals(self, ...) -> List[Proposal]:
+        # Existing proposal generation
+        proposals = await self._generate_proposals(...)
+
+        # NEW: Capture reasoning for each proposal
+        for proposal in proposals:
+            await self.reasoning_engine.capture_proposal_reasoning(
+                proposal=proposal,
+                rejected_alternatives=proposal.metadata.get("rejected", []),
+                rationale=proposal.metadata.get("rationale", "")
+            )
+
+        return proposals
+```
+
+### ExecutionRouter Integration
+
+**Location:** `src/planweaver/services/router.py`
+
+**Integration Point 1: Before Step Execution**
+```python
+class ExecutionRouter:
+    async def execute_step(self, step: ExecutionStep) -> StepResult:
+        # NEW: Capture reasoning before execution
+        reasoning = await self.reasoning_engine.capture_step_reasoning(
+            step=step,
+            llm_response=None  # Will be filled after execution
+        )
+
+        # Existing step execution
+        result = await self._execute_with_retries(step)
+
+        return result
+```
+
+**Integration Point 2: On Failure - Self-Correction**
+```python
+class ExecutionRouter:
+    async def _execute_with_retries(self, step: ExecutionStep) -> StepResult:
+        retry_count = 0
+        max_retries = 3  # Existing retry logic
+
+        while retry_count < max_retries:
+            result = await self._execute_step(step)
+
+            if result.status == "success":
+                return result
+
+            # NEW: Try self-correction before giving up
+            if retry_count < max_retries - 1:  # Don't correct on last retry
+                correction_result = await self.self_correction.attempt_correction(
+                    step=step,
+                    result=result,
+                    reasoning_trace=await self.reasoning_engine.get_step_reasoning(step.id)
+                )
+
+                if correction_result.success:
+                    step = self._apply_correction_to_step(step, correction_result.correction)
+                    retry_count += 1
+                    continue
+
+            retry_count += 1
+
+        return result  # Failed after all retries
+
+    def _apply_correction_to_step(self, step: ExecutionStep, correction: Correction) -> ExecutionStep:
+        """Apply correction to step for retry."""
+        if correction.modification_type == "prompt_template":
+            step.prompt_template = correction.corrected_value["prompt_template"]
+        elif correction.modification_type == "model":
+            step.assigned_model = correction.corrected_value["model"]
+        elif correction.modification_type == "parameters":
+            step.parameters.update(correction.corrected_value["parameters"])
+        elif correction.modification_type == "strategy":
+            step.strategy = correction.corrected_value["strategy"]
+
+        return step
+```
+
+### Orchestrator Integration
+
+**Location:** `src/planweaver/orchestrator.py`
+
+**Initialization:**
+```python
+class Orchestrator:
+    def __init__(self):
+        # Existing services
+        self.planner = Planner(...)
+        self.execution_router = ExecutionRouter(...)
+
+        # NEW: Initialize reasoning and correction services
+        self.reasoning_engine = ReasoningEngine(db_session)
+        self.self_correction = SelfCorrectionService(
+            db_session=db_session,
+            reasoning_engine=self.reasoning_engine,
+            llm_gateway=self.llm_gateway
+        )
+
+        # Wire services together
+        self.planner.reasoning_engine = self.reasoning_engine
+        self.execution_router.reasoning_engine = self.reasoning_engine
+        self.execution_router.self_correction = self.self_correction
 ```
 
 ## Component APIs
@@ -336,6 +570,328 @@ POST /api/plans/{plan_id}/corrections/{correction_id}/revert
 # UI integration
 GET /api/plans/{plan_id}/with-reasoning  # Full plan + traces
 ```
+
+### API Request/Response Schemas
+
+**GET /api/plans/{plan_id}/reasoning**
+
+Response:
+```json
+{
+  "plan_id": "string",
+  "planning_trace": {
+    "id": "string",
+    "thoughts": [
+      {
+        "timestamp": "2025-03-12T10:00:00Z",
+        "content": "string",
+        "thought_type": "analysis|decision|consideration",
+        "alternatives": ["string"]
+      }
+    ],
+    "decisions": [
+      {
+        "question": "string",
+        "options": ["string"],
+        "selected": "string",
+        "rationale": "string"
+      }
+    ],
+    "confidence_score": 0.95
+  },
+  "proposal_traces": {
+    "proposal_id": {
+      "alternatives_considered": ["string"],
+      "key_decisions": [...],
+      "trade_offs": {"key": "value"},
+      "rejected_approaches": [["approach", "reason"]]
+    }
+  }
+}
+```
+
+**GET /api/proposals/{proposal_id}/reasoning**
+
+Response:
+```json
+{
+  "proposal_id": "string",
+  "reasoning": {
+    "alternatives_considered": ["string"],
+    "key_decisions": [...],
+    "trade_offs": {"key": "value"},
+    "rejected_approaches": [["approach", "reason"]],
+    "confidence_score": 0.85
+  }
+}
+```
+
+**GET /api/steps/{step_id}/reasoning**
+
+Response:
+```json
+{
+  "step_id": "string",
+  "step_description": "string",
+  "thoughts": [...],
+  "expected_outcome": "string",
+  "approach_rationale": "string",
+  "alternatives_considered": ["string"],
+  "timestamp": "2025-03-12T10:00:00Z"
+}
+```
+
+**GET /api/plans/{plan_id}/corrections**
+
+Response:
+```json
+{
+  "plan_id": "string",
+  "corrections": [
+    {
+      "id": "string",
+      "step_id": "string",
+      "failure_reason": "string",
+      "reasoning_used_id": "string",
+      "original_approach": {...},
+      "corrected_approach": {...},
+      "correction_rationale": "string",
+      "applied_at": "2025-03-12T10:00:00Z",
+      "success": true
+    }
+  ]
+}
+```
+
+**POST /api/plans/{plan_id}/corrections/{correction_id}/revert**
+
+Request:
+```json
+{
+  "reason": "string (optional)"
+}
+```
+
+Response:
+```json
+{
+  "success": true,
+  "message": "Correction reverted successfully"
+}
+```
+
+**GET /api/plans/{plan_id}/with-reasoning**
+
+Response:
+```json
+{
+  "plan": {...},  // Full plan object (existing structure)
+  "reasoning": {
+    "planning_trace": {...},
+    "proposal_traces": {...},
+    "step_traces": {...}
+  },
+  "corrections": [...]
+}
+```
+
+## Self-Correction Algorithm
+
+### Correction Generation Logic
+
+```python
+class SelfCorrectionService:
+    async def attempt_correction(
+        self,
+        step: ExecutionStep,
+        result: StepResult,
+        reasoning_trace: StepReasoning
+    ) -> CorrectionResult:
+
+        # 1. Check if we should attempt correction
+        if not await self.should_correct(result):
+            return CorrectionResult(success=False, correction_applied=False)
+
+        # 2. Analyze the failure
+        analysis = await self.analyze_failure(result, reasoning_trace)
+
+        # 3. Generate correction
+        correction = await self.generate_correction(step, analysis)
+
+        # 4. Validate correction
+        if not self._validate_correction(correction):
+            logger.warning(f"Invalid correction generated: {correction}")
+            return CorrectionResult(
+                success=False,
+                correction_applied=False,
+                error_message="Correction validation failed"
+            )
+
+        # 5. Check retry limit
+        attempt_count = await self._get_correction_count(step.id)
+        if attempt_count >= self.MAX_CORRECTION_ATTEMPTS:
+            return CorrectionResult(
+                success=False,
+                correction_applied=False,
+                error_message="Max correction attempts reached"
+            )
+
+        # 6. Apply and log correction
+        try:
+            result = await self.apply_correction(step.plan_id, step.id, correction)
+            await self._log_correction(step, correction, result)
+            return result
+        except Exception as e:
+            logger.error(f"Failed to apply correction: {e}")
+            return CorrectionResult(
+                success=False,
+                correction_applied=False,
+                error_message=str(e)
+            )
+```
+
+### When NOT to Correct
+
+```python
+async def should_correct(self, step_result: StepResult) -> bool:
+    """
+    Determines whether a failure should trigger self-correction.
+    """
+
+    # Don't correct if:
+    # 1. Step was manually cancelled by user
+    if step_result.status == "cancelled":
+        return False
+
+    # 2. Error is not recoverable (e.g., auth failure, invalid API key)
+    unrecoverable_errors = [
+        "authentication",
+        "authorization",
+        "invalid_api_key",
+        "quota_exceeded",
+        "network_unreachable"
+    ]
+    if step_result.error and any(err in step_result.error.lower() for err in unrecoverable_errors):
+        return False
+
+    # 3. Too many retries already
+    if step_result.retry_count >= 2:  # Leave room for correction retries
+        return False
+
+    # 4. Step completed but with partial success (let user decide)
+    if step_result.status == "partial":
+        return False
+
+    return True
+```
+
+## LLM Integration Strategy
+
+### Capturing Reasoning from LLMs
+
+**Approach:** Prompt Engineering + Structured Response Parsing
+
+We'll use structured prompting to elicit reasoning from LLMs:
+
+```python
+async def capture_proposal_reasoning(self, proposal: Proposal, ...) -> ProposalReasoning:
+    """
+    Captures reasoning by explicitly requesting it from the LLM.
+    """
+
+    prompt = f"""
+    Generate a proposal for: {user_intent}
+
+    IMPORTANT: You must provide your reasoning process.
+
+    Respond in this JSON structure:
+    {{
+        "proposal": {{
+            "title": "...",
+            "steps": [...]
+        }},
+        "reasoning": {{
+            "alternatives_considered": [
+                "Describe an alternative approach you considered"
+            ],
+            "key_decisions": [
+                {{
+                    "question": "What decision did you make?",
+                    "options": ["option1", "option2"],
+                    "selected": "option1",
+                    "rationale": "Why did you choose this?"
+                }}
+            ],
+            "trade_offs": {{
+                "aspect": "trade-off description"
+            }},
+            "rejected_approaches": [
+                ["approach name", "why you rejected it"]
+            ],
+            "confidence_score": 0.8
+        }}
+    }}
+    """
+
+    response = await self.llm_gateway.complete(
+        model="gemini-2.5-flash",
+        messages=[{"role": "user", "content": prompt}],
+        response_format={"type": "json_object"}
+    )
+
+    parsed = json.loads(response.content)
+    return ProposalReasoning(**parsed["reasoning"])
+```
+
+**Fallback Strategy:** If model doesn't support structured reasoning:
+```python
+try:
+    reasoning = await self._capture_structured_reasoning(...)
+except Exception as e:
+    logger.warning(f"Structured reasoning failed: {e}")
+    # Fallback: Basic summary
+    reasoning = ProposalReasoning(
+        alternatives_considered=["Not available"],
+        key_decisions=[],
+        trade_offs={},
+        rejected_approaches=[],
+        confidence_score=0.5
+    )
+```
+
+## Migration Strategy
+
+### Backward Compatibility
+
+**Approach:** Non-breaking, additive changes
+
+1. **New tables are optional:** Plans without reasoning traces continue to work
+2. **Feature flags:** Enable/disable reasoning and correction independently
+3. **Gradual rollout:** Test on subset of plans before full deployment
+
+### Migration Steps
+
+```sql
+-- Step 1: Add new tables (safe, doesn't affect existing data)
+CREATE TABLE reasoning_traces (...);
+CREATE TABLE corrections (...);
+
+-- Step 2: Add feature flags to configuration
+ALTER TABLE plans ADD COLUMN reasoning_enabled BOOLEAN DEFAULT TRUE;
+ALTER TABLE plans ADD COLUMN correction_enabled BOOLEAN DEFAULT TRUE;
+```
+
+### Handling Existing Data
+
+**Plans without reasoning:**
+- Frontend shows: "Reasoning not available for this plan"
+- Execution continues without self-correction
+- No breaking changes to existing workflows
+
+**Existing execution logs:**
+- Remain unchanged
+- New corrections only apply to future executions
+- Optional: Backfill reasoning for historical plans (offline job)
 
 ## Error Handling
 
