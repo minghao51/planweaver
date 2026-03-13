@@ -8,8 +8,13 @@ from ...services.comparison_service import ProposalComparisonService
 from ..dependencies import get_orchestrator, get_plan_or_404, get_comparison_service
 from ..schemas import (
     AnswerQuestionsRequest,
+    BranchCandidateRequest,
+    CandidateListResponse,
+    CandidateOperationResponse,
+    CandidateOutcomesResponse,
     CreateSessionRequest,
     ExecutePlanRequest,
+    RefineCandidateRequest,
 )
 from ..serializers import (
     serialize_execution_graph,
@@ -95,6 +100,12 @@ def answer_questions(
         "status": updated_plan.status.value,
         "open_questions": [q.model_dump() for q in updated_plan.open_questions],
         "execution_graph": serialize_execution_graph(updated_plan),
+        "candidate_plans": [
+            c.model_dump(mode="json") for c in updated_plan.candidate_plans
+        ],
+        "context_suggestions": [
+            s.model_dump(mode="json") for s in updated_plan.context_suggestions
+        ],
     }
 
 
@@ -111,6 +122,10 @@ def select_proposal(session_id: str, proposal_id: str):
     return {
         "status": updated_plan.status.value,
         "locked_constraints": updated_plan.locked_constraints,
+        "selected_candidate_id": updated_plan.selected_candidate_id,
+        "candidate_plans": [
+            c.model_dump(mode="json") for c in updated_plan.candidate_plans
+        ],
     }
 
 
@@ -128,6 +143,7 @@ def approve_plan(session_id: str):
         return {
             "status": updated_plan.status.value,
             "execution_graph": serialize_execution_graph(updated_plan),
+            "approved_candidate_id": updated_plan.approved_candidate_id,
         }
     except HTTPException:
         raise
@@ -223,3 +239,122 @@ def compare_proposals(
         raise HTTPException(
             status_code=500, detail="Unable to generate comparison. Please try again."
         )
+
+
+@router.get(
+    "/sessions/{session_id}/candidates",
+    response_model=CandidateListResponse,
+)
+@limiter.limit("60/minute")
+def list_candidates(request: Request, session_id: str):
+    orch, plan = get_plan_or_404(session_id)
+    candidates = orch.list_candidates(plan)
+    return {
+        "session_id": session_id,
+        "selected_candidate_id": plan.selected_candidate_id,
+        "approved_candidate_id": plan.approved_candidate_id,
+        "candidates": [candidate.model_dump(mode="json") for candidate in candidates],
+    }
+
+
+@router.post(
+    "/sessions/{session_id}/candidates/{candidate_id}/refine",
+    response_model=CandidateOperationResponse,
+)
+@limiter.limit("30/minute")
+def refine_candidate(
+    request: Request,
+    session_id: str,
+    candidate_id: str,
+    body: RefineCandidateRequest,
+):
+    orch, plan = get_plan_or_404(session_id)
+    try:
+        candidate = orch.refine_candidate(
+            plan,
+            candidate_id,
+            body.operation,
+            step_id=body.step_id,
+            task=body.task,
+            insert_after_step_id=body.insert_after_step_id,
+            note=body.note,
+        )
+        refreshed = orch.get_session(session_id)
+        assert refreshed is not None
+        return {
+            "session_id": session_id,
+            "selected_candidate_id": refreshed.selected_candidate_id,
+            "approved_candidate_id": refreshed.approved_candidate_id,
+            "candidate": candidate.model_dump(mode="json"),
+            "execution_graph": serialize_execution_graph(refreshed),
+            "status": refreshed.status.value,
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post(
+    "/sessions/{session_id}/candidates/{candidate_id}/branch",
+    response_model=CandidateOperationResponse,
+)
+@limiter.limit("30/minute")
+def branch_candidate(
+    request: Request,
+    session_id: str,
+    candidate_id: str,
+    body: BranchCandidateRequest,
+):
+    orch, plan = get_plan_or_404(session_id)
+    try:
+        candidate = orch.branch_candidate(
+            plan, candidate_id, title=body.title, note=body.note
+        )
+        refreshed = orch.get_session(session_id)
+        assert refreshed is not None
+        return {
+            "session_id": session_id,
+            "selected_candidate_id": refreshed.selected_candidate_id,
+            "approved_candidate_id": refreshed.approved_candidate_id,
+            "candidate": candidate.model_dump(mode="json"),
+            "execution_graph": serialize_execution_graph(refreshed),
+            "status": refreshed.status.value,
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post(
+    "/sessions/{session_id}/candidates/{candidate_id}/approve",
+    response_model=CandidateOperationResponse,
+)
+@limiter.limit("30/minute")
+def approve_candidate(request: Request, session_id: str, candidate_id: str):
+    orch, plan = get_plan_or_404(session_id)
+    try:
+        updated_plan = orch.approve_candidate(plan, candidate_id)
+        candidate = updated_plan.get_candidate_by_id(candidate_id)
+        return {
+            "session_id": session_id,
+            "selected_candidate_id": updated_plan.selected_candidate_id,
+            "approved_candidate_id": updated_plan.approved_candidate_id,
+            "candidate": candidate.model_dump(mode="json"),
+            "execution_graph": serialize_execution_graph(updated_plan),
+            "status": updated_plan.status.value,
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get(
+    "/sessions/{session_id}/outcomes",
+    response_model=CandidateOutcomesResponse,
+)
+@limiter.limit("60/minute")
+def list_outcomes(request: Request, session_id: str):
+    orch, plan = get_plan_or_404(session_id)
+    return {
+        "session_id": session_id,
+        "outcomes": [
+            outcome.model_dump(mode="json") for outcome in orch.get_outcomes(plan)
+        ],
+    }

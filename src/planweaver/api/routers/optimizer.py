@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from ...db.database import get_session
 from ...services.optimizer_service import OptimizerService
+from ..dependencies import get_orchestrator
 from ..schemas import (
     ManualPlanRequest,
     ManualPlanResponse,
@@ -65,13 +66,17 @@ def optimize_plan(request: Request, body: OptimizerRequest):
     try:
         optimizer = get_optimizer_service()
 
-        # Use the proposal_id as session_id for now
-        # In production, you'd track the actual session
-        session_id = body.selected_proposal_id[:36]  # Extract potential session_id
+        candidate_id = body.candidate_id or body.selected_proposal_id
+        if not candidate_id:
+            raise HTTPException(
+                status_code=400,
+                detail="candidate_id is required when no selected_proposal_id is supplied.",
+            )
+        session_id = body.session_id or candidate_id[:36]
 
         results = optimizer.optimize_plan(
             session_id=session_id,
-            selected_proposal_id=body.selected_proposal_id,
+            selected_candidate_id=candidate_id,
             optimization_types=body.optimization_types,
             rate_with_models=["claude-3.5-sonnet", "gpt-4o", "deepseek-chat"],
         )
@@ -162,9 +167,18 @@ def save_user_rating(request: Request, body: UserRatingRequest):
     try:
         db = get_session()
 
+        session_id = body.plan_id[:36]
+        orch = get_orchestrator()
+        plan = orch.get_session(session_id)
+        if plan:
+            for candidate in plan.candidate_plans:
+                if candidate.candidate_id == body.plan_id:
+                    session_id = plan.session_id
+                    break
+
         user_rating = UserRating(
             id=str(uuid.uuid4()),
-            session_id=body.plan_id[:36],  # Extract potential session_id
+            session_id=session_id,
             plan_id=body.plan_id,
             rating=body.rating,
             comment=body.comment,
@@ -229,6 +243,26 @@ def submit_manual_plan(request: Request, body: ManualPlanRequest):
             ),
             judge_models=body.judge_models or None,
         )
+        if body.session_id:
+            orch = get_orchestrator()
+            orch.register_manual_candidate(
+                body.session_id,
+                ManualPlanSubmission(
+                    session_id=body.session_id,
+                    title=body.title,
+                    summary=body.summary,
+                    plan_text=body.plan_text,
+                    assumptions=body.assumptions,
+                    constraints=body.constraints,
+                    success_criteria=body.success_criteria,
+                    risks=body.risks,
+                    fallbacks=body.fallbacks,
+                    steps=[NormalizedStep(**step.model_dump()) for step in body.steps],
+                    estimated_time_minutes=body.estimated_time_minutes,
+                    estimated_cost_usd=body.estimated_cost_usd,
+                    metadata=body.metadata,
+                ),
+            )
         return result
     except HTTPException:
         raise
