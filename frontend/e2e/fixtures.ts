@@ -10,6 +10,7 @@ type ResponsePayload = {
 export interface SessionState {
   questionPlan: Record<string, unknown>;
   workbenchPlan: Record<string, unknown>;
+  workbenchCandidates: Record<string, unknown>;
 }
 
 function createQuestionPlan() {
@@ -24,10 +25,20 @@ function createQuestionPlan() {
         question: 'Who is the primary user for this portal?',
         answered: false,
         answer: null,
+        rationale: 'Knowing the core audience changes routing, permissions, and content structure.',
+        context_references: [],
+        confidence: 0.62,
       },
     ],
     strawman_proposals: [],
     execution_graph: [],
+    external_contexts: [],
+    context_suggestions: [],
+    candidate_plans: [],
+    candidate_revisions: [],
+    planning_outcomes: [],
+    selected_candidate_id: null,
+    approved_candidate_id: null,
     final_output: null,
   };
 }
@@ -49,6 +60,10 @@ function createWorkbenchPlan() {
         pros: ['Fast onboarding', 'Simple governance'],
         cons: ['Requires iterative polish'],
         selected: true,
+        why_suggested: 'This keeps the first rollout lightweight and measurable.',
+        context_references: [],
+        confidence: 0.8,
+        planning_style: 'baseline',
       },
       {
         id: 'proposal-beta',
@@ -57,16 +72,63 @@ function createWorkbenchPlan() {
         pros: ['Reusable foundation'],
         cons: ['Higher initial cost'],
         selected: false,
+        why_suggested: 'This creates a stronger long-term platform if the organization can absorb the setup cost.',
+        context_references: [],
+        confidence: 0.68,
+        planning_style: 'platform_first',
       },
     ],
     execution_graph: [],
+    external_contexts: [],
+    context_suggestions: [],
+    candidate_plans: [],
+    candidate_revisions: [],
+    planning_outcomes: [],
+    selected_candidate_id: 'candidate-base',
+    approved_candidate_id: null,
     final_output: null,
+  };
+}
+
+function createWorkbenchCandidates() {
+  return {
+    session_id: 'session-workbench',
+    selected_candidate_id: 'candidate-base',
+    approved_candidate_id: null,
+    candidates: [
+      {
+        candidate_id: 'candidate-base',
+        session_id: 'session-workbench',
+        title: 'Task-first rollout',
+        summary: 'Start with a minimal release checklist and expand by team.',
+        source_type: 'llm_generated',
+        source_model: 'planner-fast',
+        planning_style: 'baseline',
+        proposal_id: 'proposal-alpha',
+        status: 'selected',
+        normalized_plan_id: 'normalized-base',
+        normalized_plan: {
+          id: 'normalized-base',
+          title: 'Task-first rollout',
+          summary: 'Start with a minimal release checklist and expand by team.',
+        },
+        execution_graph: [],
+        context_references: [],
+        metadata: {
+          step_count: 3,
+          complexity_score: 'Medium',
+          estimated_time_minutes: 150,
+          estimated_cost_usd: 40,
+        },
+      },
+    ],
   };
 }
 
 export const sessionState: SessionState = {
   questionPlan: createQuestionPlan(),
   workbenchPlan: createWorkbenchPlan(),
+  workbenchCandidates: createWorkbenchCandidates(),
 };
 
 const baseModels = [
@@ -103,6 +165,7 @@ export async function installApiMocks(page: Page) {
   let latestQuestionAnswerBody: unknown = null;
   sessionState.questionPlan = createQuestionPlan();
   sessionState.workbenchPlan = createWorkbenchPlan();
+  sessionState.workbenchCandidates = createWorkbenchCandidates();
 
   await page.addInitScript(() => {
     window.localStorage.setItem('planweaver_demo_dismissed', 'true');
@@ -191,6 +254,9 @@ function resolveApiResponse(
           question: 'Who is the primary user for this portal?',
           answered: true,
           answer: (state.getLatestQuestionAnswerBody() as Record<string, string>)?.audience ?? '',
+          rationale: 'Knowing the core audience changes routing, permissions, and content structure.',
+          context_references: [],
+          confidence: 0.62,
         },
       ],
       strawman_proposals: [
@@ -201,6 +267,10 @@ function resolveApiResponse(
           pros: ['Clear ownership'],
           cons: ['Requires queue definitions'],
           selected: false,
+          why_suggested: 'It balances launch speed with enough structure for agent workflows.',
+          context_references: [],
+          confidence: 0.73,
+          planning_style: 'baseline',
         },
       ],
     };
@@ -222,7 +292,97 @@ function resolveApiResponse(
     };
   }
 
+  if (path.endsWith('/sessions/session-workbench/candidates') && method === 'GET') {
+    return { body: sessionState.workbenchCandidates };
+  }
+
   if (path.endsWith('/optimizer/optimize') && method === 'POST') {
+    sessionState.workbenchCandidates = {
+      ...sessionState.workbenchCandidates,
+      candidates: [
+        ...(sessionState.workbenchCandidates.candidates as Record<string, unknown>[]).filter(
+          (candidate) =>
+            !['variant-simplified', 'variant-enhanced'].includes(String(candidate.candidate_id))
+        ),
+        {
+          candidate_id: 'candidate-base',
+          session_id: 'session-workbench',
+          title: 'Task-first rollout',
+          summary: 'Start with a minimal release checklist and expand by team.',
+          source_type: 'llm_generated',
+          source_model: 'planner-fast',
+          planning_style: 'baseline',
+          proposal_id: 'proposal-alpha',
+          status: 'selected',
+          normalized_plan_id: 'normalized-base',
+          normalized_plan: {
+            id: 'normalized-base',
+            title: 'Task-first rollout',
+            summary: 'Start with a minimal release checklist and expand by team.',
+          },
+          execution_graph: [],
+          context_references: [],
+          metadata: {
+            step_count: 3,
+            complexity_score: 'Medium',
+            estimated_time_minutes: 150,
+            estimated_cost_usd: 40,
+          },
+        },
+        {
+          candidate_id: 'variant-simplified',
+          session_id: 'session-workbench',
+          title: 'Simplified variant',
+          summary: 'Reduced handoffs and simplified approval gates.',
+          source_type: 'optimized_variant',
+          source_model: 'planner-fast',
+          planning_style: 'simplified',
+          parent_candidate_id: 'candidate-base',
+          status: 'draft',
+          normalized_plan_id: 'variant-simplified',
+          normalized_plan: {
+            id: 'variant-simplified',
+            title: 'Simplified variant',
+            summary: 'Reduced handoffs and simplified approval gates.',
+          },
+          execution_graph: [],
+          context_references: [],
+          metadata: {
+            step_count: 4,
+            complexity_score: 'Low',
+            optimization_notes: 'Reduced handoffs and simplified approval gates.',
+            estimated_time_minutes: 120,
+            estimated_cost_usd: 50,
+          },
+        },
+        {
+          candidate_id: 'variant-enhanced',
+          session_id: 'session-workbench',
+          title: 'Enhanced variant',
+          summary: 'Adds stronger auditability and rollout checks.',
+          source_type: 'optimized_variant',
+          source_model: 'planner-fast',
+          planning_style: 'enhanced',
+          parent_candidate_id: 'candidate-base',
+          status: 'draft',
+          normalized_plan_id: 'variant-enhanced',
+          normalized_plan: {
+            id: 'variant-enhanced',
+            title: 'Enhanced variant',
+            summary: 'Adds stronger auditability and rollout checks.',
+          },
+          execution_graph: [],
+          context_references: [],
+          metadata: {
+            step_count: 6,
+            complexity_score: 'Medium',
+            optimization_notes: 'Adds stronger auditability and rollout checks.',
+            estimated_time_minutes: 180,
+            estimated_cost_usd: 90,
+          },
+        },
+      ],
+    };
     return {
       body: {
         optimization_id: 'opt-123',
@@ -269,6 +429,60 @@ function resolveApiResponse(
 
   if (path.endsWith('/optimizer/manual') && method === 'POST') {
     const body = request.postDataJSON() as Record<string, unknown>;
+    sessionState.workbenchCandidates = {
+      ...sessionState.workbenchCandidates,
+      selected_candidate_id: 'manual-baseline',
+      candidates: [
+        ...(sessionState.workbenchCandidates.candidates as Record<string, unknown>[]).filter(
+          (candidate) => candidate.candidate_id !== 'manual-baseline'
+        ),
+        {
+          candidate_id: 'manual-baseline',
+          session_id: 'session-workbench',
+          title: String(body.title || 'Manual baseline'),
+          summary: String(body.summary || 'Manual baseline summary'),
+          source_type: 'manual',
+          source_model: 'human',
+          planning_style: 'manual',
+          status: 'selected',
+          normalized_plan_id: 'manual-baseline',
+          normalized_plan: {
+            id: 'manual-baseline',
+            title: String(body.title || 'Manual baseline'),
+            summary: String(body.summary || 'Manual baseline summary'),
+          },
+          execution_graph: [
+            {
+              step_id: 1,
+              task: 'Audit release checklist',
+              prompt_template_id: 'default',
+              assigned_model: 'human',
+              dependencies: [],
+              status: 'PENDING',
+              output: null,
+              error: null,
+            },
+            {
+              step_id: 2,
+              task: 'Pilot with one team',
+              prompt_template_id: 'default',
+              assigned_model: 'human',
+              dependencies: [1],
+              status: 'PENDING',
+              output: null,
+              error: null,
+            },
+          ],
+          context_references: [],
+          metadata: {
+            step_count: 2,
+            complexity_score: 'Medium',
+            estimated_time_minutes: 75,
+            estimated_cost_usd: 15,
+          },
+        },
+      ],
+    };
     return {
       body: {
         normalized_plan: {

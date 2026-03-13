@@ -95,3 +95,7 @@ module = [
     "planweaver.services.web_search_service",
 ]
 ignore_errors = true
+
+[tool.ruff]
+line-length = 120
+extend-ignore = ["E501"]
