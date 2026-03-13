@@ -11,6 +11,9 @@ import json
 from decimal import Decimal
 
 from ..models.plan import (
+    CandidatePlan,
+    ContextSuggestion,
+    OpenQuestion,
     Plan,
     PlanStatus,
     ExecutionStep,
@@ -155,6 +158,29 @@ Approach: {p.get("description", "N/A")}
         lines.extend(["=== END CONTEXT ===", "", f"User Request: {user_intent}"])
         return "\n".join(lines)
 
+    def _context_references(self, plan: Optional[Plan]) -> List[str]:
+        if not plan:
+            return []
+        references = []
+        for context in plan.external_contexts:
+            label = context.source_type
+            if context.metadata.get("filename"):
+                label = f"{label}:{context.metadata['filename']}"
+            elif context.metadata.get("repo_name"):
+                label = f"{label}:{context.metadata['repo_name']}"
+            elif context.metadata.get("query"):
+                label = f"{label}:{context.metadata['query']}"
+            references.append(label)
+        return references
+
+    def _proposal_reason(self, plan: Optional[Plan], index: int) -> str:
+        if plan and plan.external_contexts:
+            return (
+                f"Suggested after combining the user intent with {len(plan.external_contexts)}"
+                " attached context source(s)."
+            )
+        return f"Suggested as candidate approach {index} directly from the stated user intent."
+
     def _parse_json_or_default(self, raw_content: str, default: Any) -> Any:
         try:
             return json.loads(raw_content)
@@ -289,13 +315,19 @@ Output only valid JSON array, no markdown, no explanation.
         return self._parse_execution_steps(steps_data, model)
 
     def generate_strawman_proposals(
-        self, user_intent: str, model: str = "deepseek/deepseek-chat"
+        self,
+        user_intent: str,
+        plan: Optional[Plan] = None,
+        model: str = "deepseek/deepseek-chat",
     ) -> List[StrawmanProposal]:
         """Generate strawman proposals with lightweight analysis."""
+        prompt_context = self._build_planner_prompt(
+            user_intent, plan or Plan(user_intent=user_intent)
+        )
         prompt = f"""
 You are a strategic advisor. Propose 2-3 different approaches (strawman solutions) for the following request.
 
-User Request: {user_intent}
+{prompt_context}
 
 For each approach, provide:
 - title: Short name for the approach
@@ -340,6 +372,11 @@ Return JSON array:
                 description=raw_prop.get("description", ""),
                 pros=raw_prop.get("pros", []),
                 cons=raw_prop.get("cons", []),
+                why_suggested=raw_prop.get("why_suggested")
+                or self._proposal_reason(plan, i),
+                context_references=self._context_references(plan),
+                confidence=float(raw_prop.get("confidence", 0.65)),
+                planning_style=str(raw_prop.get("planning_style", "baseline")),
             )
             proposals_with_analysis.append(proposal)
 
@@ -350,7 +387,7 @@ Return JSON array:
     ) -> List[ProposalWithAnalysis]:
         """Generate proposals with lightweight analysis for comparison."""
         # First generate the base proposals
-        proposals = self.generate_strawman_proposals(user_intent, model)
+        proposals = self.generate_strawman_proposals(user_intent, model=model)
 
         # Get analysis data again (cached internally by the method)
         raw_proposals = [p.model_dump() for p in proposals]
@@ -410,7 +447,16 @@ Return JSON array:
             plan.lock_constraint(constraint, "extracted from request")
 
         for question in analysis.get("missing_information", []):
-            plan.add_open_question(question)
+            plan.open_questions.append(
+                OpenQuestion(
+                    question=question,
+                    rationale=(
+                        "The planner needs this detail to reduce ambiguity in the execution graph."
+                    ),
+                    context_references=self._context_references(plan),
+                    confidence=0.6,
+                )
+            )
 
         return plan
 
@@ -437,3 +483,232 @@ Return JSON array:
                 plan.add_step(step)
 
         return plan
+
+    def suggest_context_sources(
+        self,
+        user_intent: str,
+        external_contexts: Optional[List[Any]] = None,
+    ) -> List[ContextSuggestion]:
+        existing_types = {context.source_type for context in (external_contexts or [])}
+        intent = user_intent.lower()
+        suggestions: List[ContextSuggestion] = []
+
+        if (
+            any(
+                keyword in intent
+                for keyword in (
+                    "repo",
+                    "codebase",
+                    "github",
+                    "refactor",
+                    "frontend",
+                    "backend",
+                )
+            )
+            and "github" not in existing_types
+        ):
+            suggestions.append(
+                ContextSuggestion(
+                    suggestion_type="github",
+                    title="Attach repository context",
+                    description="Import a GitHub repository so planning can reference real code structure and dependencies.",
+                    reason="The request looks codebase-specific, so repository structure would sharpen the plan.",
+                    confidence=0.82,
+                )
+            )
+
+        if (
+            any(
+                keyword in intent
+                for keyword in (
+                    "latest",
+                    "best practice",
+                    "framework",
+                    "migration",
+                    "planning",
+                    "market",
+                    "analysis",
+                )
+            )
+            and "web_search" not in existing_types
+        ):
+            suggestions.append(
+                ContextSuggestion(
+                    suggestion_type="web_search",
+                    title="Search current best practices",
+                    description="Pull in up-to-date guidance before choosing an implementation approach.",
+                    reason="The request appears sensitive to current practices or external information.",
+                    suggested_query=f"best practices for {user_intent}",
+                    confidence=0.76,
+                )
+            )
+
+        if (
+            any(
+                keyword in intent
+                for keyword in ("spec", "document", "brief", "pdf", "requirements")
+            )
+            and "file_upload" not in existing_types
+        ):
+            suggestions.append(
+                ContextSuggestion(
+                    suggestion_type="file_upload",
+                    title="Upload a supporting document",
+                    description="Add a requirements doc, spec, or transcript to ground the candidate plans.",
+                    reason="A primary document would reduce ambiguity and improve traceability.",
+                    confidence=0.71,
+                )
+            )
+
+        return suggestions
+
+    def regenerate_steps_from_point(
+        self,
+        user_intent: str,
+        locked_constraints: Dict[str, Any],
+        candidate: CandidatePlan,
+        regenerate_from_step_id: Optional[int],
+        note: Optional[str] = None,
+        model: str = "deepseek/deepseek-chat",
+    ) -> List[ExecutionStep]:
+        if regenerate_from_step_id is None:
+            raise ValueError("regenerate_from_step requires step_id")
+
+        step_ids = {step.step_id for step in candidate.execution_graph}
+        if regenerate_from_step_id not in step_ids:
+            raise ValueError(f"Step {regenerate_from_step_id} not found")
+
+        impacted = self._downstream_step_ids(
+            candidate.execution_graph, regenerate_from_step_id
+        )
+        preserved = [
+            ExecutionStep(**step.model_dump())
+            for step in candidate.execution_graph
+            if step.step_id not in impacted
+        ]
+        original = [
+            step.model_dump(mode="json")
+            for step in candidate.execution_graph
+            if step.step_id in impacted
+        ]
+
+        prompt = f"""
+You are refining only part of an execution plan.
+
+User Request: {user_intent}
+Locked Constraints:
+{json.dumps(locked_constraints, indent=2)}
+
+Candidate Title: {candidate.title}
+Planning Style: {candidate.planning_style}
+
+Preserved Steps:
+{json.dumps([step.model_dump(mode="json") for step in preserved], indent=2)}
+
+Steps To Replace:
+{json.dumps(original, indent=2)}
+
+Additional Guidance:
+{note or "Preserve upstream work and regenerate the selected step plus all downstream dependent work."}
+
+Return JSON array only. The new steps should start from step_id {regenerate_from_step_id} and may depend on preserved step IDs when needed.
+"""
+
+        try:
+            response = self.llm.complete(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                json_mode=True,
+            )
+            replacement_steps = self._parse_execution_steps(
+                self._parse_json_or_default(response["content"], []),
+                model,
+            )
+        except Exception:
+            replacement_steps = []
+
+        if not replacement_steps:
+            source_step = next(
+                step
+                for step in candidate.execution_graph
+                if step.step_id == regenerate_from_step_id
+            )
+            replacement_steps = [
+                ExecutionStep(
+                    step_id=regenerate_from_step_id,
+                    task=f"{source_step.task} (refined)",
+                    prompt_template_id=source_step.prompt_template_id,
+                    assigned_model=source_step.assigned_model,
+                    dependencies=source_step.dependencies,
+                )
+            ]
+
+        replacement_steps = self._normalize_regenerated_steps(
+            preserved,
+            replacement_steps,
+            regenerate_from_step_id,
+        )
+        combined = preserved + replacement_steps
+        combined.sort(key=lambda step: step.step_id)
+        return combined
+
+    def _downstream_step_ids(
+        self, steps: List[ExecutionStep], step_id: int
+    ) -> set[int]:
+        impacted = {step_id}
+        changed = True
+        while changed:
+            changed = False
+            for step in steps:
+                if step.step_id in impacted:
+                    continue
+                if any(dependency in impacted for dependency in step.dependencies):
+                    impacted.add(step.step_id)
+                    changed = True
+        return impacted
+
+    def _normalize_regenerated_steps(
+        self,
+        preserved_steps: List[ExecutionStep],
+        replacement_steps: List[ExecutionStep],
+        start_step_id: int,
+    ) -> List[ExecutionStep]:
+        normalized: List[ExecutionStep] = []
+        preserved_ids = {step.step_id for step in preserved_steps}
+        generated_ids = [step.step_id for step in replacement_steps]
+        id_map = {
+            old_id: start_step_id + offset
+            for offset, old_id in enumerate(generated_ids)
+        }
+
+        for offset, step in enumerate(replacement_steps):
+            new_id = start_step_id + offset
+            dependencies = []
+            for dependency in step.dependencies:
+                if dependency in preserved_ids:
+                    dependencies.append(dependency)
+                elif dependency in id_map:
+                    dependencies.append(id_map[dependency])
+            if not dependencies and offset == 0:
+                source_dependencies = next(
+                    (
+                        preserved_step.step_id
+                        for preserved_step in preserved_steps
+                        if preserved_step.step_id < start_step_id
+                    ),
+                    None,
+                )
+                if source_dependencies is not None:
+                    dependencies = [source_dependencies]
+
+            normalized.append(
+                ExecutionStep(
+                    step_id=new_id,
+                    task=step.task,
+                    prompt_template_id=step.prompt_template_id or "default",
+                    assigned_model=step.assigned_model,
+                    dependencies=dependencies,
+                    status=StepStatus.PENDING,
+                )
+            )
+        return normalized

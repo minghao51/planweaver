@@ -15,11 +15,16 @@ from ..db.models import (
 )
 from ..db.repositories import PlanRepository
 from ..models.plan import (
+    CandidatePlan,
+    CandidatePlanRevision,
+    CandidatePlanStatus,
+    ExecutionStep,
     ManualPlanSubmission,
     NormalizedPlan,
     PairwisePlanComparison,
     PlanEvaluation,
     PlanSourceType,
+    PlanningOutcome,
     RankedPlanResult,
 )
 import uuid
@@ -47,7 +52,7 @@ class OptimizerService:
     def optimize_plan(
         self,
         session_id: str,
-        selected_proposal_id: str,
+        selected_candidate_id: str,
         optimization_types: List[Literal["simplified", "enhanced", "cost-optimized"]]
         | None = None,
         rate_with_models: List[str] | None = None,
@@ -75,18 +80,17 @@ class OptimizerService:
 
         logger.info(
             f"Starting optimization for session {session_id}, "
-            f"proposal {selected_proposal_id}, "
+            f"candidate {selected_candidate_id}, "
             f"types: {optimization_types}"
         )
 
-        # Get the selected proposal
-        proposal = self._get_proposal(session_id, selected_proposal_id)
-        if not proposal:
-            raise ValueError(f"Proposal {selected_proposal_id} not found")
+        base_candidate = self._get_candidate(session_id, selected_candidate_id)
+        if not base_candidate:
+            raise ValueError(f"Candidate {selected_candidate_id} not found")
 
         results = {
             "session_id": session_id,
-            "selected_proposal_id": selected_proposal_id,
+            "selected_candidate_id": selected_candidate_id,
             "variants": [],
             "ratings": {},
             "status": "completed",
@@ -96,7 +100,7 @@ class OptimizerService:
         try:
             for variant_type in optimization_types:
                 variant = self._generate_and_save_variant(
-                    session_id, selected_proposal_id, proposal, variant_type
+                    session_id, selected_candidate_id, base_candidate, variant_type
                 )
                 results["variants"].append(variant)
                 logger.info(f"Generated {variant_type} variant: {variant['id']}")
@@ -107,13 +111,13 @@ class OptimizerService:
 
         # Rate all plans (original + variants)
         try:
-            plan_ids_to_rate = [selected_proposal_id] + [
+            plan_ids_to_rate = [selected_candidate_id] + [
                 v["id"] for v in results["variants"]
             ]
             results["ratings"] = self._rate_and_save_plans(
                 session_id,
                 plan_ids_to_rate,
-                proposal,  # Original proposal for reference
+                base_candidate,
                 results["variants"],
                 rate_with_models,
             )
@@ -208,45 +212,36 @@ class OptimizerService:
         )
         return [record.to_dict() for record in records]
 
-    def _get_proposal(self, session_id: str, proposal_id: str) -> Dict[str, Any] | None:
-        """Get proposal from session"""
+    def _get_candidate(
+        self, session_id: str, candidate_id: str
+    ) -> Dict[str, Any] | None:
+        """Get candidate from session."""
         session = self.plan_repo.get(session_id)
         if not session:
             return None
 
-        # Find the proposal in strawman_proposals
-        for prop in session.strawman_proposals:
-            if hasattr(prop, "model_dump"):
-                prop_data = prop.model_dump()
-            else:
-                prop_data = prop
-
-            if (
-                prop_data.get("id") == proposal_id
-                or prop_data.get("proposal_id") == proposal_id
-            ):
-                return prop_data
+        for candidate in session.candidate_plans:
+            if candidate.candidate_id == candidate_id:
+                return candidate.model_dump(mode="json")
 
         return None
 
     def _generate_and_save_variant(
         self,
         session_id: str,
-        proposal_id: str,
-        proposal: Dict[str, Any],
+        parent_candidate_id: str,
+        candidate: Dict[str, Any],
         variant_type: str,
     ) -> Dict[str, Any]:
         """Generate variant and save to database"""
-        # Generate the variant
         variant_data = self.variant_generator.generate_variant(
-            proposal=proposal, variant_type=variant_type
+            proposal=candidate, variant_type=variant_type
         )
 
-        # Save to database
         db_variant = OptimizedVariant(
             id=str(uuid.uuid4()),
             session_id=session_id,
-            proposal_id=proposal_id,
+            proposal_id=parent_candidate_id,
             variant_type=variant_type,
             execution_graph=variant_data.get("execution_graph", []),
             variant_metadata=variant_data.get("metadata", {}),
@@ -254,11 +249,79 @@ class OptimizerService:
         self.db.add(db_variant)
         self.db.commit()
 
+        session = self.plan_repo.get(session_id)
+        if session:
+            normalized = self.plan_normalizer.normalize_generated_plan(
+                {
+                    "id": str(db_variant.id),
+                    "title": f"{variant_type.replace('-', ' ').title()} variant",
+                    "summary": variant_data.get("metadata", {}).get(
+                        "optimization_notes",
+                        f"Optimized {variant_type} version",
+                    ),
+                    "execution_graph": variant_data.get("execution_graph", []),
+                    "metadata": variant_data.get("metadata", {}),
+                },
+                session_id=session_id,
+                source_type=PlanSourceType.OPTIMIZED_VARIANT,
+                source_model="variant-generator",
+                planning_style=variant_type,
+            )
+            candidate_record = CandidatePlan(
+                candidate_id=str(db_variant.id),
+                session_id=session_id,
+                title=f"{variant_type.replace('-', ' ').title()} variant",
+                summary=normalized.summary,
+                source_type=PlanSourceType.OPTIMIZED_VARIANT,
+                source_model="variant-generator",
+                planning_style=variant_type,
+                parent_candidate_id=parent_candidate_id,
+                status=CandidatePlanStatus.DRAFT,
+                normalized_plan_id=normalized.id,
+                normalized_plan=normalized.model_dump(mode="json"),
+                execution_graph=[
+                    ExecutionStep(**step) if isinstance(step, dict) else step
+                    for step in variant_data.get("execution_graph", [])
+                ],
+                context_references=list(candidate.get("context_references") or []),
+                confidence=0.72,
+                why_suggested=variant_data.get("metadata", {}).get(
+                    "optimization_notes"
+                ),
+                metadata={
+                    "origin": "optimizer",
+                    **(variant_data.get("metadata") or {}),
+                },
+            )
+            session.upsert_candidate(candidate_record)
+            session.record_candidate_revision(
+                CandidatePlanRevision(
+                    candidate_id=candidate_record.candidate_id,
+                    session_id=session_id,
+                    revision_type="optimized",
+                    title=candidate_record.title,
+                    summary=candidate_record.summary,
+                    execution_graph=candidate_record.execution_graph,
+                    note=f"Generated {variant_type} optimizer variant.",
+                )
+            )
+            session.record_outcome(
+                PlanningOutcome(
+                    session_id=session_id,
+                    candidate_id=candidate_record.candidate_id,
+                    event_type="optimized_variant_generated",
+                    summary=f"Generated {variant_type} variant from candidate {parent_candidate_id}.",
+                    metadata={"parent_candidate_id": parent_candidate_id},
+                )
+            )
+            self.plan_repo.save(session)
+
         return {
             "id": str(db_variant.id),
-            "type": variant_type,
+            "variant_type": variant_type,
             "execution_graph": db_variant.execution_graph,
             "metadata": db_variant.variant_metadata,
+            "parent_candidate_id": parent_candidate_id,
         }
 
     def _rate_and_save_plans(
@@ -323,8 +386,10 @@ class OptimizerService:
             if variant["id"] == plan_id:
                 return {
                     "id": plan_id,
-                    "title": f"{variant['type'].title()} Variant",
-                    "description": f"Optimized variant with type: {variant['type']}",
+                    "title": f"{variant['variant_type'].replace('-', ' ').title()} Variant",
+                    "description": (
+                        f"Optimized variant with type: {variant['variant_type']}"
+                    ),
                     "execution_graph": variant["execution_graph"],
                     "metadata": variant.get("metadata", {}),
                 }
