@@ -7,11 +7,15 @@ from .database import get_session
 from .models import SessionModel as DBSession
 from ..config import get_settings
 from ..models.plan import (
+    CandidatePlan,
+    CandidatePlanRevision,
+    ContextSuggestion,
     ExecutionStep,
     ExternalContext,
     OpenQuestion,
     Plan,
     PlanStatus,
+    PlanningOutcome,
     StrawmanProposal,
 )
 
@@ -125,15 +129,39 @@ class PlanRepository:
             "scenario_name": plan.scenario_name,
             "status": plan.status.value,
             "locked_constraints": locked_constraints,
-            "open_questions": [q.model_dump() for q in plan.open_questions],
-            "strawman_proposals": [p.model_dump() for p in plan.strawman_proposals],
-            "execution_graph": [s.model_dump() for s in plan.execution_graph],
-            "external_contexts": [
-                c.model_dump(mode="json") for c in plan.external_contexts
-            ],
+            "open_questions": self._model_dump_list(plan.open_questions),
+            "strawman_proposals": self._model_dump_list(plan.strawman_proposals),
+            "execution_graph": self._model_dump_list(plan.execution_graph),
+            "external_contexts": self._model_dump_list(
+                plan.external_contexts, mode="json"
+            ),
+            "candidate_plans": self._model_dump_list(plan.candidate_plans, mode="json"),
+            "candidate_revisions": self._model_dump_list(
+                plan.candidate_revisions, mode="json"
+            ),
+            "planning_outcomes": self._model_dump_list(
+                plan.planning_outcomes, mode="json"
+            ),
+            "context_suggestions": self._model_dump_list(
+                plan.context_suggestions, mode="json"
+            ),
+            "selected_candidate_id": plan.selected_candidate_id,
+            "approved_candidate_id": plan.approved_candidate_id,
             "expires_at": expires_at,
             "final_output": plan.final_output,
         }
+
+    def _model_dump_list(self, value, mode: Optional[str] = None) -> list:
+        if not isinstance(value, list):
+            return []
+        dumped = []
+        for item in value:
+            if hasattr(item, "model_dump"):
+                kwargs = {"mode": mode} if mode else {}
+                dumped.append(item.model_dump(**kwargs))
+            else:
+                dumped.append(item)
+        return dumped
 
     def _db_to_plan(self, db_plan: DBSession) -> Plan:
         locked_constraints = dict(db_plan.locked_constraints or {})
@@ -156,6 +184,20 @@ class PlanRepository:
             external_contexts=[
                 ExternalContext(**c) for c in (db_plan.external_contexts or [])
             ],
+            candidate_plans=[
+                CandidatePlan(**c) for c in (db_plan.candidate_plans or [])
+            ],
+            candidate_revisions=[
+                CandidatePlanRevision(**r) for r in (db_plan.candidate_revisions or [])
+            ],
+            planning_outcomes=[
+                PlanningOutcome(**o) for o in (db_plan.planning_outcomes or [])
+            ],
+            context_suggestions=[
+                ContextSuggestion(**s) for s in (db_plan.context_suggestions or [])
+            ],
+            selected_candidate_id=db_plan.selected_candidate_id,
+            approved_candidate_id=db_plan.approved_candidate_id,
             planner_model=planner_model,
             executor_model=executor_model,
             final_output=db_plan.final_output,

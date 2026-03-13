@@ -50,6 +50,36 @@ MIGRATIONS = [
         "name": "add_sessions_expires_at",
         "up": "ALTER TABLE sessions ADD COLUMN expires_at TIMESTAMP NULL",
     },
+    {
+        "version": 2,
+        "name": "add_sessions_candidate_plans",
+        "up": "ALTER TABLE sessions ADD COLUMN candidate_plans JSON",
+    },
+    {
+        "version": 3,
+        "name": "add_sessions_candidate_revisions",
+        "up": "ALTER TABLE sessions ADD COLUMN candidate_revisions JSON",
+    },
+    {
+        "version": 4,
+        "name": "add_sessions_planning_outcomes",
+        "up": "ALTER TABLE sessions ADD COLUMN planning_outcomes JSON",
+    },
+    {
+        "version": 5,
+        "name": "add_sessions_context_suggestions",
+        "up": "ALTER TABLE sessions ADD COLUMN context_suggestions JSON",
+    },
+    {
+        "version": 6,
+        "name": "add_sessions_selected_candidate_id",
+        "up": "ALTER TABLE sessions ADD COLUMN selected_candidate_id VARCHAR(36)",
+    },
+    {
+        "version": 7,
+        "name": "add_sessions_approved_candidate_id",
+        "up": "ALTER TABLE sessions ADD COLUMN approved_candidate_id VARCHAR(36)",
+    },
 ]
 
 

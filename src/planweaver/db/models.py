@@ -53,6 +53,12 @@ class SessionModel(Base):
     strawman_proposals = Column(JSON, default=list)
     execution_graph = Column(JSON, default=list)
     external_contexts = Column(JSON, default=list)
+    candidate_plans = Column(JSON, default=list)
+    candidate_revisions = Column(JSON, default=list)
+    planning_outcomes = Column(JSON, default=list)
+    context_suggestions = Column(JSON, default=list)
+    selected_candidate_id = Column(String(36), nullable=True)
+    approved_candidate_id = Column(String(36), nullable=True)
     final_output = Column(JSON, nullable=True)
 
 

@@ -1,6 +1,5 @@
 import type { PlanStatus } from '../types';
 
-
 export function getStatusStyles(status: PlanStatus): string {
   const styles: Record<string, string> = {
     BRAINSTORMING: 'bg-warning/10 text-warning border-warning/20',
@@ -19,7 +18,10 @@ export interface StepStyleConfig {
   iconContainer: string;
 }
 
-export function getStepStyles(status: string, stepId?: number): StepStyleConfig {
+export function getStepStyles(
+  status: string,
+  stepId?: number
+): StepStyleConfig {
   const configs: Record<string, StepStyleConfig> = {
     PENDING: {
       container: 'bg-surface border-white/5 opacity-50',
@@ -29,7 +31,8 @@ export function getStepStyles(status: string, stepId?: number): StepStyleConfig 
     IN_PROGRESS: {
       container: 'bg-primary/5 border-primary shadow-lg shadow-primary/5',
       iconLabel: 'spinner',
-      iconContainer: 'border-primary text-primary bg-primary/10 shadow-[0_0_15px_rgba(56,189,248,0.32)]',
+      iconContainer:
+        'border-primary text-primary bg-primary/10 shadow-[0_0_15px_rgba(56,189,248,0.32)]',
     },
     COMPLETED: {
       container: 'bg-success/5 border-success/30',
