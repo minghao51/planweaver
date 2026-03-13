@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any, Literal
 from enum import Enum
@@ -38,6 +40,9 @@ class OpenQuestion(BaseModel):
     question: str
     answered: bool = False
     answer: Optional[str] = None
+    rationale: Optional[str] = None
+    context_references: List[str] = Field(default_factory=list)
+    confidence: Optional[float] = None
 
 
 class StrawmanProposal(BaseModel):
@@ -47,6 +52,11 @@ class StrawmanProposal(BaseModel):
     pros: List[str] = Field(default_factory=list)
     cons: List[str] = Field(default_factory=list)
     selected: bool = False
+    why_suggested: Optional[str] = None
+    context_references: List[str] = Field(default_factory=list)
+    confidence: Optional[float] = None
+    planning_style: str = "baseline"
+    parent_candidate_id: Optional[str] = None
 
 
 class ProposalWithAnalysis(BaseModel):
@@ -108,6 +118,12 @@ class Plan(BaseModel):
         default_factory=list,
         description="External context sources for enhanced planning",
     )
+    candidate_plans: List[CandidatePlan] = Field(default_factory=list)
+    candidate_revisions: List[CandidatePlanRevision] = Field(default_factory=list)
+    planning_outcomes: List[PlanningOutcome] = Field(default_factory=list)
+    context_suggestions: List[ContextSuggestion] = Field(default_factory=list)
+    selected_candidate_id: Optional[str] = None
+    approved_candidate_id: Optional[str] = None
     planner_model: Optional[str] = Field(
         default=None, description="User-selected planner model override"
     )
@@ -139,6 +155,31 @@ class Plan(BaseModel):
             if prop.id == proposal_id:
                 return prop
         raise ValueError(f"Proposal {proposal_id} not found")
+
+    def get_candidate_by_id(self, candidate_id: str) -> CandidatePlan:
+        for candidate in self.candidate_plans:
+            if candidate.candidate_id == candidate_id:
+                return candidate
+        raise ValueError(f"Candidate {candidate_id} not found")
+
+    def upsert_candidate(self, candidate: CandidatePlan) -> CandidatePlan:
+        candidate.updated_at = datetime.now(timezone.utc)
+        for index, existing in enumerate(self.candidate_plans):
+            if existing.candidate_id == candidate.candidate_id:
+                self.candidate_plans[index] = candidate
+                self.updated_at = datetime.now(timezone.utc)
+                return candidate
+        self.candidate_plans.append(candidate)
+        self.updated_at = datetime.now(timezone.utc)
+        return candidate
+
+    def record_candidate_revision(self, revision: CandidatePlanRevision) -> None:
+        self.candidate_revisions.append(revision)
+        self.updated_at = datetime.now(timezone.utc)
+
+    def record_outcome(self, outcome: PlanningOutcome) -> None:
+        self.planning_outcomes.append(outcome)
+        self.updated_at = datetime.now(timezone.utc)
 
 
 class StepSummary(BaseModel):
@@ -186,6 +227,13 @@ class PlanSourceType(str, Enum):
     LLM_GENERATED = "llm_generated"
     MANUAL = "manual"
     OPTIMIZED_VARIANT = "optimized_variant"
+
+
+class CandidatePlanStatus(str, Enum):
+    DRAFT = "draft"
+    SELECTED = "selected"
+    APPROVED = "approved"
+    SUPERSEDED = "superseded"
 
 
 class EvaluationVerdict(str, Enum):
@@ -282,3 +330,58 @@ class ManualPlanSubmission(BaseModel):
     estimated_time_minutes: Optional[int] = None
     estimated_cost_usd: Optional[Decimal] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class CandidatePlan(BaseModel):
+    candidate_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    session_id: Optional[str] = None
+    title: str
+    summary: str
+    source_type: PlanSourceType
+    source_model: str
+    planning_style: str = "baseline"
+    parent_candidate_id: Optional[str] = None
+    proposal_id: Optional[str] = None
+    status: CandidatePlanStatus = CandidatePlanStatus.DRAFT
+    normalized_plan_id: Optional[str] = None
+    normalized_plan: Optional[Dict[str, Any]] = None
+    execution_graph: List[ExecutionStep] = Field(default_factory=list)
+    context_references: List[str] = Field(default_factory=list)
+    confidence: Optional[float] = None
+    why_suggested: Optional[str] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class CandidatePlanRevision(BaseModel):
+    revision_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    candidate_id: str
+    session_id: Optional[str] = None
+    revision_type: str
+    title: str
+    summary: str
+    execution_graph: List[ExecutionStep] = Field(default_factory=list)
+    note: Optional[str] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class PlanningOutcome(BaseModel):
+    outcome_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    session_id: str
+    candidate_id: Optional[str] = None
+    event_type: str
+    summary: str
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class ContextSuggestion(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    suggestion_type: Literal["github", "web_search", "file_upload"]
+    title: str
+    description: str
+    reason: str
+    suggested_query: Optional[str] = None
+    confidence: float = 0.5

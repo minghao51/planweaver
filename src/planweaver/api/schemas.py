@@ -72,12 +72,133 @@ class WebSearchContextRequest(BaseModel):
     )
 
 
+class CandidatePlanSchema(BaseModel):
+    candidate_id: str
+    session_id: Optional[str] = None
+    title: str
+    summary: str
+    source_type: str
+    source_model: str
+    planning_style: str
+    parent_candidate_id: Optional[str] = None
+    proposal_id: Optional[str] = None
+    status: str
+    normalized_plan_id: Optional[str] = None
+    normalized_plan: Optional[Dict[str, Any]] = None
+    execution_graph: list[Dict[str, Any]] = Field(default_factory=list)
+    context_references: list[str] = Field(default_factory=list)
+    confidence: Optional[float] = None
+    why_suggested: Optional[str] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class CandidatePlanRevisionSchema(BaseModel):
+    revision_id: str
+    candidate_id: str
+    session_id: Optional[str] = None
+    revision_type: str
+    title: str
+    summary: str
+    execution_graph: list[Dict[str, Any]] = Field(default_factory=list)
+    note: Optional[str] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    created_at: Optional[str] = None
+
+
+class PlanningOutcomeSchema(BaseModel):
+    outcome_id: str
+    session_id: str
+    candidate_id: Optional[str] = None
+    event_type: str
+    summary: str
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    created_at: Optional[str] = None
+
+
+class ContextSuggestionSchema(BaseModel):
+    id: str
+    suggestion_type: str
+    title: str
+    description: str
+    reason: str
+    suggested_query: Optional[str] = None
+    confidence: float
+
+
+class CandidateListResponse(BaseModel):
+    session_id: str
+    selected_candidate_id: Optional[str] = None
+    approved_candidate_id: Optional[str] = None
+    candidates: list[CandidatePlanSchema]
+
+
+class CandidateOperationResponse(BaseModel):
+    session_id: str
+    selected_candidate_id: Optional[str] = None
+    approved_candidate_id: Optional[str] = None
+    candidate: CandidatePlanSchema
+    execution_graph: list[Dict[str, Any]] = Field(default_factory=list)
+    status: str
+
+
+class CandidateOutcomesResponse(BaseModel):
+    session_id: str
+    outcomes: list[PlanningOutcomeSchema]
+
+
+class RefineCandidateRequest(BaseModel):
+    operation: str = Field(
+        ...,
+        description="One of edit_step, delete_step, add_step, regenerate_from_step",
+    )
+    step_id: Optional[int] = Field(default=None, ge=1)
+    task: Optional[str] = Field(default=None, max_length=2000)
+    insert_after_step_id: Optional[int] = Field(default=None, ge=1)
+    note: Optional[str] = Field(default=None, max_length=2000)
+
+    @field_validator("operation", mode="before")
+    @classmethod
+    def sanitize_operation(cls, value):
+        if isinstance(value, str):
+            return sanitize_text(value)
+        return value
+
+    @field_validator("task", "note", mode="before")
+    @classmethod
+    def sanitize_optional_text(cls, value):
+        if isinstance(value, str):
+            cleaned = sanitize_text(value)
+            return cleaned or None
+        return value
+
+
+class BranchCandidateRequest(BaseModel):
+    title: Optional[str] = Field(default=None, max_length=255)
+    note: Optional[str] = Field(default=None, max_length=2000)
+
+    @field_validator("title", "note", mode="before")
+    @classmethod
+    def sanitize_branch_text(cls, value):
+        if isinstance(value, str):
+            cleaned = sanitize_text(value)
+            return cleaned or None
+        return value
+
+
 # ==================== Optimizer Schemas ====================
 
 
 class OptimizerRequest(BaseModel):
-    selected_proposal_id: str = Field(
-        ..., min_length=1, description="Selected proposal ID to optimize"
+    session_id: Optional[str] = Field(
+        default=None, min_length=1, description="Session identifier"
+    )
+    candidate_id: Optional[str] = Field(
+        default=None, min_length=1, description="Selected candidate ID to optimize"
+    )
+    selected_proposal_id: Optional[str] = Field(
+        default=None, min_length=1, description="Legacy selected proposal ID"
     )
     optimization_types: list[str] = Field(
         default=["simplified", "enhanced"], description="Types of variants to generate"
@@ -94,10 +215,18 @@ class OptimizerRequest(BaseModel):
             raise ValueError(f"Invalid types. Must be subset of: {valid_types}")
         return v
 
+    @field_validator("candidate_id", "selected_proposal_id")
+    @classmethod
+    def sanitize_candidate_values(cls, value):
+        if isinstance(value, str):
+            cleaned = sanitize_text(value)
+            return cleaned or None
+        return value
+
 
 class OptimizedVariantSchema(BaseModel):
     id: str
-    proposal_id: str
+    parent_candidate_id: Optional[str] = None
     variant_type: str
     execution_graph: list[Dict[str, Any]]
     metadata: Dict[str, Any]
