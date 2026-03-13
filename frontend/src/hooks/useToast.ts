@@ -20,9 +20,18 @@ export function useToast() {
     }, 5000);
   }, []);
 
-  const error = useCallback((message: string) => addToast(message, 'error'), [addToast]);
-  const success = useCallback((message: string) => addToast(message, 'success'), [addToast]);
-  const info = useCallback((message: string) => addToast(message, 'info'), [addToast]);
+  const error = useCallback(
+    (message: string) => addToast(message, 'error'),
+    [addToast]
+  );
+  const success = useCallback(
+    (message: string) => addToast(message, 'success'),
+    [addToast]
+  );
+  const info = useCallback(
+    (message: string) => addToast(message, 'info'),
+    [addToast]
+  );
   const remove = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);

@@ -10,7 +10,14 @@ export type ExecutionStepStatus =
   | 'PENDING'
   | 'IN_PROGRESS'
   | 'COMPLETED'
-  | 'FAILED';
+  | 'FAILED'
+  | 'SKIPPED';
+
+export type CandidatePlanStatus =
+  | 'draft'
+  | 'selected'
+  | 'approved'
+  | 'superseded';
 
 export interface Plan {
   session_id: string;
@@ -20,6 +27,13 @@ export interface Plan {
   open_questions: OpenQuestion[];
   strawman_proposals: StrawmanProposal[];
   execution_graph: ExecutionStep[];
+  external_contexts: ExternalContext[];
+  context_suggestions: ContextSuggestion[];
+  candidate_plans: CandidatePlan[];
+  candidate_revisions: CandidatePlanRevision[];
+  planning_outcomes: PlanningOutcome[];
+  selected_candidate_id: string | null;
+  approved_candidate_id: string | null;
   final_output: Record<string, unknown> | null;
 }
 
@@ -28,6 +42,9 @@ export interface OpenQuestion {
   question: string;
   answered: boolean;
   answer: string | null;
+  rationale?: string | null;
+  context_references: string[];
+  confidence?: number | null;
 }
 
 export interface StrawmanProposal {
@@ -37,6 +54,11 @@ export interface StrawmanProposal {
   pros: string[];
   cons: string[];
   selected: boolean;
+  why_suggested?: string | null;
+  context_references: string[];
+  confidence?: number | null;
+  planning_style: string;
+  parent_candidate_id?: string | null;
 }
 
 export interface ExecutionStep {
@@ -48,6 +70,72 @@ export interface ExecutionStep {
   dependencies: number[];
   output: string | null;
   error: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+}
+
+export interface ExternalContext {
+  id: string;
+  source_type: 'github' | 'web_search' | 'file_upload';
+  source_url?: string | null;
+  content_summary: string;
+  metadata: Record<string, unknown>;
+  created_at?: string | null;
+}
+
+export interface ContextSuggestion {
+  id: string;
+  suggestion_type: 'github' | 'web_search' | 'file_upload';
+  title: string;
+  description: string;
+  reason: string;
+  suggested_query?: string | null;
+  confidence: number;
+}
+
+export interface CandidatePlan {
+  candidate_id: string;
+  session_id?: string | null;
+  title: string;
+  summary: string;
+  source_type: PlanSourceType;
+  source_model: string;
+  planning_style: string;
+  parent_candidate_id?: string | null;
+  proposal_id?: string | null;
+  status: CandidatePlanStatus;
+  normalized_plan_id?: string | null;
+  normalized_plan?: Record<string, unknown> | null;
+  execution_graph: ExecutionStep[];
+  context_references: string[];
+  confidence?: number | null;
+  why_suggested?: string | null;
+  metadata: Record<string, unknown>;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface CandidatePlanRevision {
+  revision_id: string;
+  candidate_id: string;
+  session_id?: string | null;
+  revision_type: string;
+  title: string;
+  summary: string;
+  execution_graph: ExecutionStep[];
+  note?: string | null;
+  metadata: Record<string, unknown>;
+  created_at?: string | null;
+}
+
+export interface PlanningOutcome {
+  outcome_id: string;
+  session_id: string;
+  candidate_id?: string | null;
+  event_type: string;
+  summary: string;
+  metadata: Record<string, unknown>;
+  created_at?: string | null;
 }
 
 export interface Scenario {
@@ -118,6 +206,11 @@ export interface ProposalWithAnalysis {
   pros: string[];
   cons: string[];
   selected: boolean;
+  why_suggested?: string | null;
+  context_references: string[];
+  confidence?: number | null;
+  planning_style?: string;
+  parent_candidate_id?: string | null;
   estimated_step_count: number;
   complexity_score: ComplexityScore;
   estimated_time_minutes: number;
@@ -158,11 +251,16 @@ export interface ComparisonRequest {
 
 export type VariantType = 'simplified' | 'enhanced' | 'cost-optimized';
 
-export type OptimizationStatus = 'idle' | 'generating_variants' | 'rating' | 'completed' | 'error';
+export type OptimizationStatus =
+  | 'idle'
+  | 'generating_variants'
+  | 'rating'
+  | 'completed'
+  | 'error';
 
 export interface OptimizedVariant {
   id: string;
-  proposal_id: string;
+  parent_candidate_id?: string;
   variant_type: VariantType;
   execution_graph: ExecutionStep[];
   metadata: VariantMetadata;
@@ -203,7 +301,8 @@ export interface RatedPlan {
 }
 
 export interface OptimizerRequest {
-  selected_proposal_id: string;
+  session_id: string;
+  candidate_id: string;
   optimization_types: VariantType[];
   user_context?: string;
 }
@@ -226,6 +325,40 @@ export interface RatePlansResponse {
   rating_id: string;
   status: string;
   ratings: Record<string, RatedPlan>;
+}
+
+export interface CandidateListResponse {
+  session_id: string;
+  selected_candidate_id: string | null;
+  approved_candidate_id: string | null;
+  candidates: CandidatePlan[];
+}
+
+export interface CandidateOperationResponse {
+  session_id: string;
+  selected_candidate_id: string | null;
+  approved_candidate_id: string | null;
+  candidate: CandidatePlan;
+  execution_graph: ExecutionStep[];
+  status: PlanStatus;
+}
+
+export interface CandidateOutcomesResponse {
+  session_id: string;
+  outcomes: PlanningOutcome[];
+}
+
+export interface RefineCandidateRequest {
+  operation: 'edit_step' | 'delete_step' | 'add_step' | 'regenerate_from_step';
+  step_id?: number;
+  task?: string;
+  insert_after_step_id?: number;
+  note?: string;
+}
+
+export interface BranchCandidateRequest {
+  title?: string;
+  note?: string;
 }
 
 export interface UserRatingRequest {

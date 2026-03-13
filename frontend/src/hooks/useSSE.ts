@@ -3,9 +3,16 @@ import { API_BASE } from '../api/client';
 
 interface SSEEvents {
   onConnected?: (data: { session_id: string }) => void;
-  onStepCompleted?: (data: { step_id: number; task: string; output: string }) => void;
+  onStepCompleted?: (data: {
+    step_id: number;
+    task: string;
+    output: string;
+  }) => void;
   onStepFailed?: (data: { step_id: number; error: string }) => void;
-  onExecutionComplete?: (data: { total_steps: number; completed: number }) => void;
+  onExecutionComplete?: (data: {
+    total_steps: number;
+    completed: number;
+  }) => void;
   onExecutionFailed?: (data: { reason: string }) => void;
   onError?: (data: { message: string }) => void;
 }

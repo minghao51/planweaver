@@ -1,5 +1,9 @@
 import { fetchJson } from './client';
 import type {
+  BranchCandidateRequest,
+  CandidateListResponse,
+  CandidateOperationResponse,
+  CandidateOutcomesResponse,
   CreateSessionResponse,
   ModelsResponse,
   Plan,
@@ -18,10 +22,16 @@ import type {
   NormalizePlanResponse,
   PlanEvaluationResponse,
   PairwiseComparisonResponse,
+  RefineCandidateRequest,
 } from '../types';
 
 export const planApi = {
-  createSession(userIntent: string, scenarioName?: string, plannerModel?: string, executorModel?: string) {
+  createSession(
+    userIntent: string,
+    scenarioName?: string,
+    plannerModel?: string,
+    executorModel?: string
+  ) {
     return fetchJson<CreateSessionResponse>('/sessions', {
       method: 'POST',
       body: JSON.stringify({
@@ -38,35 +48,46 @@ export const planApi = {
   },
 
   answerQuestions(sessionId: string, answers: Record<string, string>) {
-    return fetchJson<Record<string, unknown>>(`/sessions/${sessionId}/questions`, {
-      method: 'POST',
-      body: JSON.stringify(answers),
-    });
+    return fetchJson<Record<string, unknown>>(
+      `/sessions/${sessionId}/questions`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ answers }),
+      }
+    );
   },
 
   async getProposals(sessionId: string) {
-    const result = await fetchJson<ProposalsResponse>(`/sessions/${sessionId}/proposals`);
+    const result = await fetchJson<ProposalsResponse>(
+      `/sessions/${sessionId}/proposals`
+    );
     return result.proposals;
   },
 
   selectProposal(sessionId: string, proposalId: string) {
     return fetchJson<Record<string, unknown>>(
       `/sessions/${sessionId}/proposals/${proposalId}/select`,
-      { method: 'POST' },
+      { method: 'POST' }
     );
   },
 
   approvePlan(sessionId: string) {
-    return fetchJson<Record<string, unknown>>(`/sessions/${sessionId}/approve`, {
-      method: 'POST',
-    });
+    return fetchJson<Record<string, unknown>>(
+      `/sessions/${sessionId}/approve`,
+      {
+        method: 'POST',
+      }
+    );
   },
 
   executePlan(sessionId: string, context?: Record<string, unknown>) {
-    return fetchJson<Record<string, unknown>>(`/sessions/${sessionId}/execute`, {
-      method: 'POST',
-      body: JSON.stringify(context ?? {}),
-    });
+    return fetchJson<Record<string, unknown>>(
+      `/sessions/${sessionId}/execute`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ context: context ?? {} }),
+      }
+    );
   },
 
   async listScenarios() {
@@ -87,23 +108,83 @@ export const planApi = {
     if (query.q?.trim()) params.set('q', query.q.trim());
 
     const suffix = params.toString();
-    return fetchJson<SessionsListResponse>(`/sessions${suffix ? `?${suffix}` : ''}`);
+    return fetchJson<SessionsListResponse>(
+      `/sessions${suffix ? `?${suffix}` : ''}`
+    );
   },
 
   compareProposals(sessionId: string, proposalIds: string[]) {
-    return fetchJson<ProposalComparison>(`/sessions/${sessionId}/compare-proposals`, {
-      method: 'POST',
-      body: JSON.stringify({ proposal_ids: proposalIds }),
-    });
+    return fetchJson<ProposalComparison>(
+      `/sessions/${sessionId}/compare-proposals`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ proposal_ids: proposalIds }),
+      }
+    );
+  },
+
+  listCandidates(sessionId: string) {
+    return fetchJson<CandidateListResponse>(
+      `/sessions/${sessionId}/candidates`
+    );
+  },
+
+  refineCandidate(
+    sessionId: string,
+    candidateId: string,
+    payload: RefineCandidateRequest
+  ) {
+    return fetchJson<CandidateOperationResponse>(
+      `/sessions/${sessionId}/candidates/${candidateId}/refine`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    );
+  },
+
+  branchCandidate(
+    sessionId: string,
+    candidateId: string,
+    payload: BranchCandidateRequest = {}
+  ) {
+    return fetchJson<CandidateOperationResponse>(
+      `/sessions/${sessionId}/candidates/${candidateId}/branch`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    );
+  },
+
+  approveCandidate(sessionId: string, candidateId: string) {
+    return fetchJson<CandidateOperationResponse>(
+      `/sessions/${sessionId}/candidates/${candidateId}/approve`,
+      {
+        method: 'POST',
+      }
+    );
+  },
+
+  getOutcomes(sessionId: string) {
+    return fetchJson<CandidateOutcomesResponse>(
+      `/sessions/${sessionId}/outcomes`
+    );
   },
 
   // ==================== Optimizer APIs ====================
 
-  optimizePlan(proposalId: string, optimizationTypes: string[] = ['simplified', 'enhanced'], userContext?: string) {
+  optimizePlan(
+    sessionId: string,
+    candidateId: string,
+    optimizationTypes: string[] = ['simplified', 'enhanced'],
+    userContext?: string
+  ) {
     return fetchJson<OptimizerResponse>('/optimizer/optimize', {
       method: 'POST',
       body: JSON.stringify({
-        selected_proposal_id: proposalId,
+        session_id: sessionId,
+        candidate_id: candidateId,
         optimization_types: optimizationTypes,
         user_context: userContext,
       }),
@@ -111,7 +192,9 @@ export const planApi = {
   },
 
   getOptimizationResults(sessionId: string) {
-    return fetchJson<Record<string, unknown>>(`/optimizer/results/${sessionId}`);
+    return fetchJson<Record<string, unknown>>(
+      `/optimizer/results/${sessionId}`
+    );
   },
 
   ratePlans(planIds: string[], models?: string[], criteria?: string[]) {
@@ -120,12 +203,22 @@ export const planApi = {
       body: JSON.stringify({
         plan_ids: planIds,
         models: models || ['claude-3.5-sonnet', 'gpt-4o', 'deepseek-chat'],
-        criteria: criteria || ['feasibility', 'cost_efficiency', 'time_efficiency', 'complexity'],
+        criteria: criteria || [
+          'feasibility',
+          'cost_efficiency',
+          'time_efficiency',
+          'complexity',
+        ],
       }),
     });
   },
 
-  saveUserRating(planId: string, rating: number, comment?: string, rationale?: string) {
+  saveUserRating(
+    planId: string,
+    rating: number,
+    comment?: string,
+    rationale?: string
+  ) {
     return fetchJson<UserRatingResponse>('/optimizer/user-rating', {
       method: 'POST',
       body: JSON.stringify({
@@ -155,7 +248,11 @@ export const planApi = {
     });
   },
 
-  evaluatePlans(plans: Record<string, unknown>[], sessionId?: string, judgeModels?: string[]) {
+  evaluatePlans(
+    plans: Record<string, unknown>[],
+    sessionId?: string,
+    judgeModels?: string[]
+  ) {
     return fetchJson<PlanEvaluationResponse>('/optimizer/evaluate', {
       method: 'POST',
       body: JSON.stringify({
@@ -166,7 +263,11 @@ export const planApi = {
     });
   },
 
-  comparePlans(plans: Record<string, unknown>[], sessionId?: string, judgeModels?: string[]) {
+  comparePlans(
+    plans: Record<string, unknown>[],
+    sessionId?: string,
+    judgeModels?: string[]
+  ) {
     return fetchJson<PairwiseComparisonResponse>('/optimizer/compare', {
       method: 'POST',
       body: JSON.stringify({

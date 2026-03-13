@@ -35,32 +35,37 @@ export function useOptimizer() {
   const [loadingByAction, setLoadingByAction] = useState<LoadingState>({});
   const [error, setError] = useState<string | null>(null);
 
-  const runAction = useCallback(async <T,>(
-    action: OptimizerActionName,
-    request: () => Promise<T>,
-  ): Promise<T> => {
-    setLoadingByAction((prev) => ({ ...prev, [action]: true }));
-    setError(null);
-    try {
-      return await request();
-    } catch (e) {
-      const message = getErrorMessage(e);
-      setError(message);
-      throw e;
-    } finally {
-      setLoadingByAction((prev) => ({ ...prev, [action]: false }));
-    }
-  }, []);
+  const runAction = useCallback(
+    async <T>(
+      action: OptimizerActionName,
+      request: () => Promise<T>
+    ): Promise<T> => {
+      setLoadingByAction((prev) => ({ ...prev, [action]: true }));
+      setError(null);
+      try {
+        return await request();
+      } catch (e) {
+        const message = getErrorMessage(e);
+        setError(message);
+        throw e;
+      } finally {
+        setLoadingByAction((prev) => ({ ...prev, [action]: false }));
+      }
+    },
+    []
+  );
 
   const optimizePlan = useCallback(
     (
-      proposalId: string,
+      sessionId: string,
+      candidateId: string,
       optimizationTypes?: VariantType[],
       userContext?: string
     ) =>
       runAction('optimize', () =>
         planApi.optimizePlan(
-          proposalId,
+          sessionId,
+          candidateId,
           optimizationTypes || ['simplified', 'enhanced'],
           userContext
         )
@@ -127,7 +132,11 @@ export function useOptimizer() {
   );
 
   const evaluatePlans = useCallback(
-    (plans: Record<string, unknown>[], sessionId?: string, judgeModels?: string[]) =>
+    (
+      plans: Record<string, unknown>[],
+      sessionId?: string,
+      judgeModels?: string[]
+    ) =>
       runAction('evaluatePlans', () =>
         planApi.evaluatePlans(plans, sessionId, judgeModels)
       ),
@@ -135,7 +144,11 @@ export function useOptimizer() {
   );
 
   const comparePlans = useCallback(
-    (plans: Record<string, unknown>[], sessionId?: string, judgeModels?: string[]) =>
+    (
+      plans: Record<string, unknown>[],
+      sessionId?: string,
+      judgeModels?: string[]
+    ) =>
       runAction('comparePlans', () =>
         planApi.comparePlans(plans, sessionId, judgeModels)
       ),
