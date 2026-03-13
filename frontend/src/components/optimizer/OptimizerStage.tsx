@@ -10,11 +10,13 @@ import {
   Star,
 } from 'lucide-react';
 import { useOptimizer, useOptimizerStage } from '../../hooks/useOptimizer';
+import { usePlanApi } from '../../hooks/useApi';
 import { useToast } from '../../hooks/useToast';
 import { PlanCard } from './PlanCard';
 import { ComparisonPanel } from './ComparisonPanel';
 import { cn } from '../../utils';
 import type {
+  CandidatePlan as SessionCandidatePlan,
   NormalizedPlan,
   PairwiseComparisonResponse,
   PlanEvaluationResponse,
@@ -52,16 +54,76 @@ interface CandidatePlan {
   payload: Record<string, unknown>;
 }
 
+function toCandidateSummary(candidate: SessionCandidatePlan): CandidatePlan {
+  const metadata = (candidate.metadata || {}) as Record<string, unknown>;
+  const stepCount = candidate.execution_graph.length;
+  return {
+    id: candidate.candidate_id,
+    title: candidate.title,
+    description: candidate.summary,
+    sourceType: candidate.source_type,
+    sourceModel: candidate.source_model,
+    planningStyle: candidate.planning_style,
+    variantType:
+      candidate.source_type === 'optimized_variant'
+        ? candidate.planning_style
+        : candidate.source_type === 'manual'
+          ? 'manual'
+          : undefined,
+    metadata: {
+      step_count: Number(metadata.step_count || stepCount),
+      complexity_score: String(
+        metadata.complexity_score || (stepCount > 4 ? 'High' : 'Medium')
+      ),
+      estimated_time_minutes: Number(metadata.estimated_time_minutes || 0),
+      estimated_cost_usd: Number(metadata.estimated_cost_usd || 0),
+      optimization_notes:
+        typeof metadata.optimization_notes === 'string'
+          ? metadata.optimization_notes
+          : undefined,
+    },
+    payload: candidate.normalized_plan || {
+      id: candidate.candidate_id,
+      title: candidate.title,
+      summary: candidate.summary,
+      execution_graph: candidate.execution_graph,
+      metadata: candidate.metadata,
+      source_model: candidate.source_model,
+      planning_style: candidate.planning_style,
+    },
+  };
+}
+
 const WORKBENCH_TABS: Array<{
   id: WorkbenchTab;
   label: string;
   icon: typeof Sparkles;
   description: string;
 }> = [
-  { id: 'variants', label: 'Variants', icon: Sparkles, description: 'Generate and inspect optimized candidates.' },
-  { id: 'manual', label: 'Manual Plan', icon: PencilRuler, description: 'Submit a human-written plan into the same pipeline.' },
-  { id: 'evaluate', label: 'Evaluate', icon: FlaskConical, description: 'Run rubric-based scoring across current candidates.' },
-  { id: 'compare', label: 'Compare', icon: GitCompareArrows, description: 'Rank candidates with pairwise comparison.' },
+  {
+    id: 'variants',
+    label: 'Variants',
+    icon: Sparkles,
+    description: 'Generate and inspect optimized candidates.',
+  },
+  {
+    id: 'manual',
+    label: 'Manual Plan',
+    icon: PencilRuler,
+    description: 'Submit a human-written plan into the same pipeline.',
+  },
+  {
+    id: 'evaluate',
+    label: 'Evaluate',
+    icon: FlaskConical,
+    description: 'Run rubric-based scoring across current candidates.',
+  },
+  {
+    id: 'compare',
+    label: 'Compare',
+    icon: GitCompareArrows,
+    description: 'Rank candidates with pairwise comparison.',
+  },
 ];
 
 export function OptimizerStage({
@@ -80,43 +142,30 @@ export function OptimizerStage({
     comparePlans,
     isLoading,
   } = useOptimizer();
+  const { listCandidates } = usePlanApi();
   const { success: showSuccess, error: showError, info: showInfo } = useToast();
 
-  const [optimizationTypes] = useState<VariantType[]>(['simplified', 'enhanced', 'cost-optimized']);
+  const [optimizationTypes] = useState<VariantType[]>([
+    'simplified',
+    'enhanced',
+    'cost-optimized',
+  ]);
   const [activeTab, setActiveTab] = useState<WorkbenchTab>('variants');
   const [userRating, setUserRating] = useState<number>(0);
   const [userComment, setUserComment] = useState<string>('');
   const [manualTitle, setManualTitle] = useState<string>('Manual baseline');
   const [manualSummary, setManualSummary] = useState<string>('');
   const [manualPlanText, setManualPlanText] = useState<string>('');
-  const [manualSuccessCriteria, setManualSuccessCriteria] = useState<string>('');
+  const [manualSuccessCriteria, setManualSuccessCriteria] =
+    useState<string>('');
   const [manualRisks, setManualRisks] = useState<string>('');
   const [manualResult, setManualResult] = useState<NormalizedPlan | null>(null);
-  const [evaluationResult, setEvaluationResult] = useState<PlanEvaluationResponse | null>(null);
-  const [comparisonResult, setComparisonResult] = useState<PairwiseComparisonResponse | null>(null);
-  const [candidatePlans, setCandidatePlans] = useState<CandidatePlan[]>([
-    {
-      id: selectedProposalId,
-      title: selectedProposalTitle,
-      description: selectedProposalDescription,
-      sourceType: 'llm_generated',
-      sourceModel: 'selected-proposal',
-      planningStyle: 'baseline',
-      metadata: {
-        step_count: 0,
-        complexity_score: 'Medium',
-        estimated_time_minutes: 0,
-        estimated_cost_usd: 0,
-      },
-      payload: {
-        id: selectedProposalId,
-        title: selectedProposalTitle,
-        description: selectedProposalDescription,
-        source_model: 'selected-proposal',
-        planning_style: 'baseline',
-      },
-    },
-  ]);
+  const [evaluationResult, setEvaluationResult] =
+    useState<PlanEvaluationResponse | null>(null);
+  const [comparisonResult, setComparisonResult] =
+    useState<PairwiseComparisonResponse | null>(null);
+  const [candidatePlans, setCandidatePlans] = useState<CandidatePlan[]>([]);
+  const [baseCandidateId, setBaseCandidateId] = useState<string | null>(null);
 
   const {
     variants,
@@ -130,40 +179,58 @@ export function OptimizerStage({
   } = useOptimizerStage(sessionId, selectedProposalId);
 
   useEffect(() => {
+    async function loadCandidatePool() {
+      try {
+        const result = await listCandidates(sessionId);
+        const mapped = result.candidates.map(toCandidateSummary);
+        setCandidatePlans(mapped);
+
+        const preferred =
+          result.approved_candidate_id ||
+          result.selected_candidate_id ||
+          result.candidates.find(
+            (candidate) =>
+              candidate.proposal_id === selectedProposalId &&
+              candidate.planning_style === 'baseline'
+          )?.candidate_id ||
+          result.candidates[0]?.candidate_id ||
+          null;
+
+        setBaseCandidateId(preferred);
+        if (!internalSelectedPlanId && preferred) {
+          setSelectedPlanId(preferred);
+        }
+      } catch (error) {
+        console.error('Failed to load candidate pool:', error);
+      }
+    }
+
+    void loadCandidatePool();
+  }, [
+    internalSelectedPlanId,
+    listCandidates,
+    selectedProposalId,
+    sessionId,
+    setSelectedPlanId,
+  ]);
+
+  useEffect(() => {
     async function runOptimization() {
+      if (!baseCandidateId) {
+        return;
+      }
       try {
         setStatus('generating_variants');
-        const result = await optimizePlan(selectedProposalId, optimizationTypes);
+        const result = await optimizePlan(
+          sessionId,
+          baseCandidateId,
+          optimizationTypes
+        );
 
         if (result.variants) {
           setVariants(result.variants);
-          setCandidatePlans((current) => {
-            const base = current.filter((plan) => plan.sourceType !== 'optimized_variant');
-            const variantCandidates = result.variants.map((variant) => ({
-              id: variant.id,
-              title: `${variant.variant_type} Variant`,
-              description:
-                variant.metadata.optimization_notes ||
-                `AI-optimized ${variant.variant_type} version`,
-              sourceType: 'optimized_variant' as const,
-              sourceModel: 'variant-generator',
-              planningStyle: variant.variant_type,
-              variantType: variant.variant_type,
-              metadata: variant.metadata,
-              payload: {
-                id: variant.id,
-                title: `${variant.variant_type} Variant`,
-                description:
-                  variant.metadata.optimization_notes ||
-                  `AI-optimized ${variant.variant_type} version`,
-                execution_graph: variant.execution_graph,
-                metadata: variant.metadata,
-                source_model: 'variant-generator',
-                planning_style: variant.variant_type,
-              },
-            }));
-            return [...base, ...variantCandidates];
-          });
+          const refreshed = await listCandidates(sessionId);
+          setCandidatePlans(refreshed.candidates.map(toCandidateSummary));
         }
 
         if (result.ratings) {
@@ -179,55 +246,41 @@ export function OptimizerStage({
       }
     }
 
-    runOptimization();
-  }, [selectedProposalId, optimizationTypes, optimizePlan, setRatings, setStatus, setVariants, showError, showSuccess]);
+    void runOptimization();
+  }, [
+    baseCandidateId,
+    optimizationTypes,
+    optimizePlan,
+    listCandidates,
+    sessionId,
+    setRatings,
+    setStatus,
+    setVariants,
+    showError,
+    showSuccess,
+  ]);
 
   const plans = useMemo(() => {
-    return [
-      {
-        id: selectedProposalId,
-        title: 'Original Proposal',
-        description: selectedProposalDescription,
-        metadata: {
-          step_count: 0,
-          complexity_score: 'Medium' as const,
-          estimated_time_minutes: 0,
-          estimated_cost_usd: 0,
-        },
-        ratings: ratings[selectedProposalId]?.ratings || {},
-        averageScore: ratings[selectedProposalId]?.average_score,
+    return candidatePlans.map((plan) => ({
+      id: plan.id,
+      title: plan.title,
+      description: plan.description,
+      variantType: plan.variantType,
+      metadata: plan.metadata || {
+        step_count: 0,
+        complexity_score: 'Medium',
+        estimated_time_minutes: 0,
+        estimated_cost_usd: 0,
       },
-      ...variants.map((variant) => ({
-        id: variant.id,
-        title: `${variant.variant_type} Variant`,
-        description:
-          variant.metadata.optimization_notes ||
-          `AI-optimized ${variant.variant_type} version`,
-        variantType: variant.variant_type,
-        metadata: variant.metadata,
-        ratings: ratings[variant.id]?.ratings || {},
-        averageScore: ratings[variant.id]?.average_score,
-      })),
-      ...candidatePlans
-        .filter((plan) => plan.sourceType === 'manual')
-        .map((plan) => ({
-          id: plan.id,
-          title: plan.title,
-          description: plan.description,
-          variantType: 'manual',
-          metadata: plan.metadata || {
-            step_count: 0,
-            complexity_score: 'Medium',
-            estimated_time_minutes: 0,
-            estimated_cost_usd: 0,
-          },
-          ratings: {},
-          averageScore:
-            evaluationResult?.ranking.find((item) => item.plan_id === plan.id)?.final_score ||
-            comparisonResult?.ranking.find((item) => item.plan_id === plan.id)?.final_score,
-        })),
-    ];
-  }, [candidatePlans, comparisonResult, evaluationResult, ratings, selectedProposalDescription, selectedProposalId, variants]);
+      ratings: ratings[plan.id]?.ratings || {},
+      averageScore:
+        ratings[plan.id]?.average_score ||
+        evaluationResult?.ranking.find((item) => item.plan_id === plan.id)
+          ?.final_score ||
+        comparisonResult?.ranking.find((item) => item.plan_id === plan.id)
+          ?.final_score,
+    }));
+  }, [candidatePlans, comparisonResult, evaluationResult, ratings]);
 
   const handleSelectPlan = (planId: string) => {
     setSelectedPlanId(planId);
@@ -267,38 +320,8 @@ export function OptimizerStage({
         risks: toList(manualRisks),
       });
       setManualResult(result.normalized_plan);
-      setCandidatePlans((current) => {
-        const next = current.filter((plan) => plan.id !== result.normalized_plan.id);
-        return [
-          ...next,
-          {
-            id: result.normalized_plan.id,
-            title: result.normalized_plan.title,
-            description: result.normalized_plan.summary,
-            sourceType: 'manual',
-            sourceModel: 'human',
-            planningStyle: 'manual',
-            variantType: 'manual',
-            metadata: {
-              step_count: result.normalized_plan.steps.length,
-              complexity_score: result.normalized_plan.steps.length > 4 ? 'High' : 'Medium',
-              estimated_time_minutes: result.normalized_plan.estimated_time_minutes || 0,
-              estimated_cost_usd: Number(result.normalized_plan.estimated_cost_usd || 0),
-            },
-            payload: {
-              id: result.normalized_plan.id,
-              title: result.normalized_plan.title,
-              summary: result.normalized_plan.summary,
-              success_criteria: result.normalized_plan.success_criteria,
-              risks: result.normalized_plan.risks,
-              fallbacks: result.normalized_plan.fallbacks,
-              steps: result.normalized_plan.steps,
-              source_model: 'human',
-              planning_style: 'manual',
-            },
-          },
-        ];
-      });
+      const refreshed = await listCandidates(sessionId);
+      setCandidatePlans(refreshed.candidates.map(toCandidateSummary));
       showSuccess('Manual plan added to the candidate pool.');
       setActiveTab('evaluate');
     } catch (error) {
@@ -348,7 +371,8 @@ export function OptimizerStage({
     }
   };
 
-  const isOptimizing = status === 'generating_variants' || isLoading('optimize');
+  const isOptimizing =
+    status === 'generating_variants' || isLoading('optimize');
   const hasSelection = internalSelectedPlanId !== null;
 
   return (
@@ -359,9 +383,12 @@ export function OptimizerStage({
             <LayoutPanelTop size={24} />
           </div>
           <div>
-            <h2 className="text-2xl font-bold tracking-tight text-white">Planning Workbench</h2>
+            <h2 className="text-2xl font-bold tracking-tight text-white">
+              Planning Workbench
+            </h2>
             <p className="text-text-muted font-medium">
-              Variants, manual baselines, rubric evaluation, and pairwise comparison
+              Variants, manual baselines, rubric evaluation, and pairwise
+              comparison
             </p>
           </div>
         </div>
@@ -391,7 +418,9 @@ export function OptimizerStage({
                 <Icon size={16} />
                 {tab.label}
               </div>
-              <p className="text-xs leading-relaxed opacity-80">{tab.description}</p>
+              <p className="text-xs leading-relaxed opacity-80">
+                {tab.description}
+              </p>
             </button>
           );
         })}
@@ -400,9 +429,12 @@ export function OptimizerStage({
       {isOptimizing && (
         <div className="flex flex-col items-center justify-center py-16 rounded-2xl bg-surface border border-white/5">
           <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
-          <h3 className="text-lg font-bold text-white mb-2">Generating Optimized Variants</h3>
+          <h3 className="text-lg font-bold text-white mb-2">
+            Generating Optimized Variants
+          </h3>
           <p className="text-text-muted text-sm">
-            AI is synthesizing alternative plan structures from the selected proposal.
+            AI is synthesizing alternative plan structures from the selected
+            proposal.
           </p>
         </div>
       )}
@@ -413,7 +445,9 @@ export function OptimizerStage({
             {activeTab === 'variants' && (
               <>
                 <div className="space-y-4">
-                  <h3 className="text-lg font-bold text-white">Variant Candidates</h3>
+                  <h3 className="text-lg font-bold text-white">
+                    Variant Candidates
+                  </h3>
                   <div className="space-y-4">
                     {plans.map((plan) => (
                       <PlanCard
@@ -438,14 +472,19 @@ export function OptimizerStage({
             {activeTab === 'manual' && (
               <div className="rounded-2xl border border-white/5 bg-surface p-6 space-y-5">
                 <div>
-                  <h3 className="text-lg font-bold text-white">Manual Baseline Plan</h3>
+                  <h3 className="text-lg font-bold text-white">
+                    Manual Baseline Plan
+                  </h3>
                   <p className="text-sm text-text-muted">
-                    Add a human-written plan and send it through the same normalization and judging pipeline.
+                    Add a human-written plan and send it through the same
+                    normalization and judging pipeline.
                   </p>
                 </div>
                 <div className="grid gap-4 md:grid-cols-2">
                   <label className="space-y-2">
-                    <span className="text-sm font-semibold text-text-muted">Title</span>
+                    <span className="text-sm font-semibold text-text-muted">
+                      Title
+                    </span>
                     <input
                       value={manualTitle}
                       onChange={(event) => setManualTitle(event.target.value)}
@@ -453,7 +492,9 @@ export function OptimizerStage({
                     />
                   </label>
                   <label className="space-y-2">
-                    <span className="text-sm font-semibold text-text-muted">Summary</span>
+                    <span className="text-sm font-semibold text-text-muted">
+                      Summary
+                    </span>
                     <input
                       value={manualSummary}
                       onChange={(event) => setManualSummary(event.target.value)}
@@ -463,26 +504,36 @@ export function OptimizerStage({
                   </label>
                 </div>
                 <label className="space-y-2 block">
-                  <span className="text-sm font-semibold text-text-muted">Plan Steps</span>
+                  <span className="text-sm font-semibold text-text-muted">
+                    Plan Steps
+                  </span>
                   <textarea
                     value={manualPlanText}
                     onChange={(event) => setManualPlanText(event.target.value)}
                     className="min-h-[180px] w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none focus:border-primary/40"
-                    placeholder={'One step per line\nAudit the current implementation\nDefine the migration path\nValidate the rollout'}
+                    placeholder={
+                      'One step per line\nAudit the current implementation\nDefine the migration path\nValidate the rollout'
+                    }
                   />
                 </label>
                 <div className="grid gap-4 md:grid-cols-2">
                   <label className="space-y-2">
-                    <span className="text-sm font-semibold text-text-muted">Success Criteria</span>
+                    <span className="text-sm font-semibold text-text-muted">
+                      Success Criteria
+                    </span>
                     <textarea
                       value={manualSuccessCriteria}
-                      onChange={(event) => setManualSuccessCriteria(event.target.value)}
+                      onChange={(event) =>
+                        setManualSuccessCriteria(event.target.value)
+                      }
                       className="min-h-[96px] w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none focus:border-primary/40"
                       placeholder="Comma or line-separated criteria"
                     />
                   </label>
                   <label className="space-y-2">
-                    <span className="text-sm font-semibold text-text-muted">Known Risks</span>
+                    <span className="text-sm font-semibold text-text-muted">
+                      Known Risks
+                    </span>
                     <textarea
                       value={manualRisks}
                       onChange={(event) => setManualRisks(event.target.value)}
@@ -493,14 +544,17 @@ export function OptimizerStage({
                 </div>
                 <div className="flex items-center justify-between gap-4">
                   <p className="text-xs text-text-muted">
-                    Manual plans are normalized before evaluation, so missing structure will show up as warnings.
+                    Manual plans are normalized before evaluation, so missing
+                    structure will show up as warnings.
                   </p>
                   <button
                     onClick={handleManualSubmit}
                     disabled={isLoading('submitManualPlan')}
                     className="rounded-xl bg-gradient-to-r from-primary to-purple-600 px-5 py-3 text-sm font-bold text-white transition-all hover:shadow-lg hover:shadow-primary/20 disabled:opacity-60"
                   >
-                    {isLoading('submitManualPlan') ? 'Submitting...' : 'Add Manual Plan'}
+                    {isLoading('submitManualPlan')
+                      ? 'Submitting...'
+                      : 'Add Manual Plan'}
                   </button>
                 </div>
 
@@ -508,27 +562,49 @@ export function OptimizerStage({
                   <div className="rounded-2xl border border-white/5 bg-white/5 p-5 space-y-4">
                     <div className="flex items-center justify-between gap-4">
                       <div>
-                        <h4 className="font-bold text-white">{manualResult.title}</h4>
-                        <p className="text-sm text-text-muted">{manualResult.summary}</p>
+                        <h4 className="font-bold text-white">
+                          {manualResult.title}
+                        </h4>
+                        <p className="text-sm text-text-muted">
+                          {manualResult.summary}
+                        </p>
                       </div>
                       <div className="rounded-full bg-primary/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-primary">
                         normalized
                       </div>
                     </div>
                     <div className="grid gap-3 md:grid-cols-3">
-                      <MetricPill label="Steps" value={String(manualResult.steps.length)} />
-                      <MetricPill label="Warnings" value={String(manualResult.normalization_warnings.length)} />
-                      <MetricPill label="Success Criteria" value={String(manualResult.success_criteria.length)} />
+                      <MetricPill
+                        label="Steps"
+                        value={String(manualResult.steps.length)}
+                      />
+                      <MetricPill
+                        label="Warnings"
+                        value={String(
+                          manualResult.normalization_warnings.length
+                        )}
+                      />
+                      <MetricPill
+                        label="Success Criteria"
+                        value={String(manualResult.success_criteria.length)}
+                      />
                     </div>
                     {manualResult.normalization_warnings.length > 0 && (
                       <div className="space-y-2">
-                        <p className="text-xs font-bold uppercase tracking-wider text-warning">Normalization warnings</p>
+                        <p className="text-xs font-bold uppercase tracking-wider text-warning">
+                          Normalization warnings
+                        </p>
                         <ul className="space-y-2 text-sm text-text-muted">
-                          {manualResult.normalization_warnings.map((warning) => (
-                            <li key={warning} className="rounded-lg border border-warning/20 bg-warning/10 px-3 py-2">
-                              {warning}
-                            </li>
-                          ))}
+                          {manualResult.normalization_warnings.map(
+                            (warning) => (
+                              <li
+                                key={warning}
+                                className="rounded-lg border border-warning/20 bg-warning/10 px-3 py-2"
+                              >
+                                {warning}
+                              </li>
+                            )
+                          )}
                         </ul>
                       </div>
                     )}
@@ -541,9 +617,13 @@ export function OptimizerStage({
               <div className="rounded-2xl border border-white/5 bg-surface p-6 space-y-5">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <h3 className="text-lg font-bold text-white">Rubric Evaluation</h3>
+                    <h3 className="text-lg font-bold text-white">
+                      Rubric Evaluation
+                    </h3>
                     <p className="text-sm text-text-muted">
-                      Score every current candidate across completeness, feasibility, dependency quality, verification, and readiness.
+                      Score every current candidate across completeness,
+                      feasibility, dependency quality, verification, and
+                      readiness.
                     </p>
                   </div>
                   <button
@@ -551,7 +631,9 @@ export function OptimizerStage({
                     disabled={isLoading('evaluatePlans')}
                     className="rounded-xl bg-gradient-to-r from-primary to-purple-600 px-5 py-3 text-sm font-bold text-white transition-all hover:shadow-lg hover:shadow-primary/20 disabled:opacity-60"
                   >
-                    {isLoading('evaluatePlans') ? 'Evaluating...' : 'Evaluate Candidates'}
+                    {isLoading('evaluatePlans')
+                      ? 'Evaluating...'
+                      : 'Evaluate Candidates'}
                   </button>
                 </div>
 
@@ -578,9 +660,12 @@ export function OptimizerStage({
               <div className="rounded-2xl border border-white/5 bg-surface p-6 space-y-5">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <h3 className="text-lg font-bold text-white">Pairwise Comparison</h3>
+                    <h3 className="text-lg font-bold text-white">
+                      Pairwise Comparison
+                    </h3>
                     <p className="text-sm text-text-muted">
-                      Compare the current candidate pool and surface a ranked recommendation with rationale.
+                      Compare the current candidate pool and surface a ranked
+                      recommendation with rationale.
                     </p>
                   </div>
                   <button
@@ -588,7 +673,9 @@ export function OptimizerStage({
                     disabled={isLoading('comparePlans')}
                     className="rounded-xl bg-gradient-to-r from-primary to-purple-600 px-5 py-3 text-sm font-bold text-white transition-all hover:shadow-lg hover:shadow-primary/20 disabled:opacity-60"
                   >
-                    {isLoading('comparePlans') ? 'Comparing...' : 'Compare Candidates'}
+                    {isLoading('comparePlans')
+                      ? 'Comparing...'
+                      : 'Compare Candidates'}
                   </button>
                 </div>
 
@@ -602,20 +689,29 @@ export function OptimizerStage({
                     />
                     <div className="grid gap-4">
                       {comparisonResult.comparisons.map((comparison) => (
-                        <div key={`${comparison.left_plan_id}-${comparison.right_plan_id}`} className="rounded-2xl border border-white/5 bg-white/5 p-4">
+                        <div
+                          key={`${comparison.left_plan_id}-${comparison.right_plan_id}`}
+                          className="rounded-2xl border border-white/5 bg-white/5 p-4"
+                        >
                           <div className="mb-2 flex items-center justify-between gap-4">
                             <p className="text-sm font-bold text-white">
-                              {comparison.left_plan_id} vs {comparison.right_plan_id}
+                              {comparison.left_plan_id} vs{' '}
+                              {comparison.right_plan_id}
                             </p>
                             <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-primary">
                               {comparison.margin}
                             </span>
                           </div>
-                          <p className="text-sm text-text-muted">{comparison.rationale}</p>
+                          <p className="text-sm text-text-muted">
+                            {comparison.rationale}
+                          </p>
                           {comparison.preference_factors.length > 0 && (
                             <div className="mt-3 flex flex-wrap gap-2">
                               {comparison.preference_factors.map((factor) => (
-                                <span key={factor} className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-text-muted">
+                                <span
+                                  key={factor}
+                                  className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-text-muted"
+                                >
                                   {factor.replace(/_/g, ' ')}
                                 </span>
                               ))}
@@ -634,7 +730,9 @@ export function OptimizerStage({
 
           <div className="space-y-6">
             <div className="rounded-2xl border border-white/5 bg-surface p-6">
-              <h3 className="mb-4 text-lg font-bold text-white">Candidate Pool</h3>
+              <h3 className="mb-4 text-lg font-bold text-white">
+                Candidate Pool
+              </h3>
               <div className="space-y-3">
                 {candidatePlans.map((plan) => (
                   <button
@@ -651,7 +749,8 @@ export function OptimizerStage({
                       <div>
                         <p className="font-bold text-white">{plan.title}</p>
                         <p className="text-xs text-text-muted">
-                          {plan.sourceType.replace('_', ' ')} · {plan.planningStyle}
+                          {plan.sourceType.replace('_', ' ')} ·{' '}
+                          {plan.planningStyle}
                         </p>
                       </div>
                       <span className="rounded-full bg-black/20 px-2.5 py-1 text-[11px] uppercase tracking-wider text-text-muted">
@@ -676,7 +775,9 @@ export function OptimizerStage({
                   Rate This Planning Pass
                 </h3>
                 <div className="space-y-3">
-                  <label className="text-sm font-semibold text-text-muted">Overall Rating</label>
+                  <label className="text-sm font-semibold text-text-muted">
+                    Overall Rating
+                  </label>
                   <div className="flex gap-2">
                     {[1, 2, 3, 4, 5].map((star) => (
                       <button
@@ -689,7 +790,10 @@ export function OptimizerStage({
                             : 'bg-white/5 text-text-muted hover:bg-white/10'
                         )}
                       >
-                        <Star size={18} fill={userRating >= star ? 'currentColor' : 'none'} />
+                        <Star
+                          size={18}
+                          fill={userRating >= star ? 'currentColor' : 'none'}
+                        />
                       </button>
                     ))}
                   </div>
@@ -735,7 +839,9 @@ export function OptimizerStage({
 function MetricPill({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border border-white/5 bg-black/20 px-4 py-3">
-      <p className="text-[11px] font-bold uppercase tracking-wider text-text-muted">{label}</p>
+      <p className="text-[11px] font-bold uppercase tracking-wider text-text-muted">
+        {label}
+      </p>
       <p className="mt-1 text-lg font-bold text-white">{value}</p>
     </div>
   );
@@ -762,7 +868,9 @@ function RankingList({
 }) {
   return (
     <div className="space-y-3">
-      <h4 className="text-sm font-bold uppercase tracking-wider text-text-muted">{title}</h4>
+      <h4 className="text-sm font-bold uppercase tracking-wider text-text-muted">
+        {title}
+      </h4>
       <div className="space-y-3">
         {ranking.map((item) => (
           <button
@@ -780,10 +888,14 @@ function RankingList({
                 <p className="text-sm font-bold text-white">
                   #{item.rank} · {item.plan_id}
                 </p>
-                <p className="mt-1 text-sm text-text-muted">{item.recommendation_reason}</p>
+                <p className="mt-1 text-sm text-text-muted">
+                  {item.recommendation_reason}
+                </p>
               </div>
               <div className="text-right">
-                <p className="text-lg font-bold text-white">{item.final_score.toFixed(1)}</p>
+                <p className="text-lg font-bold text-white">
+                  {item.final_score.toFixed(1)}
+                </p>
                 <p className="text-xs uppercase tracking-wider text-text-muted">
                   {item.disagreement_level} disagreement
                 </p>
@@ -806,7 +918,9 @@ function RubricGrid({
   const criteria = Array.from(
     new Set(
       Object.values(evaluations).flatMap((byJudge) =>
-        Object.values(byJudge).flatMap((evaluation) => Object.keys(evaluation.rubric_scores))
+        Object.values(byJudge).flatMap((evaluation) =>
+          Object.keys(evaluation.rubric_scores)
+        )
       )
     )
   );
@@ -814,22 +928,33 @@ function RubricGrid({
   return (
     <div className="overflow-hidden rounded-2xl border border-white/5">
       <div className="grid grid-cols-[1.2fr,repeat(3,minmax(0,1fr))] gap-px bg-white/5">
-        <div className="bg-surface px-4 py-3 text-xs font-bold uppercase tracking-wider text-text-muted">Plan</div>
-        <div className="bg-surface px-4 py-3 text-xs font-bold uppercase tracking-wider text-text-muted">Score</div>
-        <div className="bg-surface px-4 py-3 text-xs font-bold uppercase tracking-wider text-text-muted">Verdict</div>
-        <div className="bg-surface px-4 py-3 text-xs font-bold uppercase tracking-wider text-text-muted">Top Signal</div>
+        <div className="bg-surface px-4 py-3 text-xs font-bold uppercase tracking-wider text-text-muted">
+          Plan
+        </div>
+        <div className="bg-surface px-4 py-3 text-xs font-bold uppercase tracking-wider text-text-muted">
+          Score
+        </div>
+        <div className="bg-surface px-4 py-3 text-xs font-bold uppercase tracking-wider text-text-muted">
+          Verdict
+        </div>
+        <div className="bg-surface px-4 py-3 text-xs font-bold uppercase tracking-wider text-text-muted">
+          Top Signal
+        </div>
         {plans.map((plan) => {
           const byJudge = evaluations[plan.id] || {};
           const all = Object.values(byJudge);
           const avgScore =
-            all.reduce((sum, item) => sum + item.overall_score, 0) / Math.max(all.length, 1);
+            all.reduce((sum, item) => sum + item.overall_score, 0) /
+            Math.max(all.length, 1);
           const primary = all[0];
           const topCriterion = criteria
             .map((criterion) => ({
               criterion,
               score:
-                all.reduce((sum, item) => sum + (item.rubric_scores[criterion] || 0), 0) /
-                Math.max(all.length, 1),
+                all.reduce(
+                  (sum, item) => sum + (item.rubric_scores[criterion] || 0),
+                  0
+                ) / Math.max(all.length, 1),
             }))
             .sort((left, right) => right.score - left.score)[0];
 
@@ -839,8 +964,12 @@ function RubricGrid({
                 <p className="font-bold text-white">{plan.title}</p>
                 <p className="text-xs text-text-muted">{plan.source_type}</p>
               </div>
-              <div className="bg-surface px-4 py-4 text-white">{avgScore.toFixed(1)}</div>
-              <div className="bg-surface px-4 py-4 text-text-muted">{primary?.verdict || '-'}</div>
+              <div className="bg-surface px-4 py-4 text-white">
+                {avgScore.toFixed(1)}
+              </div>
+              <div className="bg-surface px-4 py-4 text-text-muted">
+                {primary?.verdict || '-'}
+              </div>
               <div className="bg-surface px-4 py-4 text-text-muted">
                 {topCriterion ? topCriterion.criterion.replace(/_/g, ' ') : '-'}
               </div>

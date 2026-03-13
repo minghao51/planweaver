@@ -30,10 +30,10 @@ export const Header: React.FC = () => {
               key={item.path}
               to={item.path}
               className={cn(
-                "flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300",
+                'flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300',
                 location.pathname === item.path
-                  ? "bg-primary text-slate-950 shadow-md shadow-primary/30"
-                  : "text-text-muted hover:bg-white/5 hover:text-white"
+                  ? 'bg-primary text-slate-950 shadow-md shadow-primary/30'
+                  : 'text-text-muted hover:bg-white/5 hover:text-white'
               )}
             >
               <item.icon size={16} />

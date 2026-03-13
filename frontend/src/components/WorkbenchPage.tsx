@@ -5,13 +5,35 @@ import { OptimizerStage } from './optimizer';
 import { usePlanApi } from '../hooks/useApi';
 import { useToast } from '../hooks/useToast';
 import { cn } from '../utils';
-import type { Plan, SessionHistoryItem, StrawmanProposal } from '../types';
+import type {
+  CandidatePlan,
+  Plan,
+  SessionHistoryItem,
+  StrawmanProposal,
+} from '../types';
+
+type LaunchSelection =
+  | {
+      kind: 'proposal';
+      id: string;
+      title: string;
+      description: string;
+    }
+  | {
+      kind: 'candidate';
+      id: string;
+      title: string;
+      description: string;
+    };
 
 export function WorkbenchPage() {
   const [sessionId, setSessionId] = useState('');
   const [selectedSession, setSelectedSession] = useState<Plan | null>(null);
-  const [recentSessions, setRecentSessions] = useState<SessionHistoryItem[]>([]);
+  const [recentSessions, setRecentSessions] = useState<SessionHistoryItem[]>(
+    []
+  );
   const [selectedProposalId, setSelectedProposalId] = useState('');
+  const [selectedCandidateId, setSelectedCandidateId] = useState('');
   const [launched, setLaunched] = useState(false);
 
   const { getSession, listSessions, isLoading } = usePlanApi();
@@ -36,6 +58,7 @@ export function WorkbenchPage() {
       if (!trimmed) {
         setSelectedSession(null);
         setSelectedProposalId('');
+        setSelectedCandidateId('');
         return;
       }
 
@@ -44,17 +67,31 @@ export function WorkbenchPage() {
         setSelectedSession(plan);
         setSessionId(trimmed);
 
-        const preselected = plan.strawman_proposals.find((proposal) => proposal.selected);
+        const preselected = plan.strawman_proposals.find(
+          (proposal) => proposal.selected
+        );
         const fallback = preselected || plan.strawman_proposals[0];
         setSelectedProposalId(fallback?.id || '');
+        setSelectedCandidateId(getPreferredCandidate(plan)?.candidate_id || '');
 
         if (!plan.strawman_proposals.length) {
-          showInfo('This session has no proposals yet. Generate proposals first from the plan view.');
+          if (plan.candidate_plans.length > 0) {
+            showInfo(
+              'No proposals found, but existing candidate plans can still be opened in the workbench.'
+            );
+          } else {
+            showInfo(
+              'This session has no proposals yet. Generate proposals first from the plan view.'
+            );
+          }
         }
       } catch {
         setSelectedSession(null);
         setSelectedProposalId('');
-        showError('Failed to load that session. Check the session ID and try again.');
+        setSelectedCandidateId('');
+        showError(
+          'Failed to load that session. Check the session ID and try again.'
+        );
       }
     },
     [getSession, showError, showInfo]
@@ -68,15 +105,45 @@ export function WorkbenchPage() {
     );
   }, [selectedProposalId, selectedSession]);
 
-  const canLaunch = Boolean(selectedSession && selectedProposal);
+  const selectedCandidate = useMemo<CandidatePlan | null>(() => {
+    return (
+      selectedSession?.candidate_plans.find(
+        (candidate) => candidate.candidate_id === selectedCandidateId
+      ) || null
+    );
+  }, [selectedCandidateId, selectedSession]);
 
-  if (launched && selectedSession && selectedProposal) {
+  const selectedLaunchItem = useMemo<LaunchSelection | null>(() => {
+    if (selectedProposal) {
+      return {
+        kind: 'proposal',
+        id: selectedProposal.id,
+        title: selectedProposal.title,
+        description: selectedProposal.description,
+      };
+    }
+
+    if (selectedCandidate) {
+      return {
+        kind: 'candidate',
+        id: selectedCandidate.proposal_id || selectedCandidate.candidate_id,
+        title: selectedCandidate.title,
+        description: selectedCandidate.summary,
+      };
+    }
+
+    return null;
+  }, [selectedCandidate, selectedProposal]);
+
+  const canLaunch = Boolean(selectedSession && selectedLaunchItem);
+
+  if (launched && selectedSession && selectedLaunchItem) {
     return (
       <OptimizerStage
         sessionId={selectedSession.session_id}
-        selectedProposalId={selectedProposal.id}
-        selectedProposalTitle={selectedProposal.title}
-        selectedProposalDescription={selectedProposal.description}
+        selectedProposalId={selectedLaunchItem.id}
+        selectedProposalTitle={selectedLaunchItem.title}
+        selectedProposalDescription={selectedLaunchItem.description}
         onComplete={() => {}}
         onBack={() => setLaunched(false)}
       />
@@ -93,7 +160,8 @@ export function WorkbenchPage() {
           Planning <span className="text-primary">Workbench</span>
         </h1>
         <p className="mx-auto max-w-3xl text-lg text-text-muted">
-          Open the full planning workspace directly: optimized variants, manual plans, rubric evaluation, and pairwise comparison in one place.
+          Open the full planning workspace directly: optimized variants, manual
+          plans, rubric evaluation, and pairwise comparison in one place.
         </p>
       </div>
 
@@ -104,9 +172,12 @@ export function WorkbenchPage() {
               <Rocket size={22} />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-white">Open A Real Session</h2>
+              <h2 className="text-2xl font-bold text-white">
+                Open A Real Session
+              </h2>
               <p className="mt-2 text-sm text-text-muted">
-                Pick a recent session or load one by ID, then choose which proposal to send into the workbench.
+                Pick a recent session or load one by ID, then choose which
+                proposal or candidate to send into the workbench.
               </p>
             </div>
           </div>
@@ -174,7 +245,9 @@ export function WorkbenchPage() {
                           {session.status}
                         </span>
                       </div>
-                      <p className="line-clamp-3 text-sm text-text-body">{session.user_intent}</p>
+                      <p className="line-clamp-3 text-sm text-text-body">
+                        {session.user_intent}
+                      </p>
                     </button>
                   ))}
                 </div>
@@ -187,12 +260,16 @@ export function WorkbenchPage() {
                   <p className="text-xs font-bold uppercase tracking-widest text-text-muted">
                     Loaded Session
                   </p>
-                  <p className="mt-2 text-sm text-text-body">{selectedSession.user_intent}</p>
+                  <p className="mt-2 text-sm text-text-body">
+                    {selectedSession.user_intent}
+                  </p>
                 </div>
 
                 <div className="space-y-3">
                   <p className="text-xs font-bold uppercase tracking-widest text-text-muted">
-                    Proposals
+                    {selectedSession.strawman_proposals.length > 0
+                      ? 'Proposals'
+                      : 'Candidate Plans'}
                   </p>
                   {selectedSession.strawman_proposals.length > 0 ? (
                     <div className="space-y-3">
@@ -209,18 +286,53 @@ export function WorkbenchPage() {
                           )}
                         >
                           <div className="mb-2 flex items-center justify-between gap-3">
-                            <p className="font-bold text-white">{proposal.title}</p>
+                            <p className="font-bold text-white">
+                              {proposal.title}
+                            </p>
                             <span className="font-mono text-[11px] uppercase tracking-wider text-primary">
                               {proposal.id}
                             </span>
                           </div>
-                          <p className="text-sm text-text-muted">{proposal.description}</p>
+                          <p className="text-sm text-text-muted">
+                            {proposal.description}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
+                  ) : selectedSession.candidate_plans.length > 0 ? (
+                    <div className="space-y-3">
+                      {selectedSession.candidate_plans.map((candidate) => (
+                        <button
+                          key={candidate.candidate_id}
+                          type="button"
+                          onClick={() =>
+                            setSelectedCandidateId(candidate.candidate_id)
+                          }
+                          className={cn(
+                            'w-full rounded-2xl border px-4 py-4 text-left transition-all duration-300',
+                            selectedCandidateId === candidate.candidate_id
+                              ? 'border-primary/40 bg-primary/10'
+                              : 'border-white/5 bg-white/5 hover:bg-white/10'
+                          )}
+                        >
+                          <div className="mb-2 flex items-center justify-between gap-3">
+                            <p className="font-bold text-white">
+                              {candidate.title}
+                            </p>
+                            <span className="font-mono text-[11px] uppercase tracking-wider text-primary">
+                              {candidate.status}
+                            </span>
+                          </div>
+                          <p className="text-sm text-text-muted">
+                            {candidate.summary}
+                          </p>
                         </button>
                       ))}
                     </div>
                   ) : (
                     <div className="rounded-2xl border border-dashed border-white/10 bg-black/10 p-5 text-sm text-text-muted">
-                      No proposals found for this session yet.
+                      No proposals or candidate plans found for this session
+                      yet.
                     </div>
                   )}
                 </div>
@@ -251,7 +363,8 @@ export function WorkbenchPage() {
             <div>
               <h2 className="text-2xl font-bold text-white">Workflow</h2>
               <p className="mt-2 text-sm text-text-muted">
-                The standalone workbench now pulls from real sessions instead of asking you to guess hidden IDs.
+                The standalone workbench now pulls from real sessions instead of
+                asking you to guess hidden IDs.
               </p>
             </div>
           </div>
@@ -261,10 +374,12 @@ export function WorkbenchPage() {
               Choose a recent session or paste a session ID and load it.
             </div>
             <div className="rounded-2xl border border-white/5 bg-black/15 p-4">
-              Pick one of the actual proposals generated for that session.
+              Pick one of the actual proposals generated for that session, or
+              fall back to an existing candidate plan when proposals are absent.
             </div>
             <div className="rounded-2xl border border-white/5 bg-black/15 p-4">
-              Launch the workbench and use the `Manual Plan`, `Evaluate`, and `Compare` tabs from there.
+              Launch the workbench and use the `Manual Plan`, `Evaluate`, and
+              `Compare` tabs from there.
             </div>
           </div>
 
@@ -283,18 +398,39 @@ export function WorkbenchPage() {
             </Link>
           </div>
 
-          {selectedSession && selectedProposal && (
+          {selectedSession && selectedLaunchItem && (
             <div className="mt-8 rounded-2xl border border-primary/20 bg-primary/10 p-5">
               <div className="mb-3 flex items-center justify-between gap-3">
-                <p className="font-bold text-white">Selected proposal</p>
+                <p className="font-bold text-white">
+                  {selectedLaunchItem.kind === 'proposal'
+                    ? 'Selected proposal'
+                    : 'Selected candidate'}
+                </p>
                 <ExternalLink size={16} className="text-primary" />
               </div>
-              <p className="text-sm font-semibold text-text-body">{selectedProposal.title}</p>
-              <p className="mt-2 text-sm text-text-muted">{selectedProposal.description}</p>
+              <p className="text-sm font-semibold text-text-body">
+                {selectedLaunchItem.title}
+              </p>
+              <p className="mt-2 text-sm text-text-muted">
+                {selectedLaunchItem.description}
+              </p>
             </div>
           )}
         </div>
       </div>
     </div>
+  );
+}
+
+function getPreferredCandidate(plan: Plan): CandidatePlan | null {
+  return (
+    plan.candidate_plans.find(
+      (candidate) => candidate.candidate_id === plan.approved_candidate_id
+    ) ||
+    plan.candidate_plans.find(
+      (candidate) => candidate.candidate_id === plan.selected_candidate_id
+    ) ||
+    plan.candidate_plans[0] ||
+    null
   );
 }

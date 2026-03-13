@@ -7,7 +7,7 @@ import {
   AlertCircle,
   ChevronRight,
   Cpu,
-  Clock
+  Clock,
 } from 'lucide-react';
 import { cn } from '../utils';
 import { getStepStyles } from '../lib/statusStyles';
@@ -39,7 +39,8 @@ export function ExecutionPanel({ plan, onUpdated }: ExecutionPanelProps) {
     }
   }
 
-  const completedSteps = plan.execution_graph?.filter((s) => s.status === 'COMPLETED').length || 0;
+  const completedSteps =
+    plan.execution_graph?.filter((s) => s.status === 'COMPLETED').length || 0;
   const totalSteps = plan.execution_graph?.length || 0;
   const approving = isLoading('approvePlan');
   const executing = isLoading('executePlan');
@@ -52,8 +53,12 @@ export function ExecutionPanel({ plan, onUpdated }: ExecutionPanelProps) {
             <Cpu size={20} />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-white tracking-tight">Step Manifest</h2>
-            <p className="text-xs text-text-muted font-medium uppercase tracking-wider">{completedSteps} of {totalSteps} completed</p>
+            <h2 className="text-xl font-bold text-white tracking-tight">
+              Step Manifest
+            </h2>
+            <p className="text-xs text-text-muted font-medium uppercase tracking-wider">
+              {completedSteps} of {totalSteps} completed
+            </p>
           </div>
         </div>
 
@@ -61,31 +66,39 @@ export function ExecutionPanel({ plan, onUpdated }: ExecutionPanelProps) {
           {plan.status === 'AWAITING_APPROVAL' && (
             <button
               className={cn(
-                "px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 flex items-center gap-2",
+                'px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 flex items-center gap-2',
                 approving
-                  ? "bg-white/5 text-text-muted opacity-50 cursor-not-allowed"
-                  : "bg-success hover:bg-success/90 text-white shadow-lg shadow-success/20 hover:scale-[1.02]"
+                  ? 'bg-white/5 text-text-muted opacity-50 cursor-not-allowed'
+                  : 'bg-success hover:bg-success/90 text-white shadow-lg shadow-success/20 hover:scale-[1.02]'
               )}
               onClick={handleApprove}
               disabled={approving}
             >
-              {approving ? <Cpu className="w-4 h-4 animate-spin" /> : <CheckCircle2 size={16} />}
+              {approving ? (
+                <Cpu className="w-4 h-4 animate-spin" />
+              ) : (
+                <CheckCircle2 size={16} />
+              )}
               Approve Design
             </button>
           )}
-          {plan.status === 'EXECUTING' && (
+          {plan.status === 'APPROVED' && (
             <button
               className={cn(
-                "px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 flex items-center gap-2",
+                'px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 flex items-center gap-2',
                 executing
-                  ? "bg-white/5 text-text-muted opacity-50 cursor-not-allowed"
-                  : "bg-primary hover:bg-primary-hover text-white shadow-lg shadow-primary/20 hover:scale-[1.02]"
+                  ? 'bg-white/5 text-text-muted opacity-50 cursor-not-allowed'
+                  : 'bg-primary hover:bg-primary-hover text-white shadow-lg shadow-primary/20 hover:scale-[1.02]'
               )}
               onClick={handleExecute}
               disabled={executing}
             >
-              {executing ? <Cpu className="w-4 h-4 animate-spin" /> : <PlayCircle size={16} />}
-              Continue Weave
+              {executing ? (
+                <Cpu className="w-4 h-4 animate-spin" />
+              ) : (
+                <PlayCircle size={16} />
+              )}
+              Execute Plan
             </button>
           )}
         </div>
@@ -96,15 +109,17 @@ export function ExecutionPanel({ plan, onUpdated }: ExecutionPanelProps) {
           <div
             key={step.step_id}
             className={cn(
-              "group p-4 rounded-2xl border transition-all duration-300",
+              'group p-4 rounded-2xl border transition-all duration-300',
               getStepStyles(step.status).container
             )}
           >
             <div className="flex items-start gap-4">
-              <div className={cn(
-                "w-10 h-10 rounded-full flex items-center justify-center shrink-0 border transition-transform duration-500 group-hover:scale-110",
-                getStepStyles(step.status, step.step_id).iconContainer
-              )}>
+              <div
+                className={cn(
+                  'w-10 h-10 rounded-full flex items-center justify-center shrink-0 border transition-transform duration-500 group-hover:scale-110',
+                  getStepStyles(step.status, step.step_id).iconContainer
+                )}
+              >
                 {renderStepIcon(step.status, step.step_id)}
               </div>
 
@@ -150,7 +165,8 @@ export function ExecutionPanel({ plan, onUpdated }: ExecutionPanelProps) {
             <div className="flex items-center gap-2">
               <Clock size={16} />
               <span>
-                {error.message} Please wait <strong>{error.retryAfter} seconds</strong>.
+                {error.message} Please wait{' '}
+                <strong>{error.retryAfter} seconds</strong>.
               </span>
             </div>
           ) : (
@@ -175,7 +191,10 @@ function renderStepIcon(status: string, stepId?: number) {
     case 'alert':
       return <AlertCircle size={16} />;
     default:
-      return <span className="text-xs font-bold font-mono opacity-40">{styles.iconLabel}</span>;
+      return (
+        <span className="text-xs font-bold font-mono opacity-40">
+          {styles.iconLabel}
+        </span>
+      );
   }
 }
-

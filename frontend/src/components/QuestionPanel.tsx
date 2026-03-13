@@ -2,13 +2,7 @@ import React, { useState } from 'react';
 import { usePlanApi } from '../hooks/useApi';
 import { useToast } from '../hooks/useToast';
 import { Plan } from '../types';
-import {
-  HelpCircle,
-  Send,
-  MessageSquare,
-  Loader2,
-  Clock
-} from 'lucide-react';
+import { HelpCircle, Send, MessageSquare, Loader2, Clock } from 'lucide-react';
 import { cn } from '../utils';
 
 interface QuestionPanelProps {
@@ -44,8 +38,12 @@ export function QuestionPanel({ plan, onUpdated }: QuestionPanelProps) {
           <HelpCircle size={24} />
         </div>
         <div>
-          <h2 className="text-2xl font-bold tracking-tight text-white">Clarification Required</h2>
-          <p className="text-text-muted font-medium">The planner needs more information to weave an accurate strategy.</p>
+          <h2 className="text-2xl font-bold tracking-tight text-white">
+            Clarification Required
+          </h2>
+          <p className="text-text-muted font-medium">
+            The planner needs more information to weave an accurate strategy.
+          </p>
         </div>
       </div>
 
@@ -54,15 +52,34 @@ export function QuestionPanel({ plan, onUpdated }: QuestionPanelProps) {
           <div key={q.id} className="space-y-4">
             <div className="flex items-center gap-3">
               <div className="h-2 w-2 rounded-full bg-primary" />
-              <label className="text-sm font-bold text-text-body leading-tight">
-                {q.question}
-              </label>
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-text-body leading-tight">
+                  {q.question}
+                </label>
+                {q.rationale && (
+                  <p className="text-xs text-primary/90">{q.rationale}</p>
+                )}
+                {q.context_references.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {q.context_references.map((reference) => (
+                      <span
+                        key={reference}
+                        className="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-[10px] uppercase tracking-wider text-primary"
+                      >
+                        {reference}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             <textarea
               className="w-full bg-surface-alt border border-white/5 rounded-2xl p-4 text-text-body text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-300 min-h-[100px] placeholder:text-white/10"
               placeholder="Provide context or answer here..."
               value={answers[q.id] || ''}
-              onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })}
+              onChange={(e) =>
+                setAnswers({ ...answers, [q.id]: e.target.value })
+              }
             />
           </div>
         ))}
@@ -73,7 +90,8 @@ export function QuestionPanel({ plan, onUpdated }: QuestionPanelProps) {
               <div className="flex items-center gap-2">
                 <Clock size={16} />
                 <span>
-                  {error.message} Please wait <strong>{error.retryAfter} seconds</strong>.
+                  {error.message} Please wait{' '}
+                  <strong>{error.retryAfter} seconds</strong>.
                 </span>
               </div>
             ) : (
@@ -87,12 +105,14 @@ export function QuestionPanel({ plan, onUpdated }: QuestionPanelProps) {
 
         <button
           type="submit"
-          disabled={submitting || Object.keys(answers).length < openQuestions.length}
+          disabled={
+            submitting || Object.keys(answers).length < openQuestions.length
+          }
           className={cn(
-            "w-full h-14 rounded-2xl font-bold text-base flex items-center justify-center gap-2 transition-all duration-300",
-            (submitting || Object.keys(answers).length < openQuestions.length)
-              ? "bg-white/5 text-text-muted opacity-50 cursor-not-allowed"
-              : "bg-primary hover:bg-primary-hover text-white shadow-lg shadow-primary/20"
+            'w-full h-14 rounded-2xl font-bold text-base flex items-center justify-center gap-2 transition-all duration-300',
+            submitting || Object.keys(answers).length < openQuestions.length
+              ? 'bg-white/5 text-text-muted opacity-50 cursor-not-allowed'
+              : 'bg-primary hover:bg-primary-hover text-white shadow-lg shadow-primary/20'
           )}
         >
           {submitting ? (

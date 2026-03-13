@@ -24,8 +24,8 @@ export function DemoBanner() {
         <div className="flex items-center gap-2 text-amber-200 text-sm">
           <Info size={16} className="shrink-0" />
           <span>
-            <strong>Demo Mode</strong> — Rate limited to 10 plans/hour. 
-            Some features may be restricted.
+            <strong>Demo Mode</strong> — Rate limited to 10 plans/hour. Some
+            features may be restricted.
           </span>
         </div>
         <button

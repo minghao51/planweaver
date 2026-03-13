@@ -11,7 +11,7 @@ describe('ComparisonPanel', () => {
         step_count: 10,
         complexity_score: 'High',
         estimated_time_minutes: 60,
-        estimated_cost_usd: 5.00,
+        estimated_cost_usd: 5.0,
       },
       ratings: {
         'claude-3.5-sonnet': {
@@ -31,7 +31,7 @@ describe('ComparisonPanel', () => {
         step_count: 5,
         complexity_score: 'Low',
         estimated_time_minutes: 30,
-        estimated_cost_usd: 2.50,
+        estimated_cost_usd: 2.5,
       },
       ratings: {
         'claude-3.5-sonnet': {
@@ -124,7 +124,9 @@ describe('ComparisonPanel', () => {
     );
 
     const buttons = screen.getAllByRole('button');
-    const originalButton = buttons.find(b => b.textContent === 'Original Plan');
+    const originalButton = buttons.find(
+      (b) => b.textContent === 'Original Plan'
+    );
     fireEvent.click(originalButton!);
 
     expect(handleSelect).toHaveBeenCalledWith('plan-1');
@@ -139,7 +141,9 @@ describe('ComparisonPanel', () => {
       />
     );
 
-    const selectedButton = screen.getByRole('button', { name: /original plan/i });
+    const selectedButton = screen.getByRole('button', {
+      name: /original plan/i,
+    });
     expect(selectedButton).toHaveClass('bg-primary');
   });
 

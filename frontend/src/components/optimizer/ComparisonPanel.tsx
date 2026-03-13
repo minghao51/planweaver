@@ -20,7 +20,11 @@ interface ComparisonPanelProps {
   onSelectPlan: (planId: string) => void;
 }
 
-export function ComparisonPanel({ plans, selectedPlanId, onSelectPlan }: ComparisonPanelProps) {
+export function ComparisonPanel({
+  plans,
+  selectedPlanId,
+  onSelectPlan,
+}: ComparisonPanelProps) {
   if (plans.length === 0) {
     return (
       <div className="flex items-center justify-center h-64 rounded-2xl bg-surface border border-white/5">
@@ -32,8 +36,8 @@ export function ComparisonPanel({ plans, selectedPlanId, onSelectPlan }: Compari
   // Get all unique criteria across all ratings
   const allCriteria = Array.from(
     new Set(
-      plans.flatMap(plan =>
-        Object.values(plan.ratings || {}).flatMap(rating =>
+      plans.flatMap((plan) =>
+        Object.values(plan.ratings || {}).flatMap((rating) =>
           Object.keys(rating.ratings || {})
         )
       )
@@ -42,9 +46,7 @@ export function ComparisonPanel({ plans, selectedPlanId, onSelectPlan }: Compari
 
   // Get all unique models
   const allModels = Array.from(
-    new Set(
-      plans.flatMap(plan => Object.keys(plan.ratings || {}))
-    )
+    new Set(plans.flatMap((plan) => Object.keys(plan.ratings || {})))
   );
 
   return (
@@ -59,8 +61,10 @@ export function ComparisonPanel({ plans, selectedPlanId, onSelectPlan }: Compari
           <table className="w-full">
             <thead>
               <tr className="border-b border-white/5">
-                <th className="px-6 py-4 text-left text-sm font-semibold text-text-muted">Metric</th>
-                {plans.map(plan => (
+                <th className="px-6 py-4 text-left text-sm font-semibold text-text-muted">
+                  Metric
+                </th>
+                {plans.map((plan) => (
                   <th
                     key={plan.id}
                     className={cn(
@@ -80,7 +84,7 @@ export function ComparisonPanel({ plans, selectedPlanId, onSelectPlan }: Compari
                   <Layers size={16} />
                   Steps
                 </td>
-                {plans.map(plan => (
+                {plans.map((plan) => (
                   <td key={plan.id} className="px-6 py-4 text-center">
                     <span className="text-lg font-bold text-white">
                       {plan.metadata?.step_count || '-'}
@@ -95,7 +99,7 @@ export function ComparisonPanel({ plans, selectedPlanId, onSelectPlan }: Compari
                   <Clock size={16} />
                   Est. Time
                 </td>
-                {plans.map(plan => (
+                {plans.map((plan) => (
                   <td key={plan.id} className="px-6 py-4 text-center">
                     <span className="text-lg font-bold text-white">
                       {plan.metadata?.estimated_time_minutes
@@ -112,7 +116,7 @@ export function ComparisonPanel({ plans, selectedPlanId, onSelectPlan }: Compari
                   <DollarSign size={16} />
                   Est. Cost
                 </td>
-                {plans.map(plan => (
+                {plans.map((plan) => (
                   <td key={plan.id} className="px-6 py-4 text-center">
                     <span className="text-lg font-bold text-white">
                       {plan.metadata?.estimated_cost_usd !== undefined
@@ -129,7 +133,7 @@ export function ComparisonPanel({ plans, selectedPlanId, onSelectPlan }: Compari
                   <Star size={16} />
                   Overall Score
                 </td>
-                {plans.map(plan => (
+                {plans.map((plan) => (
                   <td key={plan.id} className="px-6 py-4 text-center">
                     <div
                       className={cn(
@@ -138,8 +142,8 @@ export function ComparisonPanel({ plans, selectedPlanId, onSelectPlan }: Compari
                           ? plan.averageScore >= 8
                             ? 'bg-success/20 text-success'
                             : plan.averageScore >= 6
-                            ? 'bg-warning/20 text-warning'
-                            : 'bg-danger/20 text-danger'
+                              ? 'bg-warning/20 text-warning'
+                              : 'bg-danger/20 text-danger'
                           : 'bg-white/5 text-text-muted'
                       )}
                     >
@@ -168,7 +172,7 @@ export function ComparisonPanel({ plans, selectedPlanId, onSelectPlan }: Compari
           </div>
 
           <div className="p-6 space-y-6">
-            {allModels.map(modelName => {
+            {allModels.map((modelName) => {
               const prettyName = modelName.split('-')[0];
               return (
                 <div key={modelName} className="space-y-3">
@@ -176,13 +180,15 @@ export function ComparisonPanel({ plans, selectedPlanId, onSelectPlan }: Compari
                     {prettyName}
                   </h4>
                   <div className="space-y-2">
-                    {allCriteria.map(criterion => {
-                      const scores = plans.map(plan => {
+                    {allCriteria.map((criterion) => {
+                      const scores = plans.map((plan) => {
                         const rating = plan.ratings?.[modelName];
                         return rating?.ratings?.[criterion];
                       });
 
-                      const maxScore = Math.max(...scores.filter(s => s !== undefined));
+                      const maxScore = Math.max(
+                        ...scores.filter((s) => s !== undefined)
+                      );
 
                       return (
                         <div key={criterion} className="space-y-2">
@@ -205,7 +211,9 @@ export function ComparisonPanel({ plans, selectedPlanId, onSelectPlan }: Compari
                                     isSelected
                                       ? 'bg-primary text-white'
                                       : 'bg-white/5 text-text-muted',
-                                    score === maxScore && !isSelected && 'ring-1 ring-success/50'
+                                    score === maxScore &&
+                                      !isSelected &&
+                                      'ring-1 ring-success/50'
                                   )}
                                 >
                                   {score.toFixed(1)}
@@ -227,7 +235,7 @@ export function ComparisonPanel({ plans, selectedPlanId, onSelectPlan }: Compari
       {/* Selection Actions */}
       <div className="flex justify-center">
         <div className="inline-flex rounded-xl bg-surface border border-white/5 p-1 gap-1">
-          {plans.map(plan => (
+          {plans.map((plan) => (
             <button
               key={plan.id}
               onClick={() => onSelectPlan(plan.id)}

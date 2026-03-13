@@ -10,7 +10,7 @@ import {
   Loader2,
   ChevronRight,
   Scale,
-  Clock
+  Clock,
 } from 'lucide-react';
 import { cn } from '../utils';
 import { ProposalComparisonView } from './ProposalComparisonView';
@@ -37,13 +37,20 @@ export function ProposalPanel({ plan, onSelected }: ProposalPanelProps) {
   const selecting = isLoading('selectProposal');
 
   // Convert proposals to ProposalWithAnalysis format
-  const proposalsWithAnalysis: ProposalWithAnalysis[] = (plan.strawman_proposals || []).map(p => ({
+  const proposalsWithAnalysis: ProposalWithAnalysis[] = (
+    plan.strawman_proposals || []
+  ).map((p) => ({
     proposal_id: p.id,
     title: p.title,
     description: p.description,
     pros: p.pros,
     cons: p.cons,
     selected: p.selected,
+    why_suggested: p.why_suggested,
+    context_references: p.context_references,
+    confidence: p.confidence,
+    planning_style: p.planning_style,
+    parent_candidate_id: p.parent_candidate_id,
     estimated_step_count: 0, // These would come from the backend if available
     complexity_score: 'Medium' as const,
     estimated_time_minutes: 0,
@@ -59,8 +66,12 @@ export function ProposalPanel({ plan, onSelected }: ProposalPanelProps) {
             <Lightbulb size={24} />
           </div>
           <div>
-            <h2 className="text-2xl font-bold tracking-tight text-white">Strawman Proposals</h2>
-            <p className="text-text-muted font-medium">Select an architectural approach to proceed with execution.</p>
+            <h2 className="text-2xl font-bold tracking-tight text-white">
+              Strawman Proposals
+            </h2>
+            <p className="text-text-muted font-medium">
+              Select an architectural approach to proceed with execution.
+            </p>
           </div>
         </div>
         {(plan.strawman_proposals?.length ?? 0) >= 2 && (
@@ -79,10 +90,10 @@ export function ProposalPanel({ plan, onSelected }: ProposalPanelProps) {
           <div
             key={proposal.id}
             className={cn(
-              "flex flex-col p-8 rounded-3xl bg-surface border transition-all duration-500 group relative overflow-hidden",
+              'flex flex-col p-8 rounded-3xl bg-surface border transition-all duration-500 group relative overflow-hidden',
               proposal.selected
-                ? "border-primary shadow-2xl shadow-primary/10 ring-1 ring-primary/20"
-                : "border-white/5 hover:border-white/20 hover:bg-surface-alt shadow-xl"
+                ? 'border-primary shadow-2xl shadow-primary/10 ring-1 ring-primary/20'
+                : 'border-white/5 hover:border-white/20 hover:bg-surface-alt shadow-xl'
             )}
           >
             {proposal.selected && (
@@ -99,6 +110,23 @@ export function ProposalPanel({ plan, onSelected }: ProposalPanelProps) {
                 <p className="mt-3 text-text-body leading-relaxed text-sm opacity-80">
                   {proposal.description}
                 </p>
+                {proposal.why_suggested && (
+                  <p className="mt-3 text-xs text-primary/90">
+                    {proposal.why_suggested}
+                  </p>
+                )}
+                {proposal.context_references.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {proposal.context_references.map((reference) => (
+                      <span
+                        key={reference}
+                        className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[10px] uppercase tracking-wider text-primary"
+                      >
+                        {reference}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 gap-6">
@@ -109,7 +137,10 @@ export function ProposalPanel({ plan, onSelected }: ProposalPanelProps) {
                   </h4>
                   <ul className="space-y-2">
                     {proposal.pros.map((pro, i) => (
-                      <li key={i} className="text-xs text-text-body flex items-start gap-2">
+                      <li
+                        key={i}
+                        className="text-xs text-text-body flex items-start gap-2"
+                      >
                         <div className="h-1 w-1 rounded-full bg-success mt-1.5 shrink-0" />
                         {pro}
                       </li>
@@ -124,7 +155,10 @@ export function ProposalPanel({ plan, onSelected }: ProposalPanelProps) {
                   </h4>
                   <ul className="space-y-2">
                     {proposal.cons.map((con, i) => (
-                      <li key={i} className="text-xs text-text-body flex items-start gap-2">
+                      <li
+                        key={i}
+                        className="text-xs text-text-body flex items-start gap-2"
+                      >
                         <div className="h-1 w-1 rounded-full bg-danger mt-1.5 shrink-0" />
                         {con}
                       </li>
@@ -138,10 +172,10 @@ export function ProposalPanel({ plan, onSelected }: ProposalPanelProps) {
               onClick={() => handleSelect(proposal.id)}
               disabled={selecting || proposal.selected}
               className={cn(
-                "mt-8 w-full h-12 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all duration-300",
+                'mt-8 w-full h-12 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all duration-300',
                 proposal.selected
-                  ? "bg-primary/10 text-primary border border-primary/20 cursor-default"
-                  : "bg-primary hover:bg-primary-hover text-white shadow-lg shadow-primary/10 hover:scale-[1.02] active:scale-100"
+                  ? 'bg-primary/10 text-primary border border-primary/20 cursor-default'
+                  : 'bg-primary hover:bg-primary-hover text-white shadow-lg shadow-primary/10 hover:scale-[1.02] active:scale-100'
               )}
             >
               {selecting ? (
@@ -167,7 +201,8 @@ export function ProposalPanel({ plan, onSelected }: ProposalPanelProps) {
             <div className="flex items-center gap-2">
               <Clock size={16} />
               <span>
-                {error.message} Please wait <strong>{error.retryAfter} seconds</strong>.
+                {error.message} Please wait{' '}
+                <strong>{error.retryAfter} seconds</strong>.
               </span>
             </div>
           ) : (

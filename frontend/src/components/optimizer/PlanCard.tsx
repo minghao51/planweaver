@@ -46,7 +46,8 @@ export function PlanCard({
     return TrendingDown;
   };
 
-  const ScoreIcon = averageScore !== undefined ? getScoreIcon(averageScore) : Minus;
+  const ScoreIcon =
+    averageScore !== undefined ? getScoreIcon(averageScore) : Minus;
 
   return (
     <div
@@ -91,15 +92,21 @@ export function PlanCard({
         {metadata && (
           <div className="grid grid-cols-3 gap-3 py-3 px-4 rounded-xl bg-white/5">
             <div className="text-center">
-              <div className="text-2xl font-bold text-white">{metadata.step_count}</div>
+              <div className="text-2xl font-bold text-white">
+                {metadata.step_count}
+              </div>
               <div className="text-xs text-text-muted mt-1">Steps</div>
             </div>
             <div className="text-center border-x border-white/10">
-              <div className="text-2xl font-bold text-white">{metadata.complexity_score}</div>
+              <div className="text-2xl font-bold text-white">
+                {metadata.complexity_score}
+              </div>
               <div className="text-xs text-text-muted mt-1">Complexity</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-white">${metadata.estimated_cost_usd.toFixed(2)}</div>
+              <div className="text-2xl font-bold text-white">
+                ${metadata.estimated_cost_usd.toFixed(2)}
+              </div>
               <div className="text-xs text-text-muted mt-1">Est. Cost</div>
             </div>
           </div>
@@ -109,35 +116,58 @@ export function PlanCard({
         {ratings && Object.keys(ratings).length > 0 && (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-text-muted">AI Ratings</span>
+              <span className="text-sm font-semibold text-text-muted">
+                AI Ratings
+              </span>
               {averageScore !== undefined && (
-                <div className={cn('flex items-center gap-2', getScoreColor(averageScore))}>
+                <div
+                  className={cn(
+                    'flex items-center gap-2',
+                    getScoreColor(averageScore)
+                  )}
+                >
                   <ScoreIcon size={16} />
-                  <span className="text-lg font-bold">{averageScore.toFixed(1)}</span>
+                  <span className="text-lg font-bold">
+                    {averageScore.toFixed(1)}
+                  </span>
                   <span className="text-xs text-text-muted">/ 10</span>
                 </div>
               )}
             </div>
 
             <div className="space-y-2">
-              {Object.entries(ratings).slice(0, 3).map(([modelName, rating]) => (
-                <div key={modelName} className="flex items-center justify-between text-xs">
-                  <span className="text-text-muted">{modelName.split('-')[0]}</span>
-                  <div className="flex items-center gap-2">
-                    <div className="w-20 h-2 rounded-full bg-white/10 overflow-hidden">
-                      <div
-                        className={cn(
-                          'h-full transition-all duration-300',
-                          rating.overall_score >= 8 ? 'bg-success' :
-                          rating.overall_score >= 6 ? 'bg-warning' : 'bg-danger'
-                        )}
-                        style={{ width: `${(rating.overall_score / 10) * 100}%` }}
-                      />
+              {Object.entries(ratings)
+                .slice(0, 3)
+                .map(([modelName, rating]) => (
+                  <div
+                    key={modelName}
+                    className="flex items-center justify-between text-xs"
+                  >
+                    <span className="text-text-muted">
+                      {modelName.split('-')[0]}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-20 h-2 rounded-full bg-white/10 overflow-hidden">
+                        <div
+                          className={cn(
+                            'h-full transition-all duration-300',
+                            rating.overall_score >= 8
+                              ? 'bg-success'
+                              : rating.overall_score >= 6
+                                ? 'bg-warning'
+                                : 'bg-danger'
+                          )}
+                          style={{
+                            width: `${(rating.overall_score / 10) * 100}%`,
+                          }}
+                        />
+                      </div>
+                      <span className="font-bold w-8 text-right">
+                        {rating.overall_score.toFixed(1)}
+                      </span>
                     </div>
-                    <span className="font-bold w-8 text-right">{rating.overall_score.toFixed(1)}</span>
                   </div>
-                </div>
-              ))}
+                ))}
             </div>
           </div>
         )}

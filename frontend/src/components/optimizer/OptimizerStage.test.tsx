@@ -2,12 +2,17 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { OptimizerStage } from './OptimizerStage';
 import * as hooks from '../../hooks/useOptimizer';
+import * as apiHooks from '../../hooks/useApi';
 import * as toastHooks from '../../hooks/useToast';
 
 // Mock the hooks
 vi.mock('../../hooks/useOptimizer', () => ({
   useOptimizer: vi.fn(),
   useOptimizerStage: vi.fn(),
+}));
+
+vi.mock('../../hooks/useApi', () => ({
+  usePlanApi: vi.fn(),
 }));
 
 vi.mock('../../hooks/useToast', () => ({
@@ -20,15 +25,43 @@ describe('OptimizerStage', () => {
   const mockSubmitManualPlan = vi.fn();
   const mockEvaluatePlans = vi.fn();
   const mockComparePlans = vi.fn();
+  const mockListCandidates = vi.fn();
   const mockShowSuccess = vi.fn();
   const mockShowError = vi.fn();
   const mockShowInfo = vi.fn();
 
+  const baselineCandidates = {
+    session_id: 'session-1',
+    selected_candidate_id: 'candidate-base',
+    approved_candidate_id: null,
+    candidates: [
+      {
+        candidate_id: 'candidate-base',
+        session_id: 'session-1',
+        title: 'Test Proposal',
+        summary: 'A test proposal',
+        source_type: 'llm_generated',
+        source_model: 'selected-proposal',
+        planning_style: 'baseline',
+        proposal_id: 'proposal-1',
+        status: 'selected',
+        normalized_plan_id: 'normalized-base',
+        normalized_plan: {
+          id: 'normalized-base',
+          title: 'Test Proposal',
+          summary: 'A test proposal',
+        },
+        execution_graph: [],
+        context_references: [],
+        metadata: {},
+      },
+    ],
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
-    mockOptimizePlan.mockImplementation(
-      () => new Promise(() => undefined)
-    );
+    mockOptimizePlan.mockImplementation(() => new Promise(() => undefined));
+    mockListCandidates.mockResolvedValue(baselineCandidates);
     mockSubmitManualPlan.mockResolvedValue({
       normalized_plan: {
         id: 'manual-1',
@@ -89,6 +122,10 @@ describe('OptimizerStage', () => {
       setRatings: vi.fn(),
     } as any);
 
+    vi.spyOn(apiHooks, 'usePlanApi').mockReturnValue({
+      listCandidates: mockListCandidates,
+    } as any);
+
     // Mock useToast
     vi.spyOn(toastHooks, 'useToast').mockReturnValue({
       success: mockShowSuccess,
@@ -110,7 +147,9 @@ describe('OptimizerStage', () => {
     );
 
     expect(screen.getByText('Planning Workbench')).toBeInTheDocument();
-    expect(screen.getByText(/manual baselines, rubric evaluation/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/manual baselines, rubric evaluation/i)
+    ).toBeInTheDocument();
   });
 
   it('should call optimizePlan on mount', async () => {
@@ -132,7 +171,8 @@ describe('OptimizerStage', () => {
 
     await waitFor(() => {
       expect(mockOptimizePlan).toHaveBeenCalledWith(
-        'proposal-1',
+        'session-1',
+        'candidate-base',
         ['simplified', 'enhanced', 'cost-optimized']
       );
     });
@@ -160,7 +200,9 @@ describe('OptimizerStage', () => {
       />
     );
 
-    expect(screen.getByText(/Generating Optimized Variants/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Generating Optimized Variants/i)
+    ).toBeInTheDocument();
   });
 
   it('should render workbench tabs', () => {
@@ -175,10 +217,18 @@ describe('OptimizerStage', () => {
       />
     );
 
-    expect(screen.getByRole('button', { name: /variants/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /manual plan/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /evaluate/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /compare/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /variants/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /manual plan/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /evaluate/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /compare/i })
+    ).toBeInTheDocument();
   });
 
   it('should call onBack when back button clicked', () => {
@@ -210,7 +260,7 @@ describe('OptimizerStage', () => {
       selectedProposalId: 'proposal-1',
       variants: [],
       ratings: {},
-      selectedPlanId: null,  // No plan selected
+      selectedPlanId: null, // No plan selected
       status: 'completed',
       setSelectedPlanId: vi.fn(),
       setStatus: vi.fn(),
@@ -229,7 +279,9 @@ describe('OptimizerStage', () => {
       />
     );
 
-    expect(screen.queryByRole('button', { name: /continue/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /continue/i })
+    ).not.toBeInTheDocument();
     expect(mockOnComplete).not.toHaveBeenCalled();
   });
 
@@ -243,7 +295,7 @@ describe('OptimizerStage', () => {
       selectedProposalId: 'proposal-1',
       variants: [],
       ratings: {},
-      selectedPlanId: 'plan-1',  // User has selected a plan
+      selectedPlanId: 'plan-1', // User has selected a plan
       status: 'completed',
       setSelectedPlanId: mockSetSelectedPlanId,
       setStatus: vi.fn(),
@@ -263,11 +315,53 @@ describe('OptimizerStage', () => {
     );
 
     // Verify stars are rendered
-    const stars = screen.getAllByRole('button').filter(b => b.querySelector('svg'));
+    const stars = screen
+      .getAllByRole('button')
+      .filter((b) => b.querySelector('svg'));
     expect(stars.length).toBeGreaterThan(0);
   });
 
   it('should add a manual plan and show normalization warnings', async () => {
+    mockListCandidates
+      .mockResolvedValueOnce(baselineCandidates)
+      .mockResolvedValueOnce({
+        ...baselineCandidates,
+        selected_candidate_id: 'manual-1',
+        candidates: [
+          ...baselineCandidates.candidates,
+          {
+            candidate_id: 'manual-1',
+            session_id: 'session-1',
+            title: 'Operator checklist baseline',
+            summary: 'Roll out the checklist in one team first.',
+            source_type: 'manual',
+            source_model: 'human',
+            planning_style: 'manual',
+            status: 'selected',
+            normalized_plan_id: 'manual-1',
+            normalized_plan: {
+              id: 'manual-1',
+              title: 'Operator checklist baseline',
+              summary: 'Roll out the checklist in one team first.',
+            },
+            execution_graph: [
+              {
+                step_id: 1,
+                task: 'Audit the current checklist',
+                prompt_template_id: 'default',
+                assigned_model: 'human',
+                dependencies: [],
+                status: 'PENDING',
+                output: null,
+                error: null,
+              },
+            ],
+            context_references: [],
+            metadata: {},
+          },
+        ],
+      });
+
     mockSubmitManualPlan.mockResolvedValue({
       normalized_plan: {
         id: 'manual-1',
@@ -294,7 +388,9 @@ describe('OptimizerStage', () => {
           },
         ],
         metadata: {},
-        normalization_warnings: ['Inferred rollout order from free-form steps.'],
+        normalization_warnings: [
+          'Inferred rollout order from free-form steps.',
+        ],
       },
       evaluations: {},
       ranking: [],
@@ -334,7 +430,11 @@ describe('OptimizerStage', () => {
       });
     });
 
-    expect(mockShowSuccess).toHaveBeenCalledWith('Manual plan added to the candidate pool.');
-    expect(screen.getAllByRole('button', { name: /evaluate/i }).length).toBeGreaterThan(0);
+    expect(mockShowSuccess).toHaveBeenCalledWith(
+      'Manual plan added to the candidate pool.'
+    );
+    expect(
+      screen.getAllByRole('button', { name: /evaluate/i }).length
+    ).toBeGreaterThan(0);
   });
 });

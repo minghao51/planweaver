@@ -9,7 +9,7 @@ import {
   Search,
   FileText,
   Cpu,
-  Clock
+  Clock,
 } from 'lucide-react';
 import { cn } from '../utils';
 import type { Model } from '../types';
@@ -23,9 +23,12 @@ export function NewPlanForm({ onPlanCreated }: NewPlanFormProps) {
   const [scenario, setScenario] = useState('');
   const [scenarios, setScenarios] = useState<string[]>([]);
   const [models, setModels] = useState<Model[]>([]);
-  const [selectedPlannerModel, setSelectedPlannerModel] = useState<string>('auto');
-  const [selectedExecutorModel, setSelectedExecutorModel] = useState<string>('auto');
-  const { createSession, listScenarios, listModels, isLoading, error } = usePlanApi();
+  const [selectedPlannerModel, setSelectedPlannerModel] =
+    useState<string>('auto');
+  const [selectedExecutorModel, setSelectedExecutorModel] =
+    useState<string>('auto');
+  const { createSession, listScenarios, listModels, isLoading, error } =
+    usePlanApi();
   const { error: showError, success: showSuccess } = useToast();
 
   useEffect(() => {
@@ -82,11 +85,15 @@ export function NewPlanForm({ onPlanCreated }: NewPlanFormProps) {
           Start a new <span className="text-primary">Plan</span>
         </h1>
         <p className="text-text-muted text-lg max-w-2xl mx-auto">
-          Describe your objective, and PlanWeaver's dual-LLM engine will weave an execution strategy.
+          Describe your objective, and PlanWeaver's dual-LLM engine will weave
+          an execution strategy.
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-8 p-6 sm:p-8 rounded-[28px] bg-surface border border-border/40 shadow-2xl glassmorphism">
+      <form
+        onSubmit={handleSubmit}
+        className="space-y-8 p-6 sm:p-8 rounded-[28px] bg-surface border border-border/40 shadow-2xl glassmorphism"
+      >
         <div className="space-y-4">
           <label className="text-xs font-bold uppercase tracking-widest text-text-muted flex items-center gap-2">
             <Sparkles size={14} className="text-primary" />
@@ -110,14 +117,16 @@ export function NewPlanForm({ onPlanCreated }: NewPlanFormProps) {
               type="button"
               onClick={() => setScenario('')}
               className={cn(
-                "p-4 rounded-xl border text-left transition-all duration-200",
+                'p-4 rounded-xl border text-left transition-all duration-200',
                 scenario === ''
-                  ? "bg-primary/15 border-primary/70 text-primary"
-                  : "bg-surface-alt/80 border-border/45 text-text-muted hover:bg-white/5"
+                  ? 'bg-primary/15 border-primary/70 text-primary'
+                  : 'bg-surface-alt/80 border-border/45 text-text-muted hover:bg-white/5'
               )}
             >
               <div className="font-bold text-sm">Auto-detect</div>
-              <div className="text-[10px] opacity-60">Let the planner choose the best scenario</div>
+              <div className="text-[10px] opacity-60">
+                Let the planner choose the best scenario
+              </div>
             </button>
             {scenarios.map((s) => (
               <button
@@ -125,14 +134,18 @@ export function NewPlanForm({ onPlanCreated }: NewPlanFormProps) {
                 type="button"
                 onClick={() => setScenario(s)}
                 className={cn(
-                  "p-4 rounded-xl border text-left transition-all duration-200",
+                  'p-4 rounded-xl border text-left transition-all duration-200',
                   scenario === s
-                    ? "bg-primary/15 border-primary/70 text-primary"
-                    : "bg-surface-alt/80 border-border/45 text-text-muted hover:bg-white/5"
+                    ? 'bg-primary/15 border-primary/70 text-primary'
+                    : 'bg-surface-alt/80 border-border/45 text-text-muted hover:bg-white/5'
                 )}
               >
-                <div className="font-bold text-sm uppercase tracking-tighter">{s.replace('_', ' ')}</div>
-                <div className="text-[10px] opacity-60">Specific workflow for {s}</div>
+                <div className="font-bold text-sm uppercase tracking-tighter">
+                  {s.replace('_', ' ')}
+                </div>
+                <div className="text-[10px] opacity-60">
+                  Specific workflow for {s}
+                </div>
               </button>
             ))}
           </div>
@@ -147,74 +160,92 @@ export function NewPlanForm({ onPlanCreated }: NewPlanFormProps) {
 
             <div className="space-y-4">
               <div className="space-y-2">
-                <span className="text-sm font-medium text-text-body">Planner Model</span>
+                <span className="text-sm font-medium text-text-body">
+                  Planner Model
+                </span>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <button
                     type="button"
                     onClick={() => setSelectedPlannerModel('auto')}
                     className={cn(
-                      "p-3 rounded-xl border text-left transition-all duration-200 text-sm",
+                      'p-3 rounded-xl border text-left transition-all duration-200 text-sm',
                       selectedPlannerModel === 'auto'
-                        ? "bg-primary/15 border-primary/70 text-primary"
-                        : "bg-surface-alt/80 border-border/45 text-text-muted hover:bg-white/5"
+                        ? 'bg-primary/15 border-primary/70 text-primary'
+                        : 'bg-surface-alt/80 border-border/45 text-text-muted hover:bg-white/5'
                     )}
                   >
                     <div className="font-bold">Auto (Default)</div>
-                    <div className="text-[10px] opacity-60">System default planner</div>
+                    <div className="text-[10px] opacity-60">
+                      System default planner
+                    </div>
                   </button>
-                  {models.filter(m => m.type === 'planner' || m.type === 'both').slice(0, 8).map(model => (
-                    <button
-                      key={model.id}
-                      type="button"
-                      onClick={() => setSelectedPlannerModel(model.id)}
-                      className={cn(
-                        "p-3 rounded-xl border text-left transition-all duration-200 text-sm",
-                        selectedPlannerModel === model.id
-                          ? "bg-primary/15 border-primary/70 text-primary"
-                          : "bg-surface-alt/80 border-border/45 text-text-muted hover:bg-white/5"
-                      )}
-                      title={model.name}
-                    >
-                      <div className="font-bold truncate">{model.name}</div>
-                      <div className="text-[10px] opacity-60 truncate">{model.provider}</div>
-                    </button>
-                  ))}
+                  {models
+                    .filter((m) => m.type === 'planner' || m.type === 'both')
+                    .slice(0, 8)
+                    .map((model) => (
+                      <button
+                        key={model.id}
+                        type="button"
+                        onClick={() => setSelectedPlannerModel(model.id)}
+                        className={cn(
+                          'p-3 rounded-xl border text-left transition-all duration-200 text-sm',
+                          selectedPlannerModel === model.id
+                            ? 'bg-primary/15 border-primary/70 text-primary'
+                            : 'bg-surface-alt/80 border-border/45 text-text-muted hover:bg-white/5'
+                        )}
+                        title={model.name}
+                      >
+                        <div className="font-bold truncate">{model.name}</div>
+                        <div className="text-[10px] opacity-60 truncate">
+                          {model.provider}
+                        </div>
+                      </button>
+                    ))}
                 </div>
               </div>
 
               <div className="space-y-2">
-                <span className="text-sm font-medium text-text-body">Executor Model</span>
+                <span className="text-sm font-medium text-text-body">
+                  Executor Model
+                </span>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <button
                     type="button"
                     onClick={() => setSelectedExecutorModel('auto')}
                     className={cn(
-                      "p-3 rounded-xl border text-left transition-all duration-200 text-sm",
+                      'p-3 rounded-xl border text-left transition-all duration-200 text-sm',
                       selectedExecutorModel === 'auto'
-                        ? "bg-primary/15 border-primary/70 text-primary"
-                        : "bg-surface-alt/80 border-border/45 text-text-muted hover:bg-white/5"
+                        ? 'bg-primary/15 border-primary/70 text-primary'
+                        : 'bg-surface-alt/80 border-border/45 text-text-muted hover:bg-white/5'
                     )}
                   >
                     <div className="font-bold">Auto (Default)</div>
-                    <div className="text-[10px] opacity-60">System default executor</div>
+                    <div className="text-[10px] opacity-60">
+                      System default executor
+                    </div>
                   </button>
-                  {models.filter(m => m.type === 'executor' || m.type === 'both').slice(0, 8).map(model => (
-                    <button
-                      key={model.id}
-                      type="button"
-                      onClick={() => setSelectedExecutorModel(model.id)}
-                      className={cn(
-                        "p-3 rounded-xl border text-left transition-all duration-200 text-sm",
-                        selectedExecutorModel === model.id
-                          ? "bg-primary/15 border-primary/70 text-primary"
-                          : "bg-surface-alt/80 border-border/45 text-text-muted hover:bg-white/5"
-                      )}
-                      title={model.name}
-                    >
-                      <div className="font-bold truncate">{model.name}</div>
-                      <div className="text-[10px] opacity-60 truncate">{model.provider}</div>
-                    </button>
-                  ))}
+                  {models
+                    .filter((m) => m.type === 'executor' || m.type === 'both')
+                    .slice(0, 8)
+                    .map((model) => (
+                      <button
+                        key={model.id}
+                        type="button"
+                        onClick={() => setSelectedExecutorModel(model.id)}
+                        className={cn(
+                          'p-3 rounded-xl border text-left transition-all duration-200 text-sm',
+                          selectedExecutorModel === model.id
+                            ? 'bg-primary/15 border-primary/70 text-primary'
+                            : 'bg-surface-alt/80 border-border/45 text-text-muted hover:bg-white/5'
+                        )}
+                        title={model.name}
+                      >
+                        <div className="font-bold truncate">{model.name}</div>
+                        <div className="text-[10px] opacity-60 truncate">
+                          {model.provider}
+                        </div>
+                      </button>
+                    ))}
                 </div>
               </div>
             </div>
@@ -227,7 +258,9 @@ export function NewPlanForm({ onPlanCreated }: NewPlanFormProps) {
               <div className="flex items-center gap-2">
                 <Clock size={16} />
                 <span>
-                  {error.message} Please wait <strong>{error.retryAfter} seconds</strong> before trying again.
+                  {error.message} Please wait{' '}
+                  <strong>{error.retryAfter} seconds</strong> before trying
+                  again.
                 </span>
               </div>
             ) : (
@@ -243,10 +276,10 @@ export function NewPlanForm({ onPlanCreated }: NewPlanFormProps) {
           type="submit"
           disabled={submitDisabled}
           className={cn(
-            "w-full h-16 rounded-2xl font-bold text-lg flex items-center justify-center gap-2 transition-all duration-500",
+            'w-full h-16 rounded-2xl font-bold text-lg flex items-center justify-center gap-2 transition-all duration-500',
             submitDisabled
-              ? "bg-white/5 text-text-muted opacity-50 cursor-not-allowed"
-              : "bg-gradient-to-r from-primary to-cyan-300 hover:to-cyan-200 text-slate-950 shadow-lg shadow-primary/25 hover:scale-[1.01] active:scale-100"
+              ? 'bg-white/5 text-text-muted opacity-50 cursor-not-allowed'
+              : 'bg-gradient-to-r from-primary to-cyan-300 hover:to-cyan-200 text-slate-950 shadow-lg shadow-primary/25 hover:scale-[1.01] active:scale-100'
           )}
         >
           {submitting ? (

@@ -7,6 +7,7 @@ import { ProposalPanel } from './ProposalPanel';
 import { ExecutionPanel } from './ExecutionPanel';
 import { FlowCanvas } from './FlowCanvas';
 import { OptimizerStage } from './optimizer';
+import { CandidatePlanPanel } from './CandidatePlanPanel';
 import {
   Target,
   Lightbulb,
@@ -29,12 +30,13 @@ interface PlanViewProps {
 export function PlanView({ sessionId }: PlanViewProps) {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [showOptimizer, setShowOptimizer] = useState(false);
-  const [selectedProposalForOptimizer, setSelectedProposalForOptimizer] = useState<{
-    id: string;
-    title: string;
-    description: string;
-  } | null>(null);
-  const { getSession, selectProposal, loading, error } = usePlanApi();
+  const [selectedProposalForOptimizer, setSelectedProposalForOptimizer] =
+    useState<{
+      id: string;
+      title: string;
+      description: string;
+    } | null>(null);
+  const { getSession, approveCandidate, loading, error } = usePlanApi();
 
   const loadPlan = useCallback(async () => {
     try {
@@ -84,7 +86,9 @@ export function PlanView({ sessionId }: PlanViewProps) {
     return (
       <div className="flex flex-col items-center justify-center py-20 animate-in fade-in duration-500">
         <Loader2 className="w-10 h-10 text-primary animate-spin mb-4" />
-        <p className="text-text-muted font-medium">Initializing orchestrator...</p>
+        <p className="text-text-muted font-medium">
+          Initializing orchestrator...
+        </p>
       </div>
     );
   }
@@ -96,13 +100,16 @@ export function PlanView({ sessionId }: PlanViewProps) {
           <div className="flex items-center gap-3">
             <Clock size={20} />
             <p>
-              {error.message} Please wait <strong>{error.retryAfter} seconds</strong> before trying again.
+              {error.message} Please wait{' '}
+              <strong>{error.retryAfter} seconds</strong> before trying again.
             </p>
           </div>
         ) : (
           <div className="flex items-center gap-3">
             <AlertCircle size={20} />
-            <p>Error in session {sessionId}: {error.message}</p>
+            <p>
+              Error in session {sessionId}: {error.message}
+            </p>
           </div>
         )}
       </div>
@@ -123,31 +130,72 @@ export function PlanView({ sessionId }: PlanViewProps) {
               <Target className="text-primary" size={20} />
               Session Plan
             </h2>
-            <div className={cn(
-              "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border",
-              getStatusStyles(plan.status)
-            )}>
+            <div
+              className={cn(
+                'px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border',
+                getStatusStyles(plan.status)
+              )}
+            >
               {plan.status}
             </div>
           </div>
 
           <div className="space-y-4">
             <div>
-              <label className="text-xs font-bold text-text-muted uppercase tracking-wider block mb-2">Intent</label>
+              <label className="text-xs font-bold text-text-muted uppercase tracking-wider block mb-2">
+                Intent
+              </label>
               <p className="text-text-body leading-relaxed bg-white/5 p-4 rounded-xl border border-white/5 italic">
                 "{plan.user_intent}"
               </p>
             </div>
 
-            {plan.locked_constraints && Object.keys(plan.locked_constraints).length > 0 && (
+            {plan.locked_constraints &&
+              Object.keys(plan.locked_constraints).length > 0 && (
+                <div>
+                  <label className="text-xs font-bold text-text-muted uppercase tracking-wider block mb-2">
+                    Constraints
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(plan.locked_constraints).map(
+                      ([key, value]) => (
+                        <span
+                          key={key}
+                          className="px-3 py-1.5 rounded-lg bg-surface-alt border border-white/5 text-xs text-text-body flex items-center gap-2"
+                        >
+                          <Settings2 size={12} className="text-primary" />
+                          <span className="font-medium opacity-60">
+                            {key}:
+                          </span>{' '}
+                          {String(value)}
+                        </span>
+                      )
+                    )}
+                  </div>
+                </div>
+              )}
+
+            {plan.context_suggestions.length > 0 && (
               <div>
-                <label className="text-xs font-bold text-text-muted uppercase tracking-wider block mb-2">Constraints</label>
-                <div className="flex flex-wrap gap-2">
-                  {Object.entries(plan.locked_constraints).map(([key, value]) => (
-                    <span key={key} className="px-3 py-1.5 rounded-lg bg-surface-alt border border-white/5 text-xs text-text-body flex items-center gap-2">
-                      <Settings2 size={12} className="text-primary" />
-                      <span className="font-medium opacity-60">{key}:</span> {String(value)}
-                    </span>
+                <label className="text-xs font-bold text-text-muted uppercase tracking-wider block mb-2">
+                  Context Suggestions
+                </label>
+                <div className="space-y-2">
+                  {plan.context_suggestions.map((suggestion) => (
+                    <div
+                      key={suggestion.id}
+                      className="rounded-xl border border-primary/10 bg-primary/5 p-3"
+                    >
+                      <p className="text-sm font-bold text-white">
+                        {suggestion.title}
+                      </p>
+                      <p className="mt-1 text-xs text-text-muted">
+                        {suggestion.description}
+                      </p>
+                      <p className="mt-2 text-xs text-primary/90">
+                        {suggestion.reason}
+                      </p>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -164,7 +212,9 @@ export function PlanView({ sessionId }: PlanViewProps) {
           <div className="space-y-4">
             <div className="flex items-center justify-between text-xs font-bold uppercase tracking-tighter">
               <span>Overall Completion</span>
-              <span className="text-primary">{getCompletionPercentage(plan)}%</span>
+              <span className="text-primary">
+                {getCompletionPercentage(plan)}%
+              </span>
             </div>
             <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden border border-white/5">
               <div
@@ -179,15 +229,19 @@ export function PlanView({ sessionId }: PlanViewProps) {
       {/* Main Content: Steps and Visualizer */}
       <div className="lg:col-span-8 flex flex-col gap-6">
         <div className="flex items-center gap-4 mb-2">
-          <div className={cn(
-            "h-3 w-3 rounded-full",
-            stage === 'completed' ? "bg-success" : "bg-primary animate-pulse"
-          )} />
+          <div
+            className={cn(
+              'h-3 w-3 rounded-full',
+              stage === 'completed' ? 'bg-success' : 'bg-primary animate-pulse'
+            )}
+          />
           <h2 className="text-2xl font-bold tracking-tight">
             {stage.charAt(0).toUpperCase() + stage.slice(1)} Stage
           </h2>
           <ChevronRight size={20} className="text-white/20" />
-          <span className="text-text-muted font-medium">Session {sessionId}</span>
+          <span className="text-text-muted font-medium">
+            Session {sessionId}
+          </span>
         </div>
 
         {stage === 'questions' && plan.open_questions && (
@@ -199,7 +253,7 @@ export function PlanView({ sessionId }: PlanViewProps) {
             plan={plan}
             onSelected={() => {
               // Find selected proposal
-              const selected = plan.strawman_proposals?.find(p => p.selected);
+              const selected = plan.strawman_proposals?.find((p) => p.selected);
               if (selected) {
                 setSelectedProposalForOptimizer({
                   id: selected.id,
@@ -218,10 +272,11 @@ export function PlanView({ sessionId }: PlanViewProps) {
             sessionId={sessionId}
             selectedProposalId={selectedProposalForOptimizer.id}
             selectedProposalTitle={selectedProposalForOptimizer.title}
-            selectedProposalDescription={selectedProposalForOptimizer.description}
-            onComplete={async (optimizedPlanId) => {
-              // Move to execution by selecting the optimized plan
-              await selectProposal(sessionId, optimizedPlanId);
+            selectedProposalDescription={
+              selectedProposalForOptimizer.description
+            }
+            onComplete={async (candidateId) => {
+              await approveCandidate(sessionId, candidateId);
               setShowOptimizer(false);
               handleUpdate();
             }}
@@ -233,6 +288,7 @@ export function PlanView({ sessionId }: PlanViewProps) {
 
         {(stage === 'execution' || stage === 'completed') && (
           <div className="flex flex-col gap-6">
+            <CandidatePlanPanel plan={plan} onUpdated={handleUpdate} />
             <FlowCanvas steps={plan.execution_graph || []} />
             <ExecutionPanel plan={plan} onUpdated={handleUpdate} />
           </div>
@@ -248,7 +304,9 @@ export function PlanView({ sessionId }: PlanViewProps) {
               Solution Reached
             </h3>
             <div className="bg-black/30 p-6 rounded-xl border border-white/5 font-mono text-sm overflow-auto max-h-[500px]">
-              <pre className="text-text-body">{JSON.stringify(plan.final_output, null, 2)}</pre>
+              <pre className="text-text-body">
+                {JSON.stringify(plan.final_output, null, 2)}
+              </pre>
             </div>
           </div>
         )}
@@ -259,15 +317,24 @@ export function PlanView({ sessionId }: PlanViewProps) {
 
 function getCompletionPercentage(plan: Plan) {
   if (!plan.execution_graph || plan.execution_graph.length === 0) return 0;
-  const completed = plan.execution_graph.filter(s => s.status === 'COMPLETED').length;
+  const completed = plan.execution_graph.filter(
+    (s) => s.status === 'COMPLETED'
+  ).length;
   return Math.round((completed / plan.execution_graph.length) * 100);
 }
 
-type PlanStage = 'questions' | 'proposals' | 'execution' | 'completed' | 'optimizer';
+type PlanStage =
+  | 'questions'
+  | 'proposals'
+  | 'execution'
+  | 'completed'
+  | 'optimizer';
 
 function getPlanStage(plan: Plan): PlanStage {
   const unansweredQuestions = plan.open_questions?.some((q) => !q.answered);
-  const hasProposals = (plan.strawman_proposals?.length ?? 0) > 0 && !plan.strawman_proposals?.some(p => p.selected);
+  const hasProposals =
+    (plan.strawman_proposals?.length ?? 0) > 0 &&
+    !plan.strawman_proposals?.some((p) => p.selected);
   const hasExecutionGraph = (plan.execution_graph?.length ?? 0) > 0;
   const isTerminal = plan.status === 'COMPLETED' || plan.status === 'FAILED';
 

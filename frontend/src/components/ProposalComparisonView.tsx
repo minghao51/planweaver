@@ -54,8 +54,12 @@ export function ProposalComparisonView({
               <Scale size={24} />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-white tracking-tight">Comparative Analysis</h2>
-              <p className="text-xs text-text-muted font-medium uppercase tracking-widest">Multi-proposal Evaluation</p>
+              <h2 className="text-xl font-bold text-white tracking-tight">
+                Comparative Analysis
+              </h2>
+              <p className="text-xs text-text-muted font-medium uppercase tracking-widest">
+                Multi-proposal Evaluation
+              </p>
             </div>
           </div>
           <button
@@ -81,8 +85,13 @@ export function ProposalComparisonView({
                 <Loader2 className="text-primary animate-spin" size={32} />
               </div>
               <div className="text-center">
-                <p className="font-bold text-white uppercase tracking-tighter text-lg">Synthesizing Comparison</p>
-                <p className="text-text-muted text-sm italic">Evaluating performance, cost, and complexity across branches...</p>
+                <p className="font-bold text-white uppercase tracking-tighter text-lg">
+                  Synthesizing Comparison
+                </p>
+                <p className="text-text-muted text-sm italic">
+                  Evaluating performance, cost, and complexity across
+                  branches...
+                </p>
               </div>
             </div>
           ) : !comparison ? (

@@ -12,7 +12,7 @@ describe('PlanCard', () => {
       step_count: 5,
       complexity_score: 'Medium',
       estimated_time_minutes: 30,
-      estimated_cost_usd: 1.50,
+      estimated_cost_usd: 1.5,
     },
     selected: false,
     onSelect: vi.fn(),
@@ -47,13 +47,17 @@ describe('PlanCard', () => {
     expect(checkIcon).toBeInTheDocument();
 
     // Should not have select button when selected
-    expect(screen.queryByRole('button', { name: /select this plan/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /select this plan/i })
+    ).not.toBeInTheDocument();
   });
 
   it('should call onSelect when select button is clicked', () => {
     render(<PlanCard {...mockProps} />);
 
-    const selectButton = screen.getByRole('button', { name: /select this plan/i });
+    const selectButton = screen.getByRole('button', {
+      name: /select this plan/i,
+    });
     fireEvent.click(selectButton);
 
     expect(mockProps.onSelect).toHaveBeenCalledTimes(1);

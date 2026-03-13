@@ -7,7 +7,7 @@ import {
   AlertCircle,
   LayoutGrid,
   ChevronRight,
-  ArrowLeft
+  ArrowLeft,
 } from 'lucide-react';
 
 interface SideBySideComparisonProps {
@@ -28,7 +28,10 @@ export function SideBySideComparison({
           onClick={onCollapse}
           className="group flex items-center gap-2 px-6 py-2.5 rounded-full bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/20 text-sm font-bold text-text-muted hover:text-white transition-all duration-300"
         >
-          <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
+          <ArrowLeft
+            size={16}
+            className="group-hover:-translate-x-1 transition-transform"
+          />
           Summary Comparison
         </button>
       </div>
@@ -44,22 +47,33 @@ export function SideBySideComparison({
                 <div className="h-10 w-10 rounded-2xl bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
                   <Target size={20} />
                 </div>
-                <h3 className="text-xl font-bold text-white">Approach {proposal.proposal_id.slice(0, 4)}</h3>
+                <h3 className="text-xl font-bold text-white">
+                  Approach {proposal.proposal_id.slice(0, 4)}
+                </h3>
               </div>
             </div>
 
             <div className="grid grid-cols-3 gap-2 mb-8 p-4 rounded-3xl bg-black/40 border border-white/5">
               <div className="flex flex-col items-center">
                 <Zap size={14} className="text-warning mb-1.5" />
-                <span className="text-xs font-bold text-white">{comparison.time_comparison[proposal.proposal_id]}m</span>
+                <span className="text-xs font-bold text-white">
+                  {comparison.time_comparison[proposal.proposal_id]}m
+                </span>
               </div>
               <div className="flex flex-col items-center border-x border-white/10">
                 <DollarSign size={14} className="text-success mb-1.5" />
-                <span className="text-xs font-bold text-white">${comparison.cost_comparison[proposal.proposal_id].toFixed(2)}</span>
+                <span className="text-xs font-bold text-white">
+                  ${comparison.cost_comparison[proposal.proposal_id].toFixed(2)}
+                </span>
               </div>
               <div className="flex flex-col items-center">
                 <AlertCircle size={14} className="text-danger mb-1.5" />
-                <span className="text-xs font-bold text-white uppercase tracking-tighter">{comparison.complexity_comparison[proposal.proposal_id].slice(0, 3)}</span>
+                <span className="text-xs font-bold text-white uppercase tracking-tighter">
+                  {comparison.complexity_comparison[proposal.proposal_id].slice(
+                    0,
+                    3
+                  )}
+                </span>
               </div>
             </div>
 
@@ -67,18 +81,28 @@ export function SideBySideComparison({
               <div className="space-y-4">
                 <div className="flex items-center gap-2 px-2 text-[10px] font-bold text-text-muted uppercase tracking-widest">
                   <LayoutGrid size={12} className="text-primary" />
-                  Strategy Blueprint ({proposal.full_execution_graph.length} steps)
+                  Strategy Blueprint ({
+                    proposal.full_execution_graph.length
+                  }{' '}
+                  steps)
                 </div>
                 <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
                   {proposal.full_execution_graph.length > 0 ? (
                     proposal.full_execution_graph.map((step, i) => (
-                      <div key={i} className="group/item flex items-start gap-3 p-3 rounded-2xl bg-white/5 border border-white/5 text-[11px] font-medium text-text-body hover:bg-white/10 transition-colors">
-                        <span className="text-primary opacity-40 font-mono mt-0.5">{i + 1}</span>
+                      <div
+                        key={i}
+                        className="group/item flex items-start gap-3 p-3 rounded-2xl bg-white/5 border border-white/5 text-[11px] font-medium text-text-body hover:bg-white/10 transition-colors"
+                      >
+                        <span className="text-primary opacity-40 font-mono mt-0.5">
+                          {i + 1}
+                        </span>
                         {step.task}
                       </div>
                     ))
                   ) : (
-                    <p className="text-xs text-text-muted italic py-4 text-center opacity-40">Blueprint unavailable.</p>
+                    <p className="text-xs text-text-muted italic py-4 text-center opacity-40">
+                      Blueprint unavailable.
+                    </p>
                   )}
                 </div>
               </div>
@@ -91,7 +115,10 @@ export function SideBySideComparison({
                   </div>
                   <div className="space-y-2">
                     {proposal.all_risk_factors.map((risk, i) => (
-                      <div key={i} className="flex items-start gap-2.5 p-3 rounded-2xl bg-danger/5 border border-danger/10 text-[11px] font-medium text-text-body italic">
+                      <div
+                        key={i}
+                        className="flex items-start gap-2.5 p-3 rounded-2xl bg-danger/5 border border-danger/10 text-[11px] font-medium text-text-body italic"
+                      >
                         <div className="h-1 w-1 rounded-full bg-danger mt-1.5 shrink-0" />
                         {risk}
                       </div>
