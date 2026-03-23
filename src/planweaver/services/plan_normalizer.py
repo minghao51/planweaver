@@ -32,12 +32,8 @@ class PlanNormalizer:
             warnings.append("Missing explicit success criteria.")
 
         if not any(step.validation for step in steps):
-            warnings.append(
-                "No step-level validation found; added a default verification."
-            )
-            steps[-1].validation.append(
-                "Verify the outcome against the requested goal."
-            )
+            warnings.append("No step-level validation found; added a default verification.")
+            steps[-1].validation.append("Verify the outcome against the requested goal.")
 
         return NormalizedPlan(
             session_id=submission.session_id,
@@ -69,20 +65,11 @@ class PlanNormalizer:
     ) -> NormalizedPlan:
         warnings: List[str] = []
         title = plan_data.get("title") or "Untitled plan"
-        summary = (
-            plan_data.get("summary")
-            or plan_data.get("description")
-            or plan_data.get("approach")
-            or title
-        )
+        summary = plan_data.get("summary") or plan_data.get("description") or plan_data.get("approach") or title
 
-        steps = self._normalize_steps(
-            plan_data.get("steps") or plan_data.get("execution_graph")
-        )
+        steps = self._normalize_steps(plan_data.get("steps") or plan_data.get("execution_graph"))
         if not steps:
-            warnings.append(
-                "No executable steps were provided; added a placeholder step."
-            )
+            warnings.append("No executable steps were provided; added a placeholder step.")
             steps = [
                 NormalizedStep(
                     step_id="step-1",
@@ -96,20 +83,12 @@ class PlanNormalizer:
             warnings.append("Missing explicit success criteria.")
 
         if not any(step.validation for step in steps):
-            warnings.append(
-                "No step-level validation found; added a default verification."
-            )
-            steps[-1].validation.append(
-                "Verify the final output satisfies the user intent."
-            )
+            warnings.append("No step-level validation found; added a default verification.")
+            steps[-1].validation.append("Verify the final output satisfies the user intent.")
 
         estimated_cost = self._to_decimal(plan_data.get("estimated_cost_usd"))
 
-        plan_id = (
-            plan_data.get("id")
-            or plan_data.get("proposal_id")
-            or plan_data.get("plan_id")
-        )
+        plan_id = plan_data.get("id") or plan_data.get("proposal_id") or plan_data.get("plan_id")
 
         normalized = NormalizedPlan(
             session_id=session_id or plan_data.get("session_id"),
@@ -121,13 +100,9 @@ class PlanNormalizer:
             assumptions=self._listify(plan_data.get("assumptions")),
             constraints=self._constraints_to_list(plan_data.get("constraints")),
             success_criteria=success_criteria,
-            risks=self._listify(
-                plan_data.get("risks") or plan_data.get("risk_factors")
-            ),
+            risks=self._listify(plan_data.get("risks") or plan_data.get("risk_factors")),
             fallbacks=self._listify(plan_data.get("fallbacks")),
-            estimated_time_minutes=self._safe_int(
-                plan_data.get("estimated_time_minutes")
-            ),
+            estimated_time_minutes=self._safe_int(plan_data.get("estimated_time_minutes")),
             estimated_cost_usd=estimated_cost,
             steps=steps,
             metadata=dict(plan_data.get("metadata") or {}),
@@ -138,9 +113,7 @@ class PlanNormalizer:
         return normalized
 
     def _normalize_steps(self, raw_steps: Any) -> List[NormalizedStep]:
-        if not isinstance(raw_steps, Iterable) or isinstance(
-            raw_steps, (str, bytes, dict)
-        ):
+        if not isinstance(raw_steps, Iterable) or isinstance(raw_steps, (str, bytes, dict)):
             return []
 
         normalized_steps: List[NormalizedStep] = []
@@ -157,24 +130,17 @@ class PlanNormalizer:
                     step_id=str(step.get("step_id") or f"step-{index}"),
                     description=description,
                     dependencies=[str(dep) for dep in step.get("dependencies", [])],
-                    validation=self._listify(
-                        step.get("validation") or step.get("checks")
-                    ),
+                    validation=self._listify(step.get("validation") or step.get("checks")),
                     tools=self._listify(step.get("tools")),
                     owner_model=step.get("owner_model") or step.get("assigned_model"),
-                    estimated_time_minutes=self._safe_int(
-                        step.get("estimated_time_minutes")
-                    ),
+                    estimated_time_minutes=self._safe_int(step.get("estimated_time_minutes")),
                 )
             )
         return normalized_steps
 
     def _steps_from_text(self, plan_text: str) -> List[NormalizedStep]:
         lines = [line.strip(" -\t") for line in plan_text.splitlines() if line.strip()]
-        return [
-            NormalizedStep(step_id=f"step-{index}", description=line)
-            for index, line in enumerate(lines, start=1)
-        ]
+        return [NormalizedStep(step_id=f"step-{index}", description=line) for index, line in enumerate(lines, start=1)]
 
     def _listify(self, value: Any) -> List[str]:
         if value is None:

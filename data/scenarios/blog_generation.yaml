@@ -1,0 +1,55 @@
+name: "Blog Post Generation"
+description: "Generate blog post series based on keywords and topics"
+planner_prompt_template: |
+  You are a content strategist. Analyze the blog request:
+
+  User Request: {user_intent}
+
+  Identify:
+  1. Target audience
+  2. Key topics to cover
+  3. Optimal structure
+  4. SEO keywords to target
+executor_template: |
+  Task: {task}
+
+  Topics: {topics}
+  Keywords: {keywords}
+  Tone: {tone}
+
+  Write engaging content that:
+  1. Hooks the reader in the first paragraph
+  2. Uses subheadings for readability
+  3. Includes examples and actionable tips
+  4. Ends with a clear call-to-action
+input_schema:
+  fields:
+    - name: topic
+      type: string
+      description: Main topic for the blog post
+      required: true
+    - name: keywords
+      type: array
+      description: SEO keywords to include
+      required: false
+    - name: tone
+      type: string
+      description: Writing tone (professional, casual, technical)
+      required: false
+      default: "professional"
+    - name: target_audience
+      type: string
+      description: Target audience description
+      required: false
+output_schema:
+  type: object
+  fields:
+    - name: title
+      type: string
+      description: Blog post title
+    - name: content
+      type: string
+      description: Full blog post content
+    - name: meta_description
+      type: string
+      description: SEO meta description

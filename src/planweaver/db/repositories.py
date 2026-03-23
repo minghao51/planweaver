@@ -52,12 +52,7 @@ class PlanRepository:
                 )
 
             total = db_query.count()
-            rows = (
-                db_query.order_by(DBSession.updated_at.desc())
-                .offset(offset)
-                .limit(limit)
-                .all()
-            )
+            rows = db_query.order_by(DBSession.updated_at.desc()).offset(offset).limit(limit).all()
             return {
                 "sessions": [
                     {
@@ -65,12 +60,8 @@ class PlanRepository:
                         "status": row.status,
                         "user_intent": row.user_intent,
                         "scenario_name": row.scenario_name,
-                        "created_at": row.created_at.isoformat()
-                        if row.created_at
-                        else None,
-                        "updated_at": row.updated_at.isoformat()
-                        if row.updated_at
-                        else None,
+                        "created_at": row.created_at.isoformat() if row.created_at else None,
+                        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
                     }
                     for row in rows
                 ],
@@ -120,9 +111,7 @@ class PlanRepository:
 
         expires_at = None
         if self._settings.session_ttl_days > 0:
-            expires_at = datetime.now(timezone.utc) + timedelta(
-                days=self._settings.session_ttl_days
-            )
+            expires_at = datetime.now(timezone.utc) + timedelta(days=self._settings.session_ttl_days)
 
         return {
             "user_intent": plan.user_intent,
@@ -132,19 +121,11 @@ class PlanRepository:
             "open_questions": self._model_dump_list(plan.open_questions),
             "strawman_proposals": self._model_dump_list(plan.strawman_proposals),
             "execution_graph": self._model_dump_list(plan.execution_graph),
-            "external_contexts": self._model_dump_list(
-                plan.external_contexts, mode="json"
-            ),
+            "external_contexts": self._model_dump_list(plan.external_contexts, mode="json"),
             "candidate_plans": self._model_dump_list(plan.candidate_plans, mode="json"),
-            "candidate_revisions": self._model_dump_list(
-                plan.candidate_revisions, mode="json"
-            ),
-            "planning_outcomes": self._model_dump_list(
-                plan.planning_outcomes, mode="json"
-            ),
-            "context_suggestions": self._model_dump_list(
-                plan.context_suggestions, mode="json"
-            ),
+            "candidate_revisions": self._model_dump_list(plan.candidate_revisions, mode="json"),
+            "planning_outcomes": self._model_dump_list(plan.planning_outcomes, mode="json"),
+            "context_suggestions": self._model_dump_list(plan.context_suggestions, mode="json"),
             "selected_candidate_id": plan.selected_candidate_id,
             "approved_candidate_id": plan.approved_candidate_id,
             "expires_at": expires_at,
@@ -175,27 +156,13 @@ class PlanRepository:
             scenario_name=db_plan.scenario_name,
             locked_constraints=locked_constraints,
             open_questions=[OpenQuestion(**q) for q in (db_plan.open_questions or [])],
-            strawman_proposals=[
-                StrawmanProposal(**p) for p in (db_plan.strawman_proposals or [])
-            ],
-            execution_graph=[
-                ExecutionStep(**s) for s in (db_plan.execution_graph or [])
-            ],
-            external_contexts=[
-                ExternalContext(**c) for c in (db_plan.external_contexts or [])
-            ],
-            candidate_plans=[
-                CandidatePlan(**c) for c in (db_plan.candidate_plans or [])
-            ],
-            candidate_revisions=[
-                CandidatePlanRevision(**r) for r in (db_plan.candidate_revisions or [])
-            ],
-            planning_outcomes=[
-                PlanningOutcome(**o) for o in (db_plan.planning_outcomes or [])
-            ],
-            context_suggestions=[
-                ContextSuggestion(**s) for s in (db_plan.context_suggestions or [])
-            ],
+            strawman_proposals=[StrawmanProposal(**p) for p in (db_plan.strawman_proposals or [])],
+            execution_graph=[ExecutionStep(**s) for s in (db_plan.execution_graph or [])],
+            external_contexts=[ExternalContext(**c) for c in (db_plan.external_contexts or [])],
+            candidate_plans=[CandidatePlan(**c) for c in (db_plan.candidate_plans or [])],
+            candidate_revisions=[CandidatePlanRevision(**r) for r in (db_plan.candidate_revisions or [])],
+            planning_outcomes=[PlanningOutcome(**o) for o in (db_plan.planning_outcomes or [])],
+            context_suggestions=[ContextSuggestion(**s) for s in (db_plan.context_suggestions or [])],
             selected_candidate_id=db_plan.selected_candidate_id,
             approved_candidate_id=db_plan.approved_candidate_id,
             planner_model=planner_model,

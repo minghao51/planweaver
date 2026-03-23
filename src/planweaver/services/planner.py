@@ -13,11 +13,15 @@ from decimal import Decimal
 from ..models.plan import (
     CandidatePlan,
     ContextSuggestion,
+    IntentAnalysis,
     OpenQuestion,
     Plan,
     PlanStatus,
     ExecutionStep,
+    ExecutionStepsList,
+    ProposalAnalysis,
     StrawmanProposal,
+    StrawmanProposalInputList,
     StepStatus,
     ProposalWithAnalysis,
 )
@@ -49,20 +53,8 @@ class Planner:
         self.llm = llm_gateway or LLMGateway()
         self.template_engine = template_engine or TemplateEngine()
 
-    def _analyze_proposals_lightweight(
-        self, user_intent: str, proposals: List[dict]
-    ) -> Dict[str, dict]:
-        """Generate lightweight analysis for proposals without full execution graph.
-
-        Uses fast LLM to estimate:
-        - Step count
-        - Complexity score
-        - Estimated time (based on ~2min per step)
-        - Estimated cost (based on ~$0.001 per step)
-        - Risk factors
-
-        Returns: Dict mapping proposal_id to analysis data
-        """
+    def _analyze_proposals_lightweight(self, user_intent: str, proposals: List[dict]) -> Dict[str, dict]:
+        """Generate lightweight analysis for proposals without full execution graph."""
         if not proposals:
             return {}
 
@@ -73,45 +65,22 @@ User Intent: {user_intent}
 Proposals to analyze:
 {self._format_proposals_for_analysis(proposals)}
 
-For EACH proposal, provide:
-1. estimated_step_count: Number of execution steps (integer, typically 3-15)
-2. complexity_score: "Low", "Medium", or "High" based on technical complexity
-3. estimated_time_minutes: Total time in minutes (assume ~2 minutes per step average)
-4. estimated_cost_usd: Cost in USD (assume ~$0.001 per step average)
-5. risk_factors: List of 2-3 specific risks or challenges
-
-Return JSON only, no explanation:
-{{
-  "1": {{"estimated_step_count": 5, "complexity_score": "Medium", "estimated_time_minutes": 10, "estimated_cost_usd": 0.005, "risk_factors": ["API rate limits", "Data migration"]}},
-  "2": {{"estimated_step_count": 3, "complexity_score": "Low", "estimated_time_minutes": 6, "estimated_cost_usd": 0.003, "risk_factors": ["Configuration errors"]}}
-}}
+For EACH proposal, provide analysis with:
+- estimated_step_count: Number of execution steps (integer, typically 3-15)
+- complexity_score: "Low", "Medium", or "High" based on technical complexity
+- estimated_time_minutes: Total time in minutes (assume ~2 minutes per step average)
+- estimated_cost_usd: Cost in USD (assume ~$0.001 per step average)
+- risk_factors: List of 2-3 specific risks or challenges
 """
-
         try:
             response = self.llm.complete(
                 model="gemini-2.5-flash",
                 messages=[{"role": "user", "content": prompt}],
-                json_mode=True,
+                response_format=ProposalAnalysis,
             )
-
-            # Parse JSON response
-            import json
-
-            cleaned = response.get("content", "").strip()
-            if cleaned.startswith("```"):
-                cleaned = cleaned.split("```")[1]
-                if cleaned.startswith("json"):
-                    cleaned = cleaned[4:]
-            analysis_data = json.loads(cleaned)
-
-            # Ensure we got a dict, not a list
-            if not isinstance(analysis_data, dict):
-                raise ValueError(f"Expected dict, got {type(analysis_data)}")
-
-            return analysis_data
-
+            parsed = ProposalAnalysis.model_validate_json(response["content"])
+            return {k: v.model_dump() for k, v in parsed.proposals.items()}
         except Exception:
-            # Return conservative defaults
             return {
                 str(i): {
                     "estimated_step_count": 5,
@@ -163,7 +132,7 @@ Approach: {p.get("description", "N/A")}
             return []
         references = []
         for context in plan.external_contexts:
-            label = context.source_type
+            label: str = context.source_type
             if context.metadata.get("filename"):
                 label = f"{label}:{context.metadata['filename']}"
             elif context.metadata.get("repo_name"):
@@ -181,23 +150,15 @@ Approach: {p.get("description", "N/A")}
             )
         return f"Suggested as candidate approach {index} directly from the stated user intent."
 
-    def _parse_json_or_default(self, raw_content: str, default: Any) -> Any:
-        try:
-            return json.loads(raw_content)
-        except json.JSONDecodeError:
-            return default
-
     def _analysis_fallback(self) -> Dict[str, Any]:
         return {
             "identified_constraints": [],
             "missing_information": ["Unable to parse analysis"],
             "suggested_approach": "Manual review needed",
-            "estimated_complexity": "unknown",
+            "estimated_complexity": "medium",
         }
 
-    def _parse_execution_steps(
-        self, steps_data: Any, default_model: str
-    ) -> List[ExecutionStep]:
+    def _parse_execution_steps(self, steps_data: Any, default_model: str) -> List[ExecutionStep]:
         if not isinstance(steps_data, list):
             return self._fallback_execution_steps(default_model)
 
@@ -232,11 +193,7 @@ Approach: {p.get("description", "N/A")}
         if not isinstance(proposals_data, list):
             return []
         try:
-            return [
-                StrawmanProposal(**proposal)
-                for proposal in proposals_data
-                if isinstance(proposal, dict)
-            ]
+            return [StrawmanProposal(**proposal) for proposal in proposals_data if isinstance(proposal, dict)]
         except TypeError:
             return []
 
@@ -246,35 +203,22 @@ Approach: {p.get("description", "N/A")}
         plan: Plan,
         scenario_name: Optional[str] = None,
         model: str = "deepseek/deepseek-chat",
-    ) -> Dict[str, Any]:
+    ) -> IntentAnalysis:
         prompt = self._build_planner_prompt(user_intent, plan)
 
-        full_prompt = f"""
-You are a task decomposition expert. Analyze the following user request and extract key requirements.
+        full_prompt = f"""You are a task decomposition expert. Analyze the following user request and extract key requirements.
 
 {prompt}
-
-Provide your analysis in JSON format:
-{{
-    "identified_constraints": [
-        "List any constraints mentioned (language, framework, tools, etc.)"
-    ],
-    "missing_information": [
-        "List any questions you have to clarify the request"
-    ],
-    "suggested_approach": "High-level approach to solve this task",
-    "estimated_complexity": "low|medium|high"
-}}
 """
-        response = self.llm.complete(
-            model=model,
-            messages=[{"role": "user", "content": full_prompt}],
-            json_mode=True,
-        )
-
-        return self._parse_json_or_default(
-            response["content"], self._analysis_fallback()
-        )
+        try:
+            response = self.llm.complete(
+                model=model,
+                messages=[{"role": "user", "content": full_prompt}],
+                response_format=IntentAnalysis,
+            )
+            return IntentAnalysis.model_validate_json(response["content"])
+        except Exception:
+            return IntentAnalysis(**self._analysis_fallback())
 
     def decompose_into_steps(
         self,
@@ -284,8 +228,7 @@ Provide your analysis in JSON format:
         model: str = "deepseek/deepseek-chat",
     ) -> List[ExecutionStep]:
         constraints_str = json.dumps(locked_constraints, indent=2)
-        prompt = f"""
-You are an expert task decomposer. Break down the following request into a dependency graph of steps.
+        prompt = f"""You are an expert task decomposer. Break down the following request into a dependency graph of steps.
 
 User Request: {user_intent}
 
@@ -298,21 +241,17 @@ Return a JSON array of steps. Each step should have:
 - prompt_template_id: identifier for the prompt template to use
 - assigned_model: model to use (claude-3-5-sonnet, gpt-4o, etc.)
 - dependencies: array of step_ids that must complete before this step
-
-Example output:
-[
-  {{"step_id": 1, "task": "Create project structure", "prompt_template_id": "create_dirs", "assigned_model": "claude-3-5-sonnet", "dependencies": []}},
-  {{"step_id": 2, "task": "Write main application code", "prompt_template_id": "write_main", "assigned_model": "claude-3-5-sonnet", "dependencies": [1]}}
-]
-
-Output only valid JSON array, no markdown, no explanation.
 """
-        response = self.llm.complete(
-            model=model, messages=[{"role": "user", "content": prompt}], json_mode=True
-        )
-
-        steps_data = self._parse_json_or_default(response["content"], [])
-        return self._parse_execution_steps(steps_data, model)
+        try:
+            response = self.llm.complete(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                response_format=ExecutionStepsList,
+            )
+            parsed = ExecutionStepsList.model_validate_json(response["content"])
+            return parsed.steps
+        except Exception:
+            return self._fallback_execution_steps(model)
 
     def generate_strawman_proposals(
         self,
@@ -321,61 +260,35 @@ Output only valid JSON array, no markdown, no explanation.
         model: str = "deepseek/deepseek-chat",
     ) -> List[StrawmanProposal]:
         """Generate strawman proposals with lightweight analysis."""
-        prompt_context = self._build_planner_prompt(
-            user_intent, plan or Plan(user_intent=user_intent)
-        )
-        prompt = f"""
-You are a strategic advisor. Propose 2-3 different approaches (strawman solutions) for the following request.
+        prompt_context = self._build_planner_prompt(user_intent, plan or Plan(user_intent=user_intent))
+        prompt = f"""You are a strategic advisor. Propose 2-3 different approaches (strawman solutions) for the following request.
 
 {prompt_context}
-
-For each approach, provide:
-- title: Short name for the approach
-- description: What this approach does
-- pros: Why this approach is good (2-3 points)
-- cons: Why this approach might not be ideal (2-3 points)
-
-Return JSON array:
-[
-  {{"title": "Approach 1", "description": "...", "pros": [...], "cons": [...]}}
-]
 """
-        response = self.llm.complete(
-            model=model, messages=[{"role": "user", "content": prompt}], json_mode=True
-        )
+        try:
+            response = self.llm.complete(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                response_format=StrawmanProposalInputList,
+            )
+            parsed = StrawmanProposalInputList.model_validate_json(response["content"])
+            raw_proposals = [p.model_dump() for p in parsed.proposals]
+        except Exception:
+            raw_proposals = []
 
-        proposals_data = self._parse_json_or_default(response["content"], [])
-        raw_proposals = proposals_data if isinstance(proposals_data, list) else []
-
-        # Generate lightweight analysis
-        analysis = self._analyze_proposals_lightweight(user_intent, raw_proposals)
-
-        # Merge proposals with analysis
         proposals_with_analysis = []
         for i, raw_prop in enumerate(raw_proposals, 1):
-            prop_id = str(i)  # Use string index as ID
-            _analysis_data = analysis.get(
-                str(i),
-                {
-                    "estimated_step_count": 5,
-                    "complexity_score": "Medium",
-                    "estimated_time_minutes": 10,
-                    "estimated_cost_usd": Decimal("0.005"),
-                    "risk_factors": [],
-                },
-            )
+            prop_id = str(i)
 
-            # Create StrawmanProposal (for backwards compatibility)
             proposal = StrawmanProposal(
                 id=prop_id,
                 title=raw_prop.get("title", f"Proposal {i}"),
                 description=raw_prop.get("description", ""),
                 pros=raw_prop.get("pros", []),
                 cons=raw_prop.get("cons", []),
-                why_suggested=raw_prop.get("why_suggested")
-                or self._proposal_reason(plan, i),
+                why_suggested=raw_prop.get("why_suggested") or self._proposal_reason(plan, i),
                 context_references=self._context_references(plan),
-                confidence=float(raw_prop.get("confidence", 0.65)),
+                confidence=float(raw_prop.get("confidence") or 0.65),
                 planning_style=str(raw_prop.get("planning_style", "baseline")),
             )
             proposals_with_analysis.append(proposal)
@@ -418,9 +331,7 @@ Return JSON array:
                     estimated_step_count=analysis_data["estimated_step_count"],
                     complexity_score=analysis_data["complexity_score"],
                     estimated_time_minutes=analysis_data["estimated_time_minutes"],
-                    estimated_cost_usd=Decimal(
-                        str(analysis_data["estimated_cost_usd"])
-                    ),
+                    estimated_cost_usd=Decimal(str(analysis_data["estimated_cost_usd"])),
                     risk_factors=analysis_data["risk_factors"],
                 )
             )
@@ -443,16 +354,14 @@ Return JSON array:
         # Analyze with context (plan.external_contexts is empty at this point)
         analysis = self.analyze_intent(user_intent, plan, scenario_name, model)
 
-        for constraint in analysis.get("identified_constraints", []):
+        for constraint in analysis.identified_constraints:
             plan.lock_constraint(constraint, "extracted from request")
 
-        for question in analysis.get("missing_information", []):
+        for question in analysis.missing_information:
             plan.open_questions.append(
                 OpenQuestion(
                     question=question,
-                    rationale=(
-                        "The planner needs this detail to reduce ambiguity in the execution graph."
-                    ),
+                    rationale=("The planner needs this detail to reduce ambiguity in the execution graph."),
                     context_references=self._context_references(plan),
                     confidence=0.6,
                 )
@@ -476,9 +385,7 @@ Return JSON array:
 
         if not plan.open_questions or all(q.answered for q in plan.open_questions):
             plan.status = PlanStatus.AWAITING_APPROVAL
-            steps = self.decompose_into_steps(
-                plan.user_intent, plan.locked_constraints, plan.scenario_name, model
-            )
+            steps = self.decompose_into_steps(plan.user_intent, plan.locked_constraints, plan.scenario_name, model)
             for step in steps:
                 plan.add_step(step)
 
@@ -544,10 +451,7 @@ Return JSON array:
             )
 
         if (
-            any(
-                keyword in intent
-                for keyword in ("spec", "document", "brief", "pdf", "requirements")
-            )
+            any(keyword in intent for keyword in ("spec", "document", "brief", "pdf", "requirements"))
             and "file_upload" not in existing_types
         ):
             suggestions.append(
@@ -578,22 +482,13 @@ Return JSON array:
         if regenerate_from_step_id not in step_ids:
             raise ValueError(f"Step {regenerate_from_step_id} not found")
 
-        impacted = self._downstream_step_ids(
-            candidate.execution_graph, regenerate_from_step_id
-        )
+        impacted = self._downstream_step_ids(candidate.execution_graph, regenerate_from_step_id)
         preserved = [
-            ExecutionStep(**step.model_dump())
-            for step in candidate.execution_graph
-            if step.step_id not in impacted
+            ExecutionStep(**step.model_dump()) for step in candidate.execution_graph if step.step_id not in impacted
         ]
-        original = [
-            step.model_dump(mode="json")
-            for step in candidate.execution_graph
-            if step.step_id in impacted
-        ]
+        original = [step.model_dump(mode="json") for step in candidate.execution_graph if step.step_id in impacted]
 
-        prompt = f"""
-You are refining only part of an execution plan.
+        prompt = f"""You are refining only part of an execution plan.
 
 User Request: {user_intent}
 Locked Constraints:
@@ -610,29 +505,20 @@ Steps To Replace:
 
 Additional Guidance:
 {note or "Preserve upstream work and regenerate the selected step plus all downstream dependent work."}
-
-Return JSON array only. The new steps should start from step_id {regenerate_from_step_id} and may depend on preserved step IDs when needed.
 """
-
         try:
             response = self.llm.complete(
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
-                json_mode=True,
+                response_format=ExecutionStepsList,
             )
-            replacement_steps = self._parse_execution_steps(
-                self._parse_json_or_default(response["content"], []),
-                model,
-            )
+            parsed = ExecutionStepsList.model_validate_json(response["content"])
+            replacement_steps = parsed.steps
         except Exception:
             replacement_steps = []
 
         if not replacement_steps:
-            source_step = next(
-                step
-                for step in candidate.execution_graph
-                if step.step_id == regenerate_from_step_id
-            )
+            source_step = next(step for step in candidate.execution_graph if step.step_id == regenerate_from_step_id)
             replacement_steps = [
                 ExecutionStep(
                     step_id=regenerate_from_step_id,
@@ -652,9 +538,7 @@ Return JSON array only. The new steps should start from step_id {regenerate_from
         combined.sort(key=lambda step: step.step_id)
         return combined
 
-    def _downstream_step_ids(
-        self, steps: List[ExecutionStep], step_id: int
-    ) -> set[int]:
+    def _downstream_step_ids(self, steps: List[ExecutionStep], step_id: int) -> set[int]:
         impacted = {step_id}
         changed = True
         while changed:
@@ -676,10 +560,7 @@ Return JSON array only. The new steps should start from step_id {regenerate_from
         normalized: List[ExecutionStep] = []
         preserved_ids = {step.step_id for step in preserved_steps}
         generated_ids = [step.step_id for step in replacement_steps]
-        id_map = {
-            old_id: start_step_id + offset
-            for offset, old_id in enumerate(generated_ids)
-        }
+        id_map = {old_id: start_step_id + offset for offset, old_id in enumerate(generated_ids)}
 
         for offset, step in enumerate(replacement_steps):
             new_id = start_step_id + offset

@@ -32,9 +32,7 @@ class FileProcessorService:
     def _validate_file(self, filename: str, content: bytes) -> str:
         size_mb = len(content) / (1024 * 1024)
         if size_mb > self.max_size_mb:
-            raise ValueError(
-                f"File too large: {size_mb:.2f}MB (max: {self.max_size_mb}MB)"
-            )
+            raise ValueError(f"File too large: {size_mb:.2f}MB (max: {self.max_size_mb}MB)")
 
         file_ext = os.path.splitext(filename)[1].lower()
         if file_ext not in self._allowed_types_set:

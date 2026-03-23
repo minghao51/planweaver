@@ -1,6 +1,7 @@
 from typing import List, Dict, Any, Literal
 from logging import getLogger
 from .llm_gateway import LLMGateway
+from ..models.plan import VariantData
 
 logger = getLogger(__name__)
 
@@ -38,19 +39,16 @@ class VariantGenerator:
             {"role": "user", "content": user_prompt},
         ]
 
-        response = self.llm_gateway.complete(
-            model="claude-3.5-sonnet",
-            messages=messages,
-            json_mode=True,
-            max_tokens=4096,
-        )
-
         try:
-            import json
-
-            variant_data = json.loads(response["content"])
+            response = self.llm_gateway.complete(
+                model="claude-3.5-sonnet",
+                messages=messages,
+                response_format=VariantData,
+                max_tokens=4096,
+            )
             logger.info(f"Successfully generated {variant_type} variant")
-            return variant_data
+            parsed = VariantData.model_validate_json(response["content"])
+            return parsed.model_dump()
         except Exception as e:
             logger.error(f"Failed to parse variant response: {e}")
             raise
@@ -88,9 +86,7 @@ Return a JSON object with:
         }
         return prompts.get(variant_type, prompts["simplified"])
 
-    def _build_user_prompt(
-        self, proposal: Dict[str, Any], variant_type: str, user_context: str
-    ) -> str:
+    def _build_user_prompt(self, proposal: Dict[str, Any], variant_type: str, user_context: str) -> str:
         """Build the user prompt for variant generation"""
         prompt = f"""Generate a {variant_type} variant of this plan:
 

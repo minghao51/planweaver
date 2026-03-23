@@ -22,9 +22,7 @@ async def add_github_context(session_id: str, request: GitHubContextRequest):
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to add GitHub context: {exc}"
-        ) from exc
+        raise HTTPException(status_code=500, detail=f"Failed to add GitHub context: {exc}") from exc
 
 
 @router.post("/sessions/{session_id}/context/web-search")
@@ -45,9 +43,7 @@ async def add_web_search_context(session_id: str, request: WebSearchContextReque
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to add web search: {exc}"
-        ) from exc
+        raise HTTPException(status_code=500, detail=f"Failed to add web search: {exc}") from exc
 
 
 @router.post("/sessions/{session_id}/context/upload")
@@ -96,9 +92,7 @@ async def upload_file_context(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to process file: {exc}"
-        ) from exc
+        raise HTTPException(status_code=500, detail=f"Failed to process file: {exc}") from exc
 
 
 @router.get("/sessions/{session_id}/context")
@@ -112,11 +106,7 @@ def list_contexts(session_id: str):
                 "source_type": ctx.source_type,
                 "source_url": ctx.source_url,
                 "created_at": ctx.created_at,
-                "metadata": {
-                    key: value
-                    for key, value in ctx.metadata.items()
-                    if key != "full_content"
-                },
+                "metadata": {key: value for key, value in ctx.metadata.items() if key != "full_content"},
             }
             for ctx in plan.external_contexts
         ],

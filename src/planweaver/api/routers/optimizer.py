@@ -91,16 +91,12 @@ def optimize_plan(request: Request, body: OptimizerRequest):
 
     except ValueError as e:
         logger.warning(f"Validation error: {e}")
-        raise HTTPException(
-            status_code=400, detail=f"Cannot complete operation: {str(e)}"
-        )
+        raise HTTPException(status_code=400, detail=f"Cannot complete operation: {str(e)}")
     except HTTPException:
         raise
     except Exception:
         logger.exception("Unexpected error optimizing plan")
-        raise HTTPException(
-            status_code=500, detail="Operation failed. Please try again."
-        )
+        raise HTTPException(status_code=500, detail="Operation failed. Please try again.")
 
 
 @router.get("/results/{session_id}")
@@ -118,9 +114,7 @@ def get_optimization_results(request: Request, session_id: str):
 
     except Exception:
         logger.exception("Unexpected error getting optimization results")
-        raise HTTPException(
-            status_code=500, detail="Operation failed. Please try again."
-        )
+        raise HTTPException(status_code=500, detail="Operation failed. Please try again.")
 
 
 @router.post("/rate", response_model=RatePlansResponse)
@@ -145,15 +139,11 @@ def rate_plans(request: Request, body: RatePlansRequest):
                 average_score=5.0,
             )
 
-        return RatePlansResponse(
-            rating_id=str(uuid.uuid4()), status="completed", ratings=ratings_by_plan
-        )
+        return RatePlansResponse(rating_id=str(uuid.uuid4()), status="completed", ratings=ratings_by_plan)
 
     except Exception:
         logger.exception("Unexpected error rating plans")
-        raise HTTPException(
-            status_code=500, detail="Operation failed. Please try again."
-        )
+        raise HTTPException(status_code=500, detail="Operation failed. Please try again.")
 
 
 @router.post("/user-rating", response_model=UserRatingResponse)
@@ -192,9 +182,7 @@ def save_user_rating(request: Request, body: UserRatingRequest):
 
     except Exception:
         logger.exception("Unexpected error saving user rating")
-        raise HTTPException(
-            status_code=500, detail="Operation failed. Please try again."
-        )
+        raise HTTPException(status_code=500, detail="Operation failed. Please try again.")
 
 
 @router.get("/state/{session_id}", response_model=OptimizationStateResponse)
@@ -208,15 +196,11 @@ def get_optimization_state(request: Request, session_id: str):
     try:
         # For now, return idle state
         # In production, you'd track actual state in cache/database
-        return OptimizationStateResponse(
-            status="idle", progress=0.0, message="Optimization not started"
-        )
+        return OptimizationStateResponse(status="idle", progress=0.0, message="Optimization not started")
 
     except Exception:
         logger.exception("Unexpected error getting optimization state")
-        raise HTTPException(
-            status_code=500, detail="Operation failed. Please try again."
-        )
+        raise HTTPException(status_code=500, detail="Operation failed. Please try again.")
 
 
 @router.post("/manual", response_model=ManualPlanResponse)
@@ -308,14 +292,10 @@ def evaluate_plans(request: Request, body: PlanEvaluationRequest):
             )
             for plan in body.plans
         ]
-        evaluations = optimizer.evaluate_normalized_plans(
-            normalized_plans, body.judge_models or None
-        )
+        evaluations = optimizer.evaluate_normalized_plans(normalized_plans, body.judge_models or None)
         ranking = optimizer.rank_plans(normalized_plans, evaluations)
         return {
-            "normalized_plans": [
-                plan.model_dump(mode="json") for plan in normalized_plans
-            ],
+            "normalized_plans": [plan.model_dump(mode="json") for plan in normalized_plans],
             "evaluations": {
                 plan_id: {
                     judge_model: evaluation.model_dump(mode="json")
@@ -345,15 +325,11 @@ def compare_plans(request: Request, body: PairwiseComparisonRequest):
             )
             for plan in body.plans
         ]
-        evaluations = optimizer.evaluate_normalized_plans(
-            normalized_plans, body.judge_models or None
-        )
+        evaluations = optimizer.evaluate_normalized_plans(normalized_plans, body.judge_models or None)
         comparisons = optimizer.compare_plans(normalized_plans, evaluations)
         ranking = optimizer.rank_plans(normalized_plans, evaluations)
         return {
-            "normalized_plans": [
-                plan.model_dump(mode="json") for plan in normalized_plans
-            ],
+            "normalized_plans": [plan.model_dump(mode="json") for plan in normalized_plans],
             "evaluations": {
                 plan_id: {
                     judge_model: evaluation.model_dump(mode="json")

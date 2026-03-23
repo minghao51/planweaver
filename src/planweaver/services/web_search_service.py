@@ -44,9 +44,7 @@ class WebSearchService:
         except Exception as e:
             raise ValueError(f"Web search failed: {str(e)}") from e
 
-    def _build_summary(
-        self, query: str, results: List[Dict[str, str]], answer: str
-    ) -> str:
+    def _build_summary(self, query: str, results: List[Dict[str, str]], answer: str) -> str:
         """Build search summary for planner"""
         summary = f"## Web Search Results for: {query}\n\n"
 

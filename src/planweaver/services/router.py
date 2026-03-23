@@ -46,9 +46,7 @@ class ExecutionRouter:
 
     def get_executable_steps(self, plan: Plan) -> List[ExecutionStep]:
         pending = [s for s in plan.execution_graph if s.status == StepStatus.PENDING]
-        completed_ids = {
-            s.step_id for s in plan.execution_graph if s.status == StepStatus.COMPLETED
-        }
+        completed_ids = {s.step_id for s in plan.execution_graph if s.status == StepStatus.COMPLETED}
 
         executable = []
         for step in pending:
@@ -114,9 +112,7 @@ class ExecutionRouter:
                 last_error = "Empty response"
             except Exception as exc:
                 last_error = str(exc)
-                logger.warning(
-                    f"Step {step.step_id} attempt {attempt + 1} failed: {exc}"
-                )
+                logger.warning(f"Step {step.step_id} attempt {attempt + 1} failed: {exc}")
                 if attempt < MAX_RETRIES - 1:
                     await asyncio.sleep(RETRY_DELAY_BASE * (2**attempt))
 
@@ -139,9 +135,7 @@ class ExecutionRouter:
                 if dep == step.step_id:
                     raise ValueError(f"Step {step.step_id} cannot depend on itself")
                 if dep not in steps_by_id:
-                    raise ValueError(
-                        f"Step {step.step_id} depends on missing step {dep}"
-                    )
+                    raise ValueError(f"Step {step.step_id} depends on missing step {dep}")
 
         visiting: set[int] = set()
         visited: set[int] = set()
@@ -150,9 +144,7 @@ class ExecutionRouter:
             if step_id in visited:
                 return
             if step_id in visiting:
-                raise ValueError(
-                    f"Execution graph contains a dependency cycle at step {step_id}"
-                )
+                raise ValueError(f"Execution graph contains a dependency cycle at step {step_id}")
 
             visiting.add(step_id)
             for dep_id in steps_by_id[step_id].dependencies:
@@ -176,15 +168,10 @@ class ExecutionRouter:
         self._mark_step_started(step)
         return await self._execute_with_retries(step, actual_model, prompt)
 
-    def _get_previous_outputs(
-        self, plan: Plan, current_step: ExecutionStep
-    ) -> Dict[int, Any]:
+    def _get_previous_outputs(self, plan: Plan, current_step: ExecutionStep) -> Dict[int, Any]:
         outputs = {}
         for step in plan.execution_graph:
-            if (
-                step.status == StepStatus.COMPLETED
-                and step.step_id in current_step.dependencies
-            ):
+            if step.status == StepStatus.COMPLETED and step.step_id in current_step.dependencies:
                 outputs[step.step_id] = step.output
         return outputs
 
@@ -209,9 +196,7 @@ class ExecutionRouter:
                 break
 
             for step in executable_steps:
-                result = await self.execute_step(
-                    step, plan, context, model=model_override
-                )
+                result = await self.execute_step(step, plan, context, model=model_override)
                 step_count += 1
 
                 if not result["success"]:
@@ -222,8 +207,7 @@ class ExecutionRouter:
                 break
 
         all_completed = all(
-            s.status == StepStatus.COMPLETED or s.status == StepStatus.SKIPPED
-            for s in plan.execution_graph
+            s.status == StepStatus.COMPLETED or s.status == StepStatus.SKIPPED for s in plan.execution_graph
         )
 
         if all_completed:

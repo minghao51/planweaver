@@ -67,6 +67,7 @@ def test_follow_up_planner_calls_use_plan_override(orchestrator_with_mocks):
     orchestrator.get_strawman_proposals(plan)
     planner.generate_strawman_proposals.assert_called_once_with(
         "Test intent",
+        plan=None,
         model="planner-override",
     )
 
@@ -100,9 +101,7 @@ async def test_execute_uses_executor_override_when_present(orchestrator_with_moc
 @pytest.mark.asyncio
 async def test_execute_uses_step_assigned_models_as_fallback(orchestrator_with_mocks):
     orchestrator, _, router = orchestrator_with_mocks
-    plan = Plan(
-        user_intent="Test intent", status=PlanStatus.APPROVED, executor_model=None
-    )
+    plan = Plan(user_intent="Test intent", status=PlanStatus.APPROVED, executor_model=None)
     router.execute_plan.return_value = plan
 
     await orchestrator.execute(plan)

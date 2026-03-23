@@ -18,9 +18,7 @@ async def stream_execution(session_id: str, request: Request):
     plan = repo.get(session_id)
 
     if not plan:
-        return StreamingResponse(
-            _error_event("Session not found"), media_type="text/event-stream"
-        )
+        return StreamingResponse(_error_event("Session not found"), media_type="text/event-stream")
 
     async def event_generator():
         """Yield SSE events as execution progresses"""
@@ -43,9 +41,7 @@ async def stream_execution(session_id: str, request: Request):
                     break
 
                 current_steps = len(plan.execution_graph)
-                completed = [
-                    s for s in plan.execution_graph if s.status.value == "COMPLETED"
-                ]
+                completed = [s for s in plan.execution_graph if s.status.value == "COMPLETED"]
                 failed = [s for s in plan.execution_graph if s.status.value == "FAILED"]
 
                 # Check for new completed steps

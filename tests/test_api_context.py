@@ -6,9 +6,7 @@ from fastapi.testclient import TestClient
 class TestAPIContext:
     @pytest.fixture
     def mock_orchestrator(self):
-        with patch(
-            "src.planweaver.api.dependencies.get_orchestrator_factory"
-        ) as mock_get_factory:
+        with patch("src.planweaver.api.dependencies.get_orchestrator_factory") as mock_get_factory:
             orchestrator = Mock()
 
             mock_plan = Mock()
@@ -40,9 +38,7 @@ class TestAPIContext:
         mock_context.source_type = "github"
         mock_context.source_url = "https://github.com/test/repo"
 
-        with patch(
-            "src.planweaver.api.routers.context.get_context_service"
-        ) as mock_get_cs:
+        with patch("src.planweaver.api.routers.context.get_context_service") as mock_get_cs:
             mock_cs = AsyncMock()
             mock_cs.add_github_context = AsyncMock(return_value=mock_context)
             mock_get_cs.return_value = mock_cs
@@ -86,9 +82,7 @@ class TestAPIContext:
         mock_context.id = "ctx-456"
         mock_context.source_type = "web_search"
 
-        with patch(
-            "src.planweaver.api.routers.context.get_context_service"
-        ) as mock_get_cs:
+        with patch("src.planweaver.api.routers.context.get_context_service") as mock_get_cs:
             mock_cs = AsyncMock()
             mock_cs.add_web_search_context = AsyncMock(return_value=mock_context)
             mock_get_cs.return_value = mock_cs
@@ -108,9 +102,7 @@ class TestAPIContext:
         mock_context.id = "ctx-789"
         mock_context.source_type = "file_upload"
 
-        with patch(
-            "src.planweaver.api.routers.context.get_context_service"
-        ) as mock_get_cs:
+        with patch("src.planweaver.api.routers.context.get_context_service") as mock_get_cs:
             mock_cs = AsyncMock()
             mock_cs.add_file_context = AsyncMock(return_value=mock_context)
             mock_get_cs.return_value = mock_cs

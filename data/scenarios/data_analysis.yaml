@@ -1,0 +1,57 @@
+name: "Data Analysis Report"
+description: "Analyze datasets and generate insights with visualizations"
+planner_prompt_template: |
+  You are a data analyst. Plan the analysis:
+
+  User Request: {user_intent}
+
+  Data: {data_description}
+
+  Identify:
+  1. Key metrics to analyze
+  2. Statistical methods to apply
+  3. Visualizations to create
+  4. Insights to highlight
+executor_template: |
+  Task: {task}
+
+  Data Overview: {data_overview}
+  Analysis Context: {context}
+
+  Perform analysis and provide:
+  1. Summary statistics
+  2. Key trends and patterns
+  3. Statistical significance
+  4. Actionable recommendations
+
+  Use Python code for calculations and show results.
+input_schema:
+  fields:
+    - name: data_source
+      type: string
+      description: Path or description of data source
+      required: true
+    - name: analysis_type
+      type: string
+      description: Type of analysis (descriptive, predictive, prescriptive)
+      required: false
+      default: "descriptive"
+    - name: metrics
+      type: array
+      description: Key metrics to focus on
+      required: false
+output_schema:
+  type: object
+  fields:
+    - name: summary
+      type: string
+      description: Executive summary
+    - name: statistics
+      type: object
+      description: Key statistics
+    - name: insights
+      type: array
+      description: Key insights found
+    - name: recommendations
+      type: array
+      description: Actionable recommendations

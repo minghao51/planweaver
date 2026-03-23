@@ -41,9 +41,7 @@ class TestProposalComparisonService:
 
     @pytest.fixture
     def sample_plan_with_proposals(self):
-        plan = Plan(
-            user_intent="Add authentication to API", status=PlanStatus.BRAINSTORMING
-        )
+        plan = Plan(user_intent="Add authentication to API", status=PlanStatus.BRAINSTORMING)
         plan.strawman_proposals = [
             StrawmanProposal(
                 id="prop-1",
@@ -62,20 +60,14 @@ class TestProposalComparisonService:
         ]
         return plan
 
-    def test_compare_proposals_requires_at_least_two(
-        self, comparison_service, sample_plan_with_proposals
-    ):
+    def test_compare_proposals_requires_at_least_two(self, comparison_service, sample_plan_with_proposals):
         """Should raise error if fewer than 2 proposals"""
         with pytest.raises(ValueError, match="at least 2 proposals"):
             comparison_service.compare_proposals(sample_plan_with_proposals, ["prop-1"])
 
-    def test_compare_proposals_creates_comparison(
-        self, comparison_service, sample_plan_with_proposals
-    ):
+    def test_compare_proposals_creates_comparison(self, comparison_service, sample_plan_with_proposals):
         """Should create comparison with valid structure"""
-        result = comparison_service.compare_proposals(
-            sample_plan_with_proposals, ["prop-1", "prop-2"]
-        )
+        result = comparison_service.compare_proposals(sample_plan_with_proposals, ["prop-1", "prop-2"])
 
         assert result.session_id == sample_plan_with_proposals.session_id
         assert len(result.proposals) == 2

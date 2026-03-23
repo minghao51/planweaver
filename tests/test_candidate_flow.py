@@ -1,12 +1,10 @@
 from unittest.mock import Mock
 
-from src.planweaver.models.plan import ExecutionStep, StepStatus, StrawmanProposal
+from src.planweaver.models.plan import ExecutionStep, StepStatus, StrawmanProposal, IntentAnalysis
 from src.planweaver.orchestrator import Orchestrator
 
 
-def _step(
-    step_id: int, task: str, dependencies: list[int] | None = None
-) -> ExecutionStep:
+def _step(step_id: int, task: str, dependencies: list[int] | None = None) -> ExecutionStep:
     return ExecutionStep(
         step_id=step_id,
         task=task,
@@ -20,16 +18,14 @@ def _step(
 def test_start_session_seeds_candidate_and_context_suggestions():
     orchestrator = Orchestrator()
     orchestrator.planner.analyze_intent = Mock(
-        return_value={
-            "identified_constraints": ["python"],
-            "missing_information": [],
-            "suggested_approach": "Ship a planning assistant",
-            "estimated_complexity": "medium",
-        }
+        return_value=IntentAnalysis(
+            identified_constraints=["python"],
+            missing_information=[],
+            suggested_approach="Ship a planning assistant",
+            estimated_complexity="medium",
+        )
     )
-    orchestrator.planner.decompose_into_steps = Mock(
-        return_value=[_step(1, "Capture the current planning flow")]
-    )
+    orchestrator.planner.decompose_into_steps = Mock(return_value=[_step(1, "Capture the current planning flow")])
 
     plan = orchestrator.start_session("Refactor a GitHub planning repo")
 
@@ -42,12 +38,12 @@ def test_start_session_seeds_candidate_and_context_suggestions():
 def test_select_proposal_creates_candidates_and_approve_candidate_activates_graph():
     orchestrator = Orchestrator()
     orchestrator.planner.analyze_intent = Mock(
-        return_value={
-            "identified_constraints": [],
-            "missing_information": [],
-            "suggested_approach": "Use multiple planning styles",
-            "estimated_complexity": "medium",
-        }
+        return_value=IntentAnalysis(
+            identified_constraints=[],
+            missing_information=[],
+            suggested_approach="Use multiple planning styles",
+            estimated_complexity="medium",
+        )
     )
     orchestrator.planner.decompose_into_steps = Mock(
         side_effect=[
@@ -71,11 +67,7 @@ def test_select_proposal_creates_candidates_and_approve_candidate_activates_grap
 
     updated = orchestrator.select_proposal(plan, "1")
 
-    generated = [
-        candidate
-        for candidate in updated.candidate_plans
-        if candidate.proposal_id == "1"
-    ]
+    generated = [candidate for candidate in updated.candidate_plans if candidate.proposal_id == "1"]
     assert {candidate.planning_style for candidate in generated} == {
         "baseline",
         "fast",
@@ -83,9 +75,7 @@ def test_select_proposal_creates_candidates_and_approve_candidate_activates_grap
         "cost_aware",
     }
 
-    baseline = next(
-        candidate for candidate in generated if candidate.planning_style == "baseline"
-    )
+    baseline = next(candidate for candidate in generated if candidate.planning_style == "baseline")
     approved = orchestrator.approve_candidate(updated, baseline.candidate_id)
 
     assert approved.approved_candidate_id == baseline.candidate_id
@@ -96,12 +86,12 @@ def test_select_proposal_creates_candidates_and_approve_candidate_activates_grap
 def test_refine_candidate_updates_execution_graph_and_records_outcomes():
     orchestrator = Orchestrator()
     orchestrator.planner.analyze_intent = Mock(
-        return_value={
-            "identified_constraints": [],
-            "missing_information": [],
-            "suggested_approach": "Refine a candidate",
-            "estimated_complexity": "medium",
-        }
+        return_value=IntentAnalysis(
+            identified_constraints=[],
+            missing_information=[],
+            suggested_approach="Refine a candidate",
+            estimated_complexity="medium",
+        )
     )
     orchestrator.planner.decompose_into_steps = Mock(
         return_value=[_step(1, "Original step"), _step(2, "Ship result", [1])]
@@ -121,9 +111,5 @@ def test_refine_candidate_updates_execution_graph_and_records_outcomes():
 
     assert updated_candidate.execution_graph[0].task == "Updated step"
     assert plan.execution_graph[0].task == "Updated step"
-    assert any(
-        outcome.event_type == "candidate_refined" for outcome in plan.planning_outcomes
-    )
-    assert any(
-        revision.revision_type == "edit_step" for revision in plan.candidate_revisions
-    )
+    assert any(outcome.event_type == "candidate_refined" for outcome in plan.planning_outcomes)
+    assert any(revision.revision_type == "edit_step" for revision in plan.candidate_revisions)

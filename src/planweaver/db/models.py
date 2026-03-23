@@ -118,20 +118,12 @@ class OptimizedVariant(Base):
     __tablename__ = "optimized_variants"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    session_id = Column(
-        String(36), ForeignKey("sessions.id"), nullable=False, index=True
-    )
+    session_id = Column(String(36), ForeignKey("sessions.id"), nullable=False, index=True)
     proposal_id = Column(String(36), nullable=False, index=True)
-    variant_type = Column(
-        String(50), nullable=False
-    )  # 'simplified', 'enhanced', 'cost-optimized'
+    variant_type = Column(String(50), nullable=False)  # 'simplified', 'enhanced', 'cost-optimized'
     execution_graph = Column(JSON, nullable=False)
-    variant_metadata = Column(
-        JSON, nullable=True
-    )  # {step_count, complexity_score, optimization_notes, etc}
-    created_at = Column(
-        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
-    )
+    variant_metadata = Column(JSON, nullable=True)  # {step_count, complexity_score, optimization_notes, etc}
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     def to_dict(self):
         return {
@@ -149,22 +141,12 @@ class PlanRating(Base):
     __tablename__ = "plan_ratings"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    session_id = Column(
-        String(36), ForeignKey("sessions.id"), nullable=False, index=True
-    )
-    plan_id = Column(
-        String(36), nullable=False, index=True
-    )  # Can be proposal or variant ID
-    model_name = Column(
-        String(100), nullable=False, index=True
-    )  # 'claude-3.5-sonnet', 'gpt-4o', etc
-    ratings = Column(
-        JSON, nullable=False
-    )  # {feasibility: 8.5, cost_efficiency: 7.0, ...}
+    session_id = Column(String(36), ForeignKey("sessions.id"), nullable=False, index=True)
+    plan_id = Column(String(36), nullable=False, index=True)  # Can be proposal or variant ID
+    model_name = Column(String(100), nullable=False, index=True)  # 'claude-3.5-sonnet', 'gpt-4o', etc
+    ratings = Column(JSON, nullable=False)  # {feasibility: 8.5, cost_efficiency: 7.0, ...}
     reasoning = Column(Text, nullable=True)
-    created_at = Column(
-        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
-    )
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     def to_dict(self):
         return {
@@ -182,16 +164,12 @@ class UserRating(Base):
     __tablename__ = "user_ratings"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    session_id = Column(
-        String(36), ForeignKey("sessions.id"), nullable=False, index=True
-    )
+    session_id = Column(String(36), ForeignKey("sessions.id"), nullable=False, index=True)
     plan_id = Column(String(36), nullable=False, index=True)
     rating = Column(Integer, nullable=False)  # 1-5 stars
     comment = Column(Text, nullable=True)
     rationale = Column(Text, nullable=True)
-    created_at = Column(
-        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
-    )
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     def to_dict(self):
         return {
@@ -209,18 +187,14 @@ class NormalizedPlanRecord(Base):
     __tablename__ = "normalized_plans"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    session_id = Column(
-        String(36), ForeignKey("sessions.id"), nullable=True, index=True
-    )
+    session_id = Column(String(36), ForeignKey("sessions.id"), nullable=True, index=True)
     source_type = Column(String(50), nullable=False)
     source_model = Column(String(100), nullable=False)
     planning_style = Column(String(100), nullable=False)
     title = Column(String(255), nullable=False)
     normalized_payload = Column(JSON, nullable=False)
     normalization_warnings = Column(JSON, nullable=False, default=list)
-    created_at = Column(
-        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
-    )
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     def to_dict(self):
         return {
@@ -240,9 +214,7 @@ class PlanEvaluationRecord(Base):
     __tablename__ = "plan_evaluations"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    session_id = Column(
-        String(36), ForeignKey("sessions.id"), nullable=True, index=True
-    )
+    session_id = Column(String(36), ForeignKey("sessions.id"), nullable=True, index=True)
     plan_id = Column(String(36), nullable=False, index=True)
     judge_model = Column(String(100), nullable=False, index=True)
     rubric_scores = Column(JSON, nullable=False)
@@ -252,9 +224,7 @@ class PlanEvaluationRecord(Base):
     blocking_issues = Column(JSON, nullable=False, default=list)
     confidence = Column(Float, nullable=False)
     verdict = Column(String(50), nullable=False)
-    created_at = Column(
-        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
-    )
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     def to_dict(self):
         return {
@@ -277,9 +247,7 @@ class PairwiseComparisonRecord(Base):
     __tablename__ = "pairwise_plan_comparisons"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    session_id = Column(
-        String(36), ForeignKey("sessions.id"), nullable=True, index=True
-    )
+    session_id = Column(String(36), ForeignKey("sessions.id"), nullable=True, index=True)
     left_plan_id = Column(String(36), nullable=False, index=True)
     right_plan_id = Column(String(36), nullable=False, index=True)
     judge_model = Column(String(100), nullable=False)
@@ -287,9 +255,7 @@ class PairwiseComparisonRecord(Base):
     margin = Column(String(50), nullable=False)
     rationale = Column(Text, nullable=False)
     preference_factors = Column(JSON, nullable=False, default=list)
-    created_at = Column(
-        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
-    )
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     def to_dict(self):
         return {
@@ -302,5 +268,28 @@ class PairwiseComparisonRecord(Base):
             "margin": self.margin,
             "rationale": self.rationale,
             "preference_factors": self.preference_factors,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class SessionMessageModel(Base):
+    __tablename__ = "session_messages"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    session_id = Column(String(36), ForeignKey("sessions.id"), nullable=False, index=True)
+    role = Column(String(20), nullable=False)
+    content = Column(Text, nullable=False)
+    intent = Column(String(50), nullable=True)
+    extra_data = Column(JSON, default=dict)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "session_id": self.session_id,
+            "role": self.role,
+            "content": self.content,
+            "intent": self.intent,
+            "metadata": self.extra_data,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }

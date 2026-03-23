@@ -23,9 +23,7 @@ def test_plan_normalizer_builds_manual_plan_from_text():
     assert normalized.source_type == PlanSourceType.MANUAL
     assert len(normalized.steps) == 3
     assert "Missing explicit success criteria." in normalized.normalization_warnings
-    assert normalized.steps[-1].validation == [
-        "Verify the outcome against the requested goal."
-    ]
+    assert normalized.steps[-1].validation == ["Verify the outcome against the requested goal."]
 
 
 def test_plan_evaluator_returns_heuristic_rubric_scores():

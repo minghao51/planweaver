@@ -1,0 +1,86 @@
+name: "Learning Path Design"
+description: "Create structured learning paths for skills development"
+
+planner_prompt_template: |
+  You are an instructional designer. Analyze the learning path request:
+
+  User Request: {user_intent}
+
+  Additional Context:
+  - Skill: {skill}
+  - Current Level: {current_level}
+  - Target Level: {target_level}
+  - Timeframe: {timeframe}
+  - Learning Style: {learning_style}
+
+  Design a learning path that:
+  1. Builds from current knowledge level
+  2. Uses progressive difficulty
+  3. Includes hands-on practice
+  4. Provides measurable milestones
+  5. Offers multiple learning resources
+
+executor_template: |
+  Task: {task}
+
+  Learning Context:
+  - Skill: {skill}
+  - Current Level: {current_level}
+  - Target Level: {target_level}
+  - Learning Style: {learning_style}
+  - Prerequisites: {prerequisites}
+
+  Create learning materials that:
+  - Are appropriate for the skill level
+  - Include practical examples
+  - Provide exercises and projects
+  - Offer clear explanations
+  - Build on previous concepts
+
+input_schema:
+  fields:
+    - name: skill
+      type: string
+      description: The skill to learn
+      required: true
+    - name: current_level
+      type: string
+      description: Current proficiency (beginner, intermediate, advanced)
+      required: true
+    - name: target_level
+      type: string
+      description: Target proficiency
+      required: true
+    - name: timeframe
+      type: string
+      description: How long to learn (e.g., "4 weeks", "3 months")
+      required: false
+      default: "8 weeks"
+    - name: learning_style
+      type: string
+      description: Preferred learning style (visual, hands-on, reading, video)
+      required: false
+      default: "mixed"
+    - name: prerequisites
+      type: array
+      description: Known prerequisites or related skills
+      required: false
+
+output_schema:
+  type: object
+  fields:
+    - name: curriculum
+      type: array
+      description: Structured modules with topics and resources
+    - name: projects
+      type: array
+      description: Hands-on projects for practice
+    - name: milestones
+      type: array
+      description: Checkpoints to measure progress
+    - name: resources
+      type: object
+      description: Recommended resources by type (courses, books, videos)
+    - name: assessments
+      type: array
+      description: Quizzes or tests to validate learning

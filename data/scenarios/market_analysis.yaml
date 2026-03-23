@@ -1,0 +1,44 @@
+name: "Market Competitor Analysis"
+description: "Analyze markets and generate SWOT matrices for competitors"
+planner_prompt_template: |
+  You are a market research analyst. Analyze this request:
+
+  User Request: {user_intent}
+
+  Provide:
+  1. List of key competitors to analyze
+  2. Criteria for comparison
+  3. Data sources to consult
+executor_template: |
+  Task: {task}
+
+  Competitors: {competitors}
+  Criteria: {criteria}
+
+  Generate a comprehensive analysis with:
+  1. Overview of each competitor
+  2. Strengths and weaknesses
+  3. Market positioning
+  4. SWOT matrix
+
+  Format as a structured report.
+input_schema:
+  fields:
+    - name: industry
+      type: string
+      description: Industry to analyze
+      required: true
+    - name: competitors
+      type: array
+      description: List of competitors to analyze
+      required: false
+    - name: criteria
+      type: array
+      description: Comparison criteria
+      required: false
+output_schema:
+  type: markdown_table
+  fields:
+    - name: competitors_data
+      type: object
+      description: Competitor analysis data

@@ -53,8 +53,7 @@ class OptimizerService:
         self,
         session_id: str,
         selected_candidate_id: str,
-        optimization_types: List[Literal["simplified", "enhanced", "cost-optimized"]]
-        | None = None,
+        optimization_types: List[Literal["simplified", "enhanced", "cost-optimized"]] | None = None,
         rate_with_models: List[str] | None = None,
     ) -> Dict[str, Any]:
         """
@@ -111,9 +110,7 @@ class OptimizerService:
 
         # Rate all plans (original + variants)
         try:
-            plan_ids_to_rate = [selected_candidate_id] + [
-                v["id"] for v in results["variants"]
-            ]
+            plan_ids_to_rate = [selected_candidate_id] + [v["id"] for v in results["variants"]]
             results["ratings"] = self._rate_and_save_plans(
                 session_id,
                 plan_ids_to_rate,
@@ -121,9 +118,7 @@ class OptimizerService:
                 results["variants"],
                 rate_with_models,
             )
-            logger.info(
-                f"Rated {len(plan_ids_to_rate)} plans with {len(rate_with_models)} models"
-            )
+            logger.info(f"Rated {len(plan_ids_to_rate)} plans with {len(rate_with_models)} models")
         except Exception as e:
             logger.error(f"Failed to rate plans: {e}")
             results["status"] = "partial"
@@ -205,16 +200,10 @@ class OptimizerService:
         return self.pairwise_comparison.rank_plans(plans, evaluations_by_plan)
 
     def get_normalized_plans(self, session_id: str) -> List[Dict[str, Any]]:
-        records = (
-            self.db.query(NormalizedPlanRecord)
-            .filter(NormalizedPlanRecord.session_id == session_id)
-            .all()
-        )
+        records = self.db.query(NormalizedPlanRecord).filter(NormalizedPlanRecord.session_id == session_id).all()
         return [record.to_dict() for record in records]
 
-    def _get_candidate(
-        self, session_id: str, candidate_id: str
-    ) -> Dict[str, Any] | None:
+    def _get_candidate(self, session_id: str, candidate_id: str) -> Dict[str, Any] | None:
         """Get candidate from session."""
         session = self.plan_repo.get(session_id)
         if not session:
@@ -234,9 +223,7 @@ class OptimizerService:
         variant_type: str,
     ) -> Dict[str, Any]:
         """Generate variant and save to database"""
-        variant_data = self.variant_generator.generate_variant(
-            proposal=candidate, variant_type=variant_type
-        )
+        variant_data = self.variant_generator.generate_variant(proposal=candidate, variant_type=variant_type)
 
         db_variant = OptimizedVariant(
             id=str(uuid.uuid4()),
@@ -285,9 +272,7 @@ class OptimizerService:
                 ],
                 context_references=list(candidate.get("context_references") or []),
                 confidence=0.72,
-                why_suggested=variant_data.get("metadata", {}).get(
-                    "optimization_notes"
-                ),
+                why_suggested=variant_data.get("metadata", {}).get("optimization_notes"),
                 metadata={
                     "origin": "optimizer",
                     **(variant_data.get("metadata") or {}),
@@ -357,9 +342,7 @@ class OptimizerService:
             self.db.commit()
 
             # Calculate average score
-            avg_score = sum(
-                r.get("overall_score", 5.0) for r in model_ratings.values()
-            ) / len(model_ratings)
+            avg_score = sum(r.get("overall_score", 5.0) for r in model_ratings.values()) / len(model_ratings)
 
             ratings_by_plan[plan_id] = {
                 "ratings": model_ratings,
@@ -376,9 +359,7 @@ class OptimizerService:
     ) -> Dict[str, Any]:
         """Get plan data for rating"""
         # Check if it's the original proposal
-        if plan_id == original_proposal.get("id") or plan_id == original_proposal.get(
-            "proposal_id"
-        ):
+        if plan_id == original_proposal.get("id") or plan_id == original_proposal.get("proposal_id"):
             return original_proposal
 
         # Check if it's a variant
@@ -387,9 +368,7 @@ class OptimizerService:
                 return {
                     "id": plan_id,
                     "title": f"{variant['variant_type'].replace('-', ' ').title()} Variant",
-                    "description": (
-                        f"Optimized variant with type: {variant['variant_type']}"
-                    ),
+                    "description": (f"Optimized variant with type: {variant['variant_type']}"),
                     "execution_graph": variant["execution_graph"],
                     "metadata": variant.get("metadata", {}),
                 }
@@ -400,30 +379,16 @@ class OptimizerService:
     def get_optimization_results(self, session_id: str) -> Dict[str, Any]:
         """Retrieve optimization results for a session"""
         # Get variants
-        variants = (
-            self.db.query(OptimizedVariant)
-            .filter(OptimizedVariant.session_id == session_id)
-            .all()
-        )
+        variants = self.db.query(OptimizedVariant).filter(OptimizedVariant.session_id == session_id).all()
 
         # Get ratings
-        ratings = (
-            self.db.query(PlanRating).filter(PlanRating.session_id == session_id).all()
-        )
+        ratings = self.db.query(PlanRating).filter(PlanRating.session_id == session_id).all()
         normalized_plans = (
-            self.db.query(NormalizedPlanRecord)
-            .filter(NormalizedPlanRecord.session_id == session_id)
-            .all()
+            self.db.query(NormalizedPlanRecord).filter(NormalizedPlanRecord.session_id == session_id).all()
         )
-        evaluations = (
-            self.db.query(PlanEvaluationRecord)
-            .filter(PlanEvaluationRecord.session_id == session_id)
-            .all()
-        )
+        evaluations = self.db.query(PlanEvaluationRecord).filter(PlanEvaluationRecord.session_id == session_id).all()
         pairwise = (
-            self.db.query(PairwiseComparisonRecord)
-            .filter(PairwiseComparisonRecord.session_id == session_id)
-            .all()
+            self.db.query(PairwiseComparisonRecord).filter(PairwiseComparisonRecord.session_id == session_id).all()
         )
 
         return {
@@ -473,9 +438,7 @@ class OptimizerService:
             self.db.add(NormalizedPlanRecord(id=plan.id, **payload))
         self.db.commit()
 
-    def _save_evaluations(
-        self, session_id: Optional[str], evaluations: Dict[str, PlanEvaluation]
-    ) -> None:
+    def _save_evaluations(self, session_id: Optional[str], evaluations: Dict[str, PlanEvaluation]) -> None:
         for evaluation in evaluations.values():
             self.db.add(
                 PlanEvaluationRecord(
@@ -494,9 +457,7 @@ class OptimizerService:
             )
         self.db.commit()
 
-    def _save_pairwise_comparison(
-        self, session_id: Optional[str], comparison: PairwisePlanComparison
-    ) -> None:
+    def _save_pairwise_comparison(self, session_id: Optional[str], comparison: PairwisePlanComparison) -> None:
         self.db.add(
             PairwiseComparisonRecord(
                 id=str(uuid.uuid4()),
@@ -512,10 +473,5 @@ class OptimizerService:
         )
         self.db.commit()
 
-    def _serialize_evaluations(
-        self, evaluations: Dict[str, PlanEvaluation]
-    ) -> Dict[str, Any]:
-        return {
-            judge_model: evaluation.model_dump(mode="json")
-            for judge_model, evaluation in evaluations.items()
-        }
+    def _serialize_evaluations(self, evaluations: Dict[str, PlanEvaluation]) -> Dict[str, Any]:
+        return {judge_model: evaluation.model_dump(mode="json") for judge_model, evaluation in evaluations.items()}

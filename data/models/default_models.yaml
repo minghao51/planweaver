@@ -1,0 +1,76 @@
+# Default Model Configurations
+# This file contains the default models available in PlanWeaver
+# Models can be loaded into the database using: uv run python scripts/maintenance/init_models.py
+
+models:
+  # Gemini 3.1 Pro (Latest, March 2026) - Best for complex planning
+  - id: "gemini-3.1-pro"
+    name: "Gemini 3.1 Pro (Latest)"
+    provider: "google"
+    type: "planner"
+    is_free: false
+    context_length: 2000000
+    pricing_info:
+      input_per_1m: 2.00
+      output_per_1m: 12.00
+    notes: "1-2M token context, best for complex planning tasks"
+
+  # Gemini 3 Flash - Fast, PhD-level reasoning
+  - id: "gemini-3-flash"
+    name: "Gemini 3 Flash"
+    provider: "google"
+    type: "planner"
+    is_free: false
+    context_length: 1000000
+    pricing_info:
+      input_per_1m: 0.50
+      output_per_1m: 3.00
+    notes: "1M token context, fast execution with PhD-level reasoning"
+
+  # Gemini 3 Pro - Advanced reasoning
+  - id: "gemini-3-pro"
+    name: "Gemini 3 Pro"
+    provider: "google"
+    type: "executor"
+    is_free: false
+    context_length: 1000000
+    pricing_info:
+      input_per_1m: 2.00
+      output_per_1m: 12.00
+    notes: "Advanced reasoning for execution tasks"
+
+  # DeepSeek Chat - Cost-effective planner
+  - id: "deepseek/deepseek-chat"
+    name: "DeepSeek Chat"
+    provider: "deepseek"
+    type: "planner"
+    is_free: true
+    context_length: 128000
+    pricing_info:
+      input_per_1m: 0.00
+      output_per_1m: 0.00
+    notes: "Free alternative for planning tasks"
+
+  # Claude 3.5 Sonnet - Coding specialist
+  - id: "anthropic/claude-3-5-sonnet-20241022"
+    name: "Claude 3.5 Sonnet"
+    provider: "anthropic"
+    type: "executor"
+    is_free: false
+    context_length: 200000
+    pricing_info:
+      input_per_1m: 3.00
+      output_per_1m: 15.00
+    notes: "Excellent for coding and technical tasks"
+
+  # GPT-4o - General purpose
+  - id: "openai/gpt-4o"
+    name: "GPT-4o"
+    provider: "openai"
+    type: "executor"
+    is_free: false
+    context_length: 128000
+    pricing_info:
+      input_per_1m: 5.00
+      output_per_1m: 15.00
+    notes: "Well-rounded model for general tasks"

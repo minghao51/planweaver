@@ -19,17 +19,11 @@ class Settings(BaseSettings):
     cors_origins: Optional[str] = None
 
     # GitHub Configuration
-    github_token: Optional[str] = Field(
-        None, description="GitHub PAT for private repos"
-    )
+    github_token: Optional[str] = Field(None, description="GitHub PAT for private repos")
 
     # Web Search Configuration
-    tavily_api_key: Optional[str] = Field(
-        None, description="Tavily API key for web search"
-    )
-    search_provider: str = Field(
-        "tavily", description="Search provider: tavily, serper, duckduckgo"
-    )
+    tavily_api_key: Optional[str] = Field(None, description="Tavily API key for web search")
+    search_provider: str = Field("tavily", description="Search provider: tavily, serper, duckduckgo")
 
     # File Upload Configuration
     max_file_size_mb: int = Field(10, description="Maximum file upload size in MB")
@@ -39,9 +33,7 @@ class Settings(BaseSettings):
     )
 
     # Session Cleanup Configuration
-    session_ttl_days: int = Field(
-        7, description="Days until sessions expire and are deleted"
-    )
+    session_ttl_days: int = Field(7, description="Days until sessions expire and are deleted")
 
 
 @lru_cache

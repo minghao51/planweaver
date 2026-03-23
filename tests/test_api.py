@@ -61,9 +61,7 @@ class TestAPI:
             "src.planweaver.api.routers.sessions.get_orchestrator",
             return_value=mock_orchestrator,
         ):
-            response = client.post(
-                "/api/v1/sessions", json={"user_intent": "Create a web app"}
-            )
+            response = client.post("/api/v1/sessions", json={"user_intent": "Create a web app"})
 
             assert response.status_code == 200
             assert "session_id" in response.json()
@@ -190,9 +188,7 @@ class TestAPIValidation:
             mock_db = Mock()
             mock_get_db.return_value = mock_db
 
-            with patch(
-                "src.planweaver.api.routers.optimizer.OptimizerService"
-            ) as mock_service_cls:
+            with patch("src.planweaver.api.routers.optimizer.OptimizerService") as mock_service_cls:
                 mock_service = Mock()
                 mock_service.optimize_plan.return_value = {
                     "status": "completed",
@@ -268,9 +264,7 @@ class TestAPIValidation:
             ],
         }
 
-        with patch(
-            "src.planweaver.api.routers.optimizer.get_optimizer_service"
-        ) as mock_get_service:
+        with patch("src.planweaver.api.routers.optimizer.get_optimizer_service") as mock_get_service:
             mock_service = Mock()
             mock_service.submit_manual_plan.return_value = mocked_response
             mock_get_service.return_value = mock_service
@@ -358,21 +352,15 @@ class TestAPIValidation:
             ],
         }
 
-        with patch(
-            "src.planweaver.api.routers.optimizer.get_optimizer_service"
-        ) as mock_get_service:
+        with patch("src.planweaver.api.routers.optimizer.get_optimizer_service") as mock_get_service:
             mock_service = Mock()
             mock_service.normalize_plan_payload.side_effect = [
                 Mock(
-                    model_dump=Mock(
-                        return_value=mocked_response["normalized_plans"][0]
-                    ),
+                    model_dump=Mock(return_value=mocked_response["normalized_plans"][0]),
                     id="plan-a",
                 ),
                 Mock(
-                    model_dump=Mock(
-                        return_value=mocked_response["normalized_plans"][1]
-                    ),
+                    model_dump=Mock(return_value=mocked_response["normalized_plans"][1]),
                     id="plan-b",
                 ),
             ]
@@ -380,9 +368,7 @@ class TestAPIValidation:
             mock_service.compare_plans.return_value = [
                 Mock(model_dump=Mock(return_value=mocked_response["comparisons"][0]))
             ]
-            mock_service.rank_plans.return_value = [
-                Mock(model_dump=Mock(return_value=mocked_response["ranking"][0]))
-            ]
+            mock_service.rank_plans.return_value = [Mock(model_dump=Mock(return_value=mocked_response["ranking"][0]))]
             mock_get_service.return_value = mock_service
 
             response = client.post(

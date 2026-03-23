@@ -42,9 +42,7 @@ class GitHubAnalyzer:
             dependencies = self._get_dependencies(repo)
 
             # Build content summary
-            content_summary = self._build_summary(
-                metadata, file_structure, key_files, dependencies
-            )
+            content_summary = self._build_summary(metadata, file_structure, key_files, dependencies)
 
             return {
                 "metadata": metadata,
@@ -112,9 +110,7 @@ class GitHubAnalyzer:
 
         try:
             readme = repo.get_readme()
-            key_files["README.md"] = readme.decoded_content.decode()[
-                : self._max_readme_chars
-            ]
+            key_files["README.md"] = readme.decoded_content.decode()[: self._max_readme_chars]
         except (GithubException, UnicodeDecodeError, AttributeError):
             pass
 
@@ -136,9 +132,7 @@ class GitHubAnalyzer:
         if requirements_txt:
             requirements = requirements_txt.splitlines()
             dependencies["python"] = [
-                line.strip()
-                for line in requirements
-                if line.strip() and not line.startswith("#")
+                line.strip() for line in requirements if line.strip() and not line.startswith("#")
             ]
 
         package_json = self._safe_decoded_content(repo, "package.json")
@@ -175,15 +169,9 @@ class GitHubAnalyzer:
 
         lines.extend(["", "### Dependencies:"])
         if dependencies["python"]:
-            lines.append(
-                "**Python:** "
-                + ", ".join(dependencies["python"][: self._max_summary_list_items])
-            )
+            lines.append("**Python:** " + ", ".join(dependencies["python"][: self._max_summary_list_items]))
         if dependencies["javascript"]:
-            lines.append(
-                "**JavaScript:** "
-                + ", ".join(dependencies["javascript"][: self._max_summary_list_items])
-            )
+            lines.append("**JavaScript:** " + ", ".join(dependencies["javascript"][: self._max_summary_list_items]))
 
         lines.extend(["", "### Key Files:"])
         for filename, content in key_files.items():

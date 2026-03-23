@@ -93,9 +93,7 @@ class TestE2EContextWorkflow:
         assert len(plan.external_contexts) == 1
 
         # 3. Add more context later
-        new_context = ExternalContext(
-            source_type="web_search", content_summary="Testing best practices"
-        )
+        new_context = ExternalContext(source_type="web_search", content_summary="Testing best practices")
         plan = mock_orchestrator.add_external_context(plan.session_id, new_context)
 
         # 4. Verify both contexts present

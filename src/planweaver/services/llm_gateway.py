@@ -1,4 +1,4 @@
-from typing import Optional, AsyncIterator, Dict, Any
+from typing import Optional, AsyncIterator, Dict, Any, Type, Union
 import json
 from pydantic import BaseModel, ValidationError
 from litellm import completion, acompletion
@@ -9,9 +9,7 @@ from google import genai
 from google.genai import types
 
 logger = logging.getLogger(__name__)
-JSON_ONLY_INSTRUCTION = (
-    "You must output valid JSON only. No markdown formatting, no code blocks."
-)
+JSON_ONLY_INSTRUCTION = "You must output valid JSON only. No markdown formatting, no code blocks."
 
 
 class LLMResponse(BaseModel):
@@ -29,14 +27,15 @@ class LLMGateway:
         if self._gemini_client is None:
             api_key = self.settings.google_api_key or self.settings.gemini_api_key
             if not api_key:
-                raise ValueError(
-                    "GOOGLE_API_KEY or GEMINI_API_KEY is required for Gemini models"
-                )
+                raise ValueError("GOOGLE_API_KEY or GEMINI_API_KEY is required for Gemini models")
             self._gemini_client = genai.Client(api_key=api_key)
         return self._gemini_client
 
     def _is_gemini_model(self, model: str) -> bool:
         return model.startswith("gemini-") or model.startswith("models/")
+
+    def _is_openai_model(self, model: str) -> bool:
+        return any(model.startswith(prefix) for prefix in ["gpt-", "o1-", "o3-", "chatgpt-"])
 
     def _convert_messages_for_gemini(self, messages: list[dict]) -> list[dict]:
         converted = []
@@ -55,9 +54,7 @@ class LLMGateway:
             prepared.append({"role": "system", "content": JSON_ONLY_INSTRUCTION})
         return prepared
 
-    def _format_response(
-        self, model: str, content: Optional[str], usage: Optional[Dict[str, Any]] = None
-    ) -> dict:
+    def _format_response(self, model: str, content: Optional[str], usage: Optional[Dict[str, Any]] = None) -> dict:
         return {
             "content": content or "",
             "model": model,
@@ -79,19 +76,20 @@ class LLMGateway:
         messages: list[dict],
         json_mode: bool = False,
         max_tokens: int = 4096,
+        response_format: Optional[Union[Type[BaseModel], dict]] = None,
     ) -> dict:
         if self._is_gemini_model(model):
-            return self._complete_gemini(model, messages, json_mode, max_tokens)
+            return self._complete_gemini(model, messages, json_mode, max_tokens, response_format)
 
-        prepared_messages = self._prepare_messages(messages, json_mode)
+        prepared_messages = self._prepare_messages(messages, json_mode or response_format is not None)
 
-        response = completion(
-            model=model, messages=prepared_messages, max_tokens=max_tokens
-        )
+        kwargs: Dict[str, Any] = {"model": model, "messages": prepared_messages, "max_tokens": max_tokens}
+        if response_format is not None:
+            kwargs["response_format"] = response_format
 
-        content = self._normalize_content(
-            response.choices[0].message.content, json_mode
-        )
+        response = completion(**kwargs)
+
+        content = self._normalize_content(response.choices[0].message.content, json_mode or response_format is not None)
         return self._format_response(model, content, self._extract_usage(response))
 
     def _complete_gemini(
@@ -100,23 +98,32 @@ class LLMGateway:
         messages: list[dict],
         json_mode: bool = False,
         max_tokens: int = 4096,
+        response_format: Optional[Union[Type[BaseModel], dict]] = None,
     ) -> dict:
         client = self._get_gemini_client()
 
-        prepared_messages = self._prepare_messages(messages, json_mode)
+        prepared_messages = self._prepare_messages(messages, json_mode or response_format is not None)
         gemini_messages = self._convert_messages_for_gemini(prepared_messages)
 
-        config_kwargs = {"max_output_tokens": max_tokens}
-        if json_mode:
+        config_kwargs: Dict[str, Any] = {"max_output_tokens": max_tokens}
+
+        if response_format is not None:
+            if isinstance(response_format, type) and issubclass(response_format, BaseModel):
+                config_kwargs["response_mime_type"] = "application/json"
+                config_kwargs["response_schema"] = response_format.model_json_schema()
+            elif isinstance(response_format, dict):
+                config_kwargs["response_mime_type"] = "application/json"
+                if "json_schema" in response_format:
+                    config_kwargs["response_schema"] = response_format["json_schema"]
+        elif json_mode:
             config_kwargs["response_mime_type"] = "application/json"
+
         generation_config = types.GenerateContentConfig(**config_kwargs)
 
-        response = client.models.generate_content(
-            model=model, contents=gemini_messages, config=generation_config
-        )
+        response = client.models.generate_content(model=model, contents=gemini_messages, config=generation_config)
 
         content = response.text if hasattr(response, "text") else str(response)
-        return self._format_response(model, self._normalize_content(content, json_mode))
+        return self._format_response(model, self._normalize_content(content, json_mode or response_format is not None))
 
     async def acomplete(
         self,
@@ -130,18 +137,12 @@ class LLMGateway:
 
         prepared_messages = self._prepare_messages(messages, json_mode)
 
-        response = await acompletion(
-            model=model, messages=prepared_messages, max_tokens=max_tokens
-        )
+        response = await acompletion(model=model, messages=prepared_messages, max_tokens=max_tokens)
 
-        content = self._normalize_content(
-            response.choices[0].message.content, json_mode
-        )
+        content = self._normalize_content(response.choices[0].message.content, json_mode)
         return self._format_response(model, content, self._extract_usage(response))
 
-    def stream_complete(
-        self, model: str, messages: list[dict], json_mode: bool = False
-    ) -> AsyncIterator[dict]:
+    def stream_complete(self, model: str, messages: list[dict], json_mode: bool = False) -> AsyncIterator[dict]:
         prepared_messages = self._prepare_messages(messages, json_mode)
 
         response = completion(model=model, messages=prepared_messages, stream=True)
@@ -164,9 +165,7 @@ class LLMGateway:
             logger.warning(f"JSON repair failed: {e}")
             return content
 
-    def parse_json_response(
-        self, content: str, schema: Optional[type[BaseModel]] = None
-    ) -> Dict[str, Any]:
+    def parse_json_response(self, content: str, schema: Optional[type[BaseModel]] = None) -> Dict[str, Any]:
         content = self._repair_json(content)
         try:
             data = json.loads(content)
@@ -211,9 +210,7 @@ class LLMGateway:
                 logger.info("No models in database, using fallback list")
                 return self._get_fallback_models()
         except Exception as e:
-            logger.warning(
-                f"Error fetching models from database: {e}, using fallback list"
-            )
+            logger.warning(f"Error fetching models from database: {e}, using fallback list")
             return self._get_fallback_models()
         finally:
             session.close()

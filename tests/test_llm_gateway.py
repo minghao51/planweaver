@@ -13,15 +13,11 @@ class TestLLMGateway:
             "completion_tokens": 5,
         }
 
-        with patch(
-            "src.planweaver.services.llm_gateway.completion", return_value=mock_response
-        ):
+        with patch("src.planweaver.services.llm_gateway.completion", return_value=mock_response):
             from src.planweaver.services.llm_gateway import LLMGateway
 
             gateway = LLMGateway()
-            result = gateway.complete(
-                model="test/model", messages=[{"role": "user", "content": "hello"}]
-            )
+            result = gateway.complete(model="test/model", messages=[{"role": "user", "content": "hello"}])
 
             assert result["content"] == "test response"
             assert result["model"] == "test/model"
@@ -37,12 +33,8 @@ class TestLLMGateway:
             "completion_tokens": 5,
         }
 
-        with patch(
-            "src.planweaver.services.llm_gateway.completion", return_value=mock_response
-        ):
-            with patch(
-                "src.planweaver.services.llm_gateway.json_repair"
-            ) as mock_repair:
+        with patch("src.planweaver.services.llm_gateway.completion", return_value=mock_response):
+            with patch("src.planweaver.services.llm_gateway.json_repair") as mock_repair:
                 mock_repair.repair_json.return_value = '{"key": "value"}'
 
                 from src.planweaver.services.llm_gateway import LLMGateway
@@ -84,9 +76,7 @@ class TestLLMGateway:
 
         google_models = [m for m in models if m.get("provider") == "google"]
         assert len(google_models) > 0, "Should contain Google provider models"
-        assert any("gemini-2.5-flash" in m["id"] for m in google_models), (
-            "Should contain Gemini 2.5 Flash"
-        )
+        assert any("gemini-2.5-flash" in m["id"] for m in google_models), "Should contain Gemini 2.5 Flash"
 
     @pytest.mark.asyncio
     async def test_acomplete_returns_content(self):
@@ -106,9 +96,7 @@ class TestLLMGateway:
             from src.planweaver.services.llm_gateway import LLMGateway
 
             gateway = LLMGateway()
-            result = await gateway.acomplete(
-                model="test/model", messages=[{"role": "user", "content": "hello"}]
-            )
+            result = await gateway.acomplete(model="test/model", messages=[{"role": "user", "content": "hello"}])
 
             assert result["content"] == "async response"
 
@@ -199,9 +187,7 @@ class TestLLMGateway:
             "completion_tokens": 5,
         }
 
-        with patch(
-            "src.planweaver.services.llm_gateway.completion", return_value=mock_response
-        ) as mock_completion:
+        with patch("src.planweaver.services.llm_gateway.completion", return_value=mock_response) as mock_completion:
             gateway = LLMGateway()
             result = gateway.complete(
                 model="deepseek/deepseek-chat",
@@ -231,9 +217,7 @@ class TestLLMGateway:
 
                 assert result["content"] == '{"key": "value"}'
                 call_args = mock_client.models.generate_content.call_args
-                assert (
-                    call_args.kwargs["config"].response_mime_type == "application/json"
-                )
+                assert call_args.kwargs["config"].response_mime_type == "application/json"
 
     @pytest.mark.asyncio
     async def test_acomplete_routes_to_gemini_for_gemini_model(self):

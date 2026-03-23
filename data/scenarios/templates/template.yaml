@@ -1,0 +1,40 @@
+name: "Your Scenario Name"
+description: "Brief description of what this scenario does"
+
+planner_prompt_template: |
+  You are an expert in [domain]. Analyze the following request:
+
+  User Request: {user_intent}
+
+  Additional Context:
+  - Field 1: {field1}
+  - Field 2: {field2}
+
+  Create a detailed plan to accomplish this goal.
+
+executor_template: |
+  Task: {task}
+
+  Context:
+  - Field 1: {field1}
+  - Field 2: {field2}
+
+  Execute this task according to the plan.
+
+input_schema:
+  fields:
+    - name: field1
+      type: string
+      description: Description of field1
+      required: true
+    - name: field2
+      type: array
+      description: Description of field2
+      required: false
+
+output_schema:
+  type: object
+  fields:
+    - name: result
+      type: object
+      description: The main result

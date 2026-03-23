@@ -16,49 +16,39 @@ class TestPlanner:
         return gateway
 
     def test_analyze_intent_returns_analysis(self, mock_llm_gateway):
-        with patch(
-            "src.planweaver.services.planner.LLMGateway", return_value=mock_llm_gateway
-        ):
+        with patch("src.planweaver.services.planner.LLMGateway", return_value=mock_llm_gateway):
             from src.planweaver.services.planner import Planner
-            from src.planweaver.models.plan import Plan, PlanStatus
+            from src.planweaver.models.plan import Plan, PlanStatus, IntentAnalysis
 
             planner = Planner(llm_gateway=mock_llm_gateway)
 
-            # Create a plan for the analyze_intent call
-            plan = Plan(
-                user_intent="Create a Python web app", status=PlanStatus.BRAINSTORMING
-            )
+            plan = Plan(user_intent="Create a Python web app", status=PlanStatus.BRAINSTORMING)
 
             result = planner.analyze_intent("Create a Python web app", plan)
 
-            assert "identified_constraints" in result
-            assert "missing_information" in result
-            assert "suggested_approach" in result
-            assert "estimated_complexity" in result
+            assert isinstance(result, IntentAnalysis)
+            assert result.identified_constraints == ["Python"]
+            assert result.suggested_approach == "test"
+            assert result.estimated_complexity == "low"
 
     def test_analyze_intent_handles_json_error(self):
         mock_gateway = Mock()
-        mock_gateway.complete = Mock(
-            return_value={"content": "not valid json", "model": "test", "usage": {}}
-        )
+        mock_gateway.complete = Mock(return_value={"content": "not valid json", "model": "test", "usage": {}})
 
         from src.planweaver.services.planner import Planner
         from src.planweaver.models.plan import Plan, PlanStatus
 
         planner = Planner(llm_gateway=mock_gateway)
 
-        # Create a plan for the analyze_intent call
         plan = Plan(user_intent="test request", status=PlanStatus.BRAINSTORMING)
 
         result = planner.analyze_intent("test request", plan)
 
-        assert "identified_constraints" in result
-        assert result["estimated_complexity"] == "unknown"
+        assert result.identified_constraints == []
+        assert result.estimated_complexity == "medium"
 
     def test_create_initial_plan_returns_plan(self, mock_llm_gateway):
-        with patch(
-            "src.planweaver.services.planner.LLMGateway", return_value=mock_llm_gateway
-        ):
+        with patch("src.planweaver.services.planner.LLMGateway", return_value=mock_llm_gateway):
             from src.planweaver.services.planner import Planner
             from src.planweaver.models.plan import PlanStatus
 
@@ -86,9 +76,7 @@ class TestPlanner:
         from src.planweaver.models.plan import ExecutionStep, StepStatus
 
         planner = Planner(llm_gateway=mock_planner_llm_for_decompose)
-        steps = planner.decompose_into_steps(
-            user_intent="Create web app", locked_constraints={}
-        )
+        steps = planner.decompose_into_steps(user_intent="Create web app", locked_constraints={})
 
         assert len(steps) > 0
         assert isinstance(steps[0], ExecutionStep)
@@ -96,9 +84,7 @@ class TestPlanner:
 
     def test_decompose_handles_json_error(self):
         mock_gateway = Mock()
-        mock_gateway.complete = Mock(
-            return_value={"content": "invalid", "model": "test", "usage": {}}
-        )
+        mock_gateway.complete = Mock(return_value={"content": "invalid", "model": "test", "usage": {}})
 
         from src.planweaver.services.planner import Planner
 
@@ -114,7 +100,7 @@ class TestPlanner:
         gateway = Mock()
         gateway.complete = Mock(
             return_value={
-                "content": '[{"title": "Approach 1", "description": "Desc", "pros": ["Pro 1"], "cons": ["Con 1"]}]',
+                "content": '{"proposals": [{"title": "Approach 1", "description": "Desc", "pros": ["Pro 1"], "cons": ["Con 1"]}]}',
                 "model": "test",
                 "usage": {},
             }
@@ -133,9 +119,7 @@ class TestPlanner:
 
     def test_generate_strawman_handles_json_error(self):
         mock_gateway = Mock()
-        mock_gateway.complete = Mock(
-            return_value={"content": "invalid", "model": "test", "usage": {}}
-        )
+        mock_gateway.complete = Mock(return_value={"content": "invalid", "model": "test", "usage": {}})
 
         from src.planweaver.services.planner import Planner
 

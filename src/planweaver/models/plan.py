@@ -81,6 +81,13 @@ class ProposalWithAnalysis(BaseModel):
         from_attributes = True
 
 
+class PreconditionAnnotation(BaseModel):
+    precondition_type: str
+    check_expression: str
+    probe_result: Optional[bool] = None
+    probe_error: Optional[str] = None
+
+
 class ExecutionStep(BaseModel):
     step_id: int
     task: str
@@ -92,6 +99,7 @@ class ExecutionStep(BaseModel):
     error: Optional[str] = None
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    preconditions: List[PreconditionAnnotation] = Field(default_factory=list)
 
 
 class ExternalContext(BaseModel):
@@ -124,12 +132,9 @@ class Plan(BaseModel):
     context_suggestions: List[ContextSuggestion] = Field(default_factory=list)
     selected_candidate_id: Optional[str] = None
     approved_candidate_id: Optional[str] = None
-    planner_model: Optional[str] = Field(
-        default=None, description="User-selected planner model override"
-    )
-    executor_model: Optional[str] = Field(
-        default=None, description="Executor model to use for this plan"
-    )
+    planner_model: Optional[str] = Field(default=None, description="User-selected planner model override")
+    executor_model: Optional[str] = Field(default=None, description="Executor model to use for this plan")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata for the plan")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     final_output: Optional[Any] = None
@@ -385,3 +390,58 @@ class ContextSuggestion(BaseModel):
     reason: str
     suggested_query: Optional[str] = None
     confidence: float = 0.5
+
+
+class IntentAnalysis(BaseModel):
+    identified_constraints: List[str] = Field(default_factory=list)
+    missing_information: List[str] = Field(default_factory=list)
+    suggested_approach: str = ""
+    estimated_complexity: Literal["low", "medium", "high"] = "medium"
+
+
+class ProposalAnalysisEntry(BaseModel):
+    estimated_step_count: int = 5
+    complexity_score: Literal["Low", "Medium", "High"] = "Medium"
+    estimated_time_minutes: int = 10
+    estimated_cost_usd: float = 0.005
+    risk_factors: List[str] = Field(default_factory=list)
+
+
+class ProposalAnalysis(BaseModel):
+    proposals: Dict[str, ProposalAnalysisEntry] = Field(default_factory=dict)
+
+
+class StrawmanProposalInput(BaseModel):
+    title: str
+    description: str
+    pros: List[str] = Field(default_factory=list)
+    cons: List[str] = Field(default_factory=list)
+    why_suggested: Optional[str] = None
+    confidence: Optional[float] = None
+    planning_style: Optional[str] = "baseline"
+
+
+class ModelRating(BaseModel):
+    ratings: Dict[str, float] = Field(default_factory=dict)
+    reasoning: str = ""
+
+
+class VariantMetadata(BaseModel):
+    step_count: Optional[int] = None
+    complexity_score: Optional[str] = None
+    optimization_notes: Optional[str] = None
+    estimated_time_minutes: Optional[int] = None
+    estimated_cost_usd: Optional[float] = None
+
+
+class VariantData(BaseModel):
+    execution_graph: List[Dict[str, Any]] = Field(default_factory=list)
+    metadata: VariantMetadata = Field(default_factory=VariantMetadata)
+
+
+class ExecutionStepsList(BaseModel):
+    steps: List["ExecutionStep"] = Field(default_factory=list)
+
+
+class StrawmanProposalInputList(BaseModel):
+    proposals: List[StrawmanProposalInput] = Field(default_factory=list)

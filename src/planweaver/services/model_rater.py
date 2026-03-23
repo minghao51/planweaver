@@ -1,6 +1,7 @@
 from typing import List, Dict, Any
 from logging import getLogger
 from .llm_gateway import LLMGateway
+from ..models.plan import ModelRating
 
 logger = getLogger(__name__)
 
@@ -43,9 +44,7 @@ class ModelRater:
         models = models or self.DEFAULT_MODELS
         criteria = criteria or self.CRITERIA
 
-        logger.info(
-            f"Rating plan with {len(models)} models on {len(criteria)} criteria"
-        )
+        logger.info(f"Rating plan with {len(models)} models on {len(criteria)} criteria")
 
         ratings = {}
         for model in models:
@@ -59,9 +58,7 @@ class ModelRater:
 
         return ratings
 
-    def _rate_with_model(
-        self, plan: Dict[str, Any], model: str, criteria: List[str]
-    ) -> Dict[str, Any]:
+    def _rate_with_model(self, plan: Dict[str, Any], model: str, criteria: List[str]) -> Dict[str, Any]:
         """Rate plan using a specific model"""
         system_prompt = self._get_rating_system_prompt(criteria)
         user_prompt = self._build_rating_prompt(plan, criteria)
@@ -71,24 +68,21 @@ class ModelRater:
             {"role": "user", "content": user_prompt},
         ]
 
-        response = self.llm_gateway.complete(
-            model=model, messages=messages, json_mode=True, max_tokens=2048
-        )
-
         try:
-            import json
-
-            rating_data = json.loads(response["content"])
-
-            # Calculate overall score
-            ratings = rating_data.get("ratings", {})
+            response = self.llm_gateway.complete(
+                model=model,
+                messages=messages,
+                response_format=ModelRating,
+                max_tokens=2048,
+            )
+            parsed = ModelRating.model_validate_json(response["content"])
+            ratings = parsed.ratings
             overall = sum(ratings.values()) / len(ratings) if ratings else 5.0
-
             return {
                 "model_name": model,
                 "ratings": ratings,
                 "overall_score": round(overall, 2),
-                "reasoning": rating_data.get("reasoning", ""),
+                "reasoning": parsed.reasoning,
             }
         except Exception as e:
             logger.error(f"Failed to parse rating response from {model}: {e}")
@@ -150,9 +144,7 @@ Respond ONLY with a valid JSON object containing ratings and reasoning."""
 
         formatted = []
         for step in graph[:10]:  # Limit to first 10 steps
-            formatted.append(
-                f"- Step {step.get('step_id', '?')}: {step.get('task', 'Unknown')}"
-            )
+            formatted.append(f"- Step {step.get('step_id', '?')}: {step.get('task', 'Unknown')}")
 
         if len(graph) > 10:
             formatted.append(f"... and {len(graph) - 10} more steps")

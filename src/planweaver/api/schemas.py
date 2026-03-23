@@ -11,9 +11,7 @@ def sanitize_text(value: str) -> str:
 
 
 class CreateSessionRequest(BaseModel):
-    user_intent: str = Field(
-        min_length=1, max_length=5000, description="User's planning intent"
-    )
+    user_intent: str = Field(min_length=1, max_length=5000, description="User's planning intent")
     scenario_name: str = Field(
         default="default",
         min_length=1,
@@ -21,12 +19,8 @@ class CreateSessionRequest(BaseModel):
         pattern=r"^[a-zA-Z0-9 _-]+$",
         description="Scenario template name",
     )
-    planner_model: Optional[str] = Field(
-        None, description="Override default planner model"
-    )
-    executor_model: Optional[str] = Field(
-        None, description="Override default executor model"
-    )
+    planner_model: Optional[str] = Field(None, description="Override default planner model")
+    executor_model: Optional[str] = Field(None, description="Override default executor model")
 
     @field_validator("user_intent", mode="before")
     @classmethod
@@ -37,9 +31,7 @@ class CreateSessionRequest(BaseModel):
 
 
 class AnswerQuestionsRequest(BaseModel):
-    answers: Dict[str, str] = Field(
-        min_length=1, description="List of answers to clarifying questions"
-    )
+    answers: Dict[str, str] = Field(min_length=1, description="List of answers to clarifying questions")
 
     @field_validator("answers", mode="before")
     @classmethod
@@ -191,21 +183,13 @@ class BranchCandidateRequest(BaseModel):
 
 
 class OptimizerRequest(BaseModel):
-    session_id: Optional[str] = Field(
-        default=None, min_length=1, description="Session identifier"
-    )
-    candidate_id: Optional[str] = Field(
-        default=None, min_length=1, description="Selected candidate ID to optimize"
-    )
-    selected_proposal_id: Optional[str] = Field(
-        default=None, min_length=1, description="Legacy selected proposal ID"
-    )
+    session_id: Optional[str] = Field(default=None, min_length=1, description="Session identifier")
+    candidate_id: Optional[str] = Field(default=None, min_length=1, description="Selected candidate ID to optimize")
+    selected_proposal_id: Optional[str] = Field(default=None, min_length=1, description="Legacy selected proposal ID")
     optimization_types: list[str] = Field(
         default=["simplified", "enhanced"], description="Types of variants to generate"
     )
-    user_context: Optional[str] = Field(
-        None, max_length=2000, description="Additional context from user"
-    )
+    user_context: Optional[str] = Field(None, max_length=2000, description="Additional context from user")
 
     @field_validator("optimization_types")
     @classmethod
@@ -276,9 +260,7 @@ class UserRatingRequest(BaseModel):
     plan_id: str = Field(..., min_length=10, description="Plan ID to rate")
     rating: int = Field(..., ge=1, le=5, description="User rating 1-5")
     comment: Optional[str] = Field(None, max_length=1000, description="User comment")
-    rationale: Optional[str] = Field(
-        None, max_length=2000, description="Rating rationale"
-    )
+    rationale: Optional[str] = Field(None, max_length=2000, description="Rating rationale")
 
     @field_validator("comment", "rationale", mode="before")
     @classmethod
@@ -419,3 +401,35 @@ class PairwiseComparisonResponse(BaseModel):
     evaluations: Dict[str, Dict[str, PlanEvaluationSchema]]
     comparisons: list[PairwiseComparisonSchema]
     ranking: list[RankedPlanSchema]
+
+
+class MessageRequest(BaseModel):
+    content: str = Field(..., description="The message content from user or agent")
+    role: str = Field(default="user", description="Role of the message sender")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Optional metadata about the message")
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, v: str) -> str:
+        if v not in ("user", "assistant", "system"):
+            raise ValueError(f"role must be one of 'user', 'assistant', or 'system', got '{v}'")
+        return v
+
+
+class MessageResponse(BaseModel):
+    session_id: str
+    state: str
+    response_message: str = Field(..., description="Natural language response from the system")
+    intent: str = Field(..., description="Classified intent of the message")
+    mutations_applied: int = Field(default=0, description="Number of plan mutations applied")
+    state_transition: Optional[str] = Field(None, description="New state if transition occurred")
+    convergence_status: Optional[Dict[str, Any]] = Field(
+        None, description="Convergence detection results if in negotiating state"
+    )
+    session: Dict[str, Any] = Field(..., description="Full serialized session state")
+
+
+class SessionHistoryResponse(BaseModel):
+    session_id: str
+    messages: list[Dict[str, Any]]
+    total: int

@@ -31,6 +31,7 @@ from .services.router import ExecutionRouter
 from .services.template_engine import TemplateEngine
 from .services.llm_gateway import LLMGateway
 from .db.repositories import PlanRepository
+from .scout import PreconditionScout
 
 
 PLANNING_STYLES = ("baseline", "fast", "risk_averse", "cost_aware")
@@ -46,6 +47,7 @@ class Orchestrator:
         planner_model: str = "gemini-2.5-flash",
         executor_model: str = "gemini-3-flash",
         scenarios_path: str = "scenarios",
+        scout_enabled: bool = False,
     ):
         self.planner_model = planner_model
         self.executor_model = executor_model
@@ -55,6 +57,8 @@ class Orchestrator:
         self.router = ExecutionRouter(self.llm, self.template_engine)
         self.plan_repository = PlanRepository()
         self.plan_normalizer = PlanNormalizer()
+        self.scout = PreconditionScout()
+        self.scout_enabled = scout_enabled
 
     def start_session(
         self,
@@ -66,9 +70,7 @@ class Orchestrator:
     ) -> Plan:
         planner = planner_model or self.planner_model
 
-        plan = self.planner.create_initial_plan(
-            user_intent=user_intent, scenario_name=scenario_name, model=planner
-        )
+        plan = self.planner.create_initial_plan(user_intent=user_intent, scenario_name=scenario_name, model=planner)
         plan.planner_model = planner_model
         plan.executor_model = executor_model
         plan.external_contexts = external_contexts or []
@@ -105,21 +107,17 @@ class Orchestrator:
 
         plan.external_contexts.append(context)
         plan.context_suggestions = self._safe_suggestions(
-            self.planner.suggest_context_sources(
-                plan.user_intent, plan.external_contexts
-            )
+            self.planner.suggest_context_sources(plan.user_intent, plan.external_contexts)
         )
         self._refresh_candidate_context_references(plan)
         self.plan_repository.save(plan)
         return plan
 
     def get_strawman_proposals(self, plan: Plan) -> List[Dict[str, Any]]:
-        planner_kwargs = {"model": plan.planner_model or self.planner_model}
-        if plan.external_contexts:
-            planner_kwargs["plan"] = plan
         proposals = self.planner.generate_strawman_proposals(
             plan.user_intent,
-            **planner_kwargs,
+            plan=plan if plan.external_contexts else None,
+            model=plan.planner_model or self.planner_model,
         )
         plan.strawman_proposals = proposals
         self.plan_repository.save(plan)
@@ -143,16 +141,10 @@ class Orchestrator:
 
         plan.lock_constraint("selected_approach", selected_proposal.title)
         plan.lock_constraint("approach_description", selected_proposal.description)
-        created_candidates = self._ensure_proposal_candidates(
-            plan, selected_proposal.id
-        )
+        created_candidates = self._ensure_proposal_candidates(plan, selected_proposal.id)
         if created_candidates:
             baseline_candidate = next(
-                (
-                    candidate
-                    for candidate in created_candidates
-                    if candidate.planning_style == "baseline"
-                ),
+                (candidate for candidate in created_candidates if candidate.planning_style == "baseline"),
                 created_candidates[0],
             )
             plan.selected_candidate_id = baseline_candidate.candidate_id
@@ -180,9 +172,7 @@ class Orchestrator:
             model=plan.planner_model or self.planner_model,
         )
         plan.context_suggestions = self._safe_suggestions(
-            self.planner.suggest_context_sources(
-                plan.user_intent, plan.external_contexts
-            )
+            self.planner.suggest_context_sources(plan.user_intent, plan.external_contexts)
         )
         self._ensure_seed_candidate(plan)
         self.plan_repository.save(plan)
@@ -205,9 +195,7 @@ class Orchestrator:
         candidate = plan.get_candidate_by_id(candidate_id)
         plan.selected_candidate_id = candidate.candidate_id
         plan.approved_candidate_id = candidate.candidate_id
-        plan.execution_graph = [
-            ExecutionStep(**step.model_dump()) for step in candidate.execution_graph
-        ]
+        plan.execution_graph = [ExecutionStep(**step.model_dump()) for step in candidate.execution_graph]
         if plan.status == PlanStatus.BRAINSTORMING:
             plan.status = PlanStatus.AWAITING_APPROVAL
 
@@ -219,9 +207,7 @@ class Orchestrator:
             elif other.candidate_id == plan.selected_candidate_id:
                 other.status = CandidatePlanStatus.SELECTED
 
-        self._record_revision(
-            plan, candidate, "approved", "Candidate adopted into the session plan."
-        )
+        self._record_revision(plan, candidate, "approved", "Candidate adopted into the session plan.")
         self._record_outcome(
             plan,
             event_type="candidate_approved",
@@ -229,6 +215,36 @@ class Orchestrator:
             summary=f"Approved candidate '{candidate.title}'.",
             metadata={"planning_style": candidate.planning_style},
         )
+        self.plan_repository.save(plan)
+        return plan
+
+    async def scout_plan(self, plan: Plan) -> Plan:
+        """
+        Run precondition scouting on the plan's execution graph.
+
+        Identifies and validates preconditions before execution.
+        Annotates steps with validation results.
+        """
+        if not self.scout_enabled:
+            return plan
+
+        report = await self.scout.scout_plan(plan)
+        if report.has_failed_preconditions():
+            plan.metadata["scout_failed_preconditions"] = [
+                {
+                    "step_id": p.step_id,
+                    "type": p.precondition_type,
+                    "check": p.check_expression,
+                    "error": p.probe_error,
+                }
+                for p in report.failed
+            ]
+        plan.metadata["scout_report"] = {
+            "total": len(report.preconditions),
+            "failed": len(report.failed),
+            "unverifiable": len(report.unverifiable),
+        }
+        plan = self.scout.annotate_plan(plan, report)
         self.plan_repository.save(plan)
         return plan
 
@@ -250,9 +266,7 @@ class Orchestrator:
             parent_candidate_id=source.candidate_id,
             proposal_id=source.proposal_id,
             status=CandidatePlanStatus.DRAFT,
-            execution_graph=[
-                ExecutionStep(**step.model_dump()) for step in source.execution_graph
-            ],
+            execution_graph=[ExecutionStep(**step.model_dump()) for step in source.execution_graph],
             context_references=list(source.context_references),
             confidence=source.confidence,
             why_suggested=source.why_suggested,
@@ -260,9 +274,7 @@ class Orchestrator:
         )
         self._refresh_candidate_normalization(clone, plan)
         plan.upsert_candidate(clone)
-        self._record_revision(
-            plan, clone, "branched", note or "Candidate branched from an existing plan."
-        )
+        self._record_revision(plan, clone, "branched", note or "Candidate branched from an existing plan.")
         self._record_outcome(
             plan,
             event_type="candidate_branched",
@@ -307,9 +319,7 @@ class Orchestrator:
         self._refresh_candidate_normalization(candidate, plan)
         plan.upsert_candidate(candidate)
         if plan.approved_candidate_id == candidate.candidate_id:
-            plan.execution_graph = [
-                ExecutionStep(**step.model_dump()) for step in candidate.execution_graph
-            ]
+            plan.execution_graph = [ExecutionStep(**step.model_dump()) for step in candidate.execution_graph]
         self._record_revision(
             plan,
             candidate,
@@ -326,23 +336,15 @@ class Orchestrator:
         self.plan_repository.save(plan)
         return candidate
 
-    async def execute(
-        self, plan: Plan, context: Optional[Dict[str, Any]] = None
-    ) -> Plan:
+    async def execute(self, plan: Plan, context: Optional[Dict[str, Any]] = None) -> Plan:
         if plan.status != PlanStatus.APPROVED:
             raise ValueError("Plan must be APPROVED before execution")
 
-        plan = await self.router.execute_plan(
-            plan=plan, context=context or {}, model_override=plan.executor_model
-        )
+        plan = await self.router.execute_plan(plan=plan, context=context or {}, model_override=plan.executor_model)
 
         self._record_outcome(
             plan,
-            event_type=(
-                "execution_completed"
-                if plan.status == PlanStatus.COMPLETED
-                else "execution_failed"
-            ),
+            event_type=("execution_completed" if plan.status == PlanStatus.COMPLETED else "execution_failed"),
             candidate_id=plan.approved_candidate_id,
             summary=(
                 "Execution completed successfully."
@@ -355,13 +357,9 @@ class Orchestrator:
         return plan
 
     def get_next_executable_step(self, plan: Plan) -> Optional[ExecutionStep]:
-        return (
-            self.router.get_executable_steps(plan)[0] if plan.execution_graph else None
-        )
+        return self.router.get_executable_steps(plan)[0] if plan.execution_graph else None
 
-    def register_manual_candidate(
-        self, session_id: str, submission: ManualPlanSubmission
-    ) -> CandidatePlan:
+    def register_manual_candidate(self, session_id: str, submission: ManualPlanSubmission) -> CandidatePlan:
         plan = self.plan_repository.get(session_id)
         if not plan:
             raise ValueError(f"Session {session_id} not found")
@@ -432,19 +430,14 @@ class Orchestrator:
         self._refresh_candidate_normalization(candidate, plan)
         plan.upsert_candidate(candidate)
         plan.selected_candidate_id = candidate.candidate_id
-        self._record_revision(
-            plan, candidate, "created", "Seed baseline candidate created."
-        )
+        self._record_revision(plan, candidate, "created", "Seed baseline candidate created.")
         return candidate
 
-    def _ensure_proposal_candidates(
-        self, plan: Plan, proposal_id: str
-    ) -> List[CandidatePlan]:
+    def _ensure_proposal_candidates(self, plan: Plan, proposal_id: str) -> List[CandidatePlan]:
         existing = [
             candidate
             for candidate in plan.candidate_plans
-            if candidate.proposal_id == proposal_id
-            and candidate.metadata.get("origin") == "proposal"
+            if candidate.proposal_id == proposal_id and candidate.metadata.get("origin") == "proposal"
         ]
         if existing:
             return existing
@@ -472,9 +465,7 @@ class Orchestrator:
                 source_model=plan.planner_model or self.planner_model,
                 planning_style=style,
                 proposal_id=proposal.id,
-                status=CandidatePlanStatus.SELECTED
-                if style == "baseline"
-                else CandidatePlanStatus.DRAFT,
+                status=CandidatePlanStatus.SELECTED if style == "baseline" else CandidatePlanStatus.DRAFT,
                 execution_graph=steps,
                 context_references=list(proposal.context_references),
                 confidence=proposal.confidence or 0.65,
@@ -492,17 +483,13 @@ class Orchestrator:
             created.append(candidate)
         return created
 
-    def _refresh_candidate_normalization(
-        self, candidate: CandidatePlan, plan: Plan
-    ) -> None:
+    def _refresh_candidate_normalization(self, candidate: CandidatePlan, plan: Plan) -> None:
         normalized = self.plan_normalizer.normalize_generated_plan(
             {
                 "id": candidate.candidate_id,
                 "title": candidate.title,
                 "summary": candidate.summary,
-                "execution_graph": [
-                    step.model_dump(mode="json") for step in candidate.execution_graph
-                ],
+                "execution_graph": [step.model_dump(mode="json") for step in candidate.execution_graph],
                 "success_criteria": candidate.metadata.get("success_criteria", []),
                 "risks": candidate.metadata.get("risks", []),
                 "fallbacks": candidate.metadata.get("fallbacks", []),
@@ -534,10 +521,7 @@ class Orchestrator:
                 revision_type=revision_type,
                 title=candidate.title,
                 summary=candidate.summary,
-                execution_graph=[
-                    ExecutionStep(**step.model_dump())
-                    for step in candidate.execution_graph
-                ],
+                execution_graph=[ExecutionStep(**step.model_dump()) for step in candidate.execution_graph],
                 note=note,
                 metadata={"status": candidate.status.value},
             )
@@ -571,12 +555,10 @@ class Orchestrator:
     def _safe_suggestions(self, suggestions: Any) -> List[ContextSuggestion]:
         return suggestions if isinstance(suggestions, list) else []
 
-    def _context_reference_labels(
-        self, contexts: Iterable[ExternalContext]
-    ) -> List[str]:
-        labels = []
+    def _context_reference_labels(self, contexts: Iterable[ExternalContext]) -> List[str]:
+        labels: List[str] = []
         for context in contexts:
-            label = context.source_type
+            label: str = context.source_type
             if context.metadata.get("filename"):
                 label = f"{label}:{context.metadata['filename']}"
             elif context.metadata.get("repo_name"):
@@ -602,15 +584,11 @@ class Orchestrator:
             )
         for execution_step, normalized_step in zip(execution_steps, steps):
             execution_step.dependencies = [
-                id_map[dependency]
-                for dependency in normalized_step.dependencies
-                if dependency in id_map
+                id_map[dependency] for dependency in normalized_step.dependencies if dependency in id_map
             ]
         return execution_steps
 
-    def _edit_candidate_step(
-        self, candidate: CandidatePlan, step_id: Optional[int], task: Optional[str]
-    ) -> None:
+    def _edit_candidate_step(self, candidate: CandidatePlan, step_id: Optional[int], task: Optional[str]) -> None:
         if step_id is None or not task:
             raise ValueError("edit_step requires step_id and task")
         for step in candidate.execution_graph:
@@ -619,20 +597,14 @@ class Orchestrator:
                 return
         raise ValueError(f"Step {step_id} not found")
 
-    def _delete_candidate_step(
-        self, candidate: CandidatePlan, step_id: Optional[int]
-    ) -> None:
+    def _delete_candidate_step(self, candidate: CandidatePlan, step_id: Optional[int]) -> None:
         if step_id is None:
             raise ValueError("delete_step requires step_id")
-        remaining = [
-            step for step in candidate.execution_graph if step.step_id != step_id
-        ]
+        remaining = [step for step in candidate.execution_graph if step.step_id != step_id]
         if len(remaining) == len(candidate.execution_graph):
             raise ValueError(f"Step {step_id} not found")
         for step in remaining:
-            step.dependencies = [
-                dependency for dependency in step.dependencies if dependency != step_id
-            ]
+            step.dependencies = [dependency for dependency in step.dependencies if dependency != step_id]
         candidate.execution_graph = remaining
 
     def _add_candidate_step(
@@ -643,9 +615,7 @@ class Orchestrator:
     ) -> None:
         if not task:
             raise ValueError("add_step requires task")
-        next_step_id = (
-            max((step.step_id for step in candidate.execution_graph), default=0) + 1
-        )
+        next_step_id = max((step.step_id for step in candidate.execution_graph), default=0) + 1
         dependencies = [insert_after_step_id] if insert_after_step_id else []
         candidate.execution_graph.append(
             ExecutionStep(

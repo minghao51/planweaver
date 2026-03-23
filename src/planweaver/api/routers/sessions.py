@@ -1,10 +1,13 @@
-from typing import Optional
+from typing import Optional, cast, Literal
 import logging
 
 from fastapi import APIRouter, HTTPException, Query, Depends, Request
 
 from ...models.plan import PlanStatus, ComparisonRequest, ProposalComparison
+from ...models.session import SessionState, SessionMessage, NegotiatorIntent
 from ...services.comparison_service import ProposalComparisonService
+from ...session import SessionStateMachine
+from ...negotiator import Negotiator
 from ..dependencies import get_orchestrator, get_plan_or_404, get_comparison_service
 from ..schemas import (
     AnswerQuestionsRequest,
@@ -14,6 +17,8 @@ from ..schemas import (
     CandidateOutcomesResponse,
     CreateSessionRequest,
     ExecutePlanRequest,
+    MessageRequest,
+    MessageResponse,
     RefineCandidateRequest,
 )
 from ..serializers import (
@@ -23,6 +28,8 @@ from ..serializers import (
     serialize_plan_summary,
 )
 from ..middleware import limiter
+from ...db.database import SessionLocal
+from ...db.models import SessionMessageModel
 
 logger = logging.getLogger(__name__)
 
@@ -43,16 +50,12 @@ def create_session(request: Request, body: CreateSessionRequest):
         return serialize_plan_summary(plan)
     except ValueError as e:
         logger.warning(f"Validation error: {e}")
-        raise HTTPException(
-            status_code=400, detail=f"Cannot complete operation: {str(e)}"
-        )
+        raise HTTPException(status_code=400, detail=f"Cannot complete operation: {str(e)}")
     except HTTPException:
         raise
     except Exception:
         logger.exception("Unexpected error creating session")
-        raise HTTPException(
-            status_code=500, detail="Operation failed. Please try again."
-        )
+        raise HTTPException(status_code=500, detail="Operation failed. Please try again.")
 
 
 @router.get("/sessions")
@@ -84,28 +87,20 @@ def get_session(request: Request, session_id: str):
         raise
     except Exception:
         logger.exception("Unexpected error getting session")
-        raise HTTPException(
-            status_code=500, detail="Operation failed. Please try again."
-        )
+        raise HTTPException(status_code=500, detail="Operation failed. Please try again.")
 
 
 @router.post("/sessions/{session_id}/questions")
 @limiter.limit("30/minute")
-def answer_questions(
-    request: Request, session_id: str, answers: AnswerQuestionsRequest
-):
+def answer_questions(request: Request, session_id: str, answers: AnswerQuestionsRequest):
     orch, plan = get_plan_or_404(session_id)
     updated_plan = orch.answer_questions(plan, answers.answers)
     return {
         "status": updated_plan.status.value,
         "open_questions": [q.model_dump() for q in updated_plan.open_questions],
         "execution_graph": serialize_execution_graph(updated_plan),
-        "candidate_plans": [
-            c.model_dump(mode="json") for c in updated_plan.candidate_plans
-        ],
-        "context_suggestions": [
-            s.model_dump(mode="json") for s in updated_plan.context_suggestions
-        ],
+        "candidate_plans": [c.model_dump(mode="json") for c in updated_plan.candidate_plans],
+        "context_suggestions": [s.model_dump(mode="json") for s in updated_plan.context_suggestions],
     }
 
 
@@ -123,9 +118,7 @@ def select_proposal(session_id: str, proposal_id: str):
         "status": updated_plan.status.value,
         "locked_constraints": updated_plan.locked_constraints,
         "selected_candidate_id": updated_plan.selected_candidate_id,
-        "candidate_plans": [
-            c.model_dump(mode="json") for c in updated_plan.candidate_plans
-        ],
+        "candidate_plans": [c.model_dump(mode="json") for c in updated_plan.candidate_plans],
     }
 
 
@@ -149,22 +142,16 @@ def approve_plan(session_id: str):
         raise
     except Exception:
         logger.exception("Unexpected error approving plan")
-        raise HTTPException(
-            status_code=500, detail="Operation failed. Please try again."
-        )
+        raise HTTPException(status_code=500, detail="Operation failed. Please try again.")
 
 
 @router.post("/sessions/{session_id}/execute")
 @limiter.limit("10/hour")
-async def execute_plan(
-    request: Request, session_id: str, body: Optional[ExecutePlanRequest] = None
-):
+async def execute_plan(request: Request, session_id: str, body: Optional[ExecutePlanRequest] = None):
     try:
         orch, plan = get_plan_or_404(session_id)
         if plan.status != PlanStatus.APPROVED:
-            raise HTTPException(
-                status_code=400, detail="Plan must be approved before execution"
-            )
+            raise HTTPException(status_code=400, detail="Plan must be approved before execution")
 
         result = await orch.execute(plan, body.context if body else {})
         return {
@@ -176,14 +163,10 @@ async def execute_plan(
         raise
     except Exception:
         logger.exception("Unexpected error executing plan")
-        raise HTTPException(
-            status_code=500, detail="Operation failed. Please try again."
-        )
+        raise HTTPException(status_code=500, detail="Operation failed. Please try again.")
 
 
-@router.post(
-    "/sessions/{session_id}/compare-proposals", response_model=ProposalComparison
-)
+@router.post("/sessions/{session_id}/compare-proposals", response_model=ProposalComparison)
 @limiter.limit("10/hour")
 def compare_proposals(
     http_request: Request,
@@ -211,9 +194,7 @@ def compare_proposals(
     invalid_ids = set(request.proposal_ids) - valid_ids
 
     if invalid_ids:
-        raise HTTPException(
-            status_code=404, detail=f"Proposals not found: {sorted(invalid_ids)}"
-        )
+        raise HTTPException(status_code=404, detail=f"Proposals not found: {sorted(invalid_ids)}")
 
     if len(request.proposal_ids) < 2:
         raise HTTPException(
@@ -228,17 +209,13 @@ def compare_proposals(
         )
 
     try:
-        comparison = comparison_service.compare_proposals(
-            plan=plan, proposal_ids=request.proposal_ids
-        )
+        comparison = comparison_service.compare_proposals(plan=plan, proposal_ids=request.proposal_ids)
         return comparison
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Comparison failed: {e}")
-        raise HTTPException(
-            status_code=500, detail="Unable to generate comparison. Please try again."
-        )
+        raise HTTPException(status_code=500, detail="Unable to generate comparison. Please try again.")
 
 
 @router.get(
@@ -306,9 +283,7 @@ def branch_candidate(
 ):
     orch, plan = get_plan_or_404(session_id)
     try:
-        candidate = orch.branch_candidate(
-            plan, candidate_id, title=body.title, note=body.note
-        )
+        candidate = orch.branch_candidate(plan, candidate_id, title=body.title, note=body.note)
         refreshed = orch.get_session(session_id)
         assert refreshed is not None
         return {
@@ -354,7 +329,118 @@ def list_outcomes(request: Request, session_id: str):
     orch, plan = get_plan_or_404(session_id)
     return {
         "session_id": session_id,
-        "outcomes": [
-            outcome.model_dump(mode="json") for outcome in orch.get_outcomes(plan)
-        ],
+        "outcomes": [outcome.model_dump(mode="json") for outcome in orch.get_outcomes(plan)],
     }
+
+
+def _get_message_history(session_id: str) -> list:
+    """Get message history for a session."""
+    db = SessionLocal()
+    try:
+        messages = (
+            db.query(SessionMessageModel)
+            .filter(SessionMessageModel.session_id == session_id)
+            .order_by(SessionMessageModel.created_at.asc())
+            .all()
+        )
+        return [m.to_dict() for m in messages]
+    finally:
+        db.close()
+
+
+def _save_session_message(message: SessionMessage) -> None:
+    """Save a session message to the database."""
+    db = SessionLocal()
+    try:
+        db_message = SessionMessageModel(
+            id=message.id,
+            session_id=message.session_id,
+            role=message.role,
+            content=message.content,
+            intent=message.intent.value if message.intent else None,
+            extra_data=message.metadata,
+        )
+        db.add(db_message)
+        db.commit()
+    finally:
+        db.close()
+
+
+def _intent_to_event(intent: NegotiatorIntent) -> str:
+    """Map negotiator intent to state machine event."""
+    mapping = {
+        NegotiatorIntent.APPROVE: "approve",
+        NegotiatorIntent.REJECT: "cancel",
+        NegotiatorIntent.EXECUTE: "approve",
+        NegotiatorIntent.ANSWER: "all_questions_answered",
+        NegotiatorIntent.REVISE: "request_revision",
+    }
+    return mapping.get(intent, "request_revision")
+
+
+@router.post("/sessions/{session_id}/message", response_model=MessageResponse)
+@limiter.limit("30/minute")
+async def send_message(
+    request: Request,
+    session_id: str,
+    body: MessageRequest,
+):
+    """
+    Universal endpoint for all session communication.
+
+    This endpoint replaces the fragmented approve/reject/questions endpoints
+    with a single unified interface. The Negotiator classifies intent and
+    applies appropriate mutations to the plan.
+    """
+    orch, plan = get_plan_or_404(session_id)
+
+    current_state = SessionState(plan.status.value.lower())
+    state_machine = SessionStateMachine(session_id, current_state)
+
+    negotiator = Negotiator()
+
+    message_history = _get_message_history(session_id)
+
+    output = await negotiator.process(
+        message=body.content,
+        plan=plan,
+        session_state=state_machine.get_state(),
+        message_history=message_history,
+    )
+
+    had_mutation = len(output.mutations) > 0
+
+    if output.mutations:
+        plan = negotiator.apply_mutations(output.mutations, plan)
+
+    if output.state_transition:
+        state_machine.transition(_intent_to_event(output.intent), {"mutations": len(output.mutations)})
+        plan.status = PlanStatus(output.state_transition.value.upper())
+    else:
+        state_machine.record_negotiation_round(had_mutation)
+
+    session_message = SessionMessage(
+        session_id=session_id,
+        role=cast(Literal["user", "assistant", "system"], body.role),
+        content=body.content,
+        intent=output.intent,
+        metadata=body.metadata,
+    )
+    _save_session_message(session_message)
+
+    orch.plan_repository.save(plan)
+
+    convergence = None
+    if state_machine.get_state() == SessionState.NEGOTIATING:
+        convergence = state_machine.check_convergence()
+
+    return MessageResponse(
+        session_id=session_id,
+        state=state_machine.get_state().value,
+        response_message=output.response_message,
+        intent=output.intent.value,
+        mutations_applied=len(output.mutations),
+        state_transition=output.state_transition.value if output.state_transition else None,
+        convergence_status=convergence.model_dump() if convergence else None,
+        session=serialize_plan_detail(plan),
+    )

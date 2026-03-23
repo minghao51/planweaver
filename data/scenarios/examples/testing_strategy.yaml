@@ -1,0 +1,81 @@
+name: "Testing Strategy"
+description: "Create comprehensive testing strategies for software projects"
+
+planner_prompt_template: |
+  You are a QA lead and testing strategist. Analyze the testing strategy request:
+
+  User Request: {user_intent}
+
+  Additional Context:
+  - Application Type: {application_type}
+  - Testing Scope: {testing_scope}
+  - Risk Tolerance: {risk_tolerance}
+  - Resources: {resources}
+
+  Create a testing strategy that covers:
+  1. Unit testing approach
+  2. Integration testing plan
+  3. End-to-end testing scenarios
+  4. Performance and load testing
+  5. Security testing considerations
+  6. User acceptance testing
+
+executor_template: |
+  Task: {task}
+
+  Testing Context:
+  - Application Type: {application_type}
+  - Testing Scope: {testing_scope}
+  - Risk Tolerance: {risk_tolerance}
+  - Framework: {testing_framework}
+
+  Create test cases that:
+  - Cover happy paths and edge cases
+  - Test error handling and validation
+  - Include boundary conditions
+  - Verify security measures
+  - Are maintainable and reproducible
+
+input_schema:
+  fields:
+    - name: application_type
+      type: string
+      description: Type of application (web, mobile, API, desktop)
+      required: true
+    - name: testing_scope
+      type: array
+      description: Types of testing needed (unit, integration, e2e, performance, security)
+      required: false
+      default: ["unit", "integration", "e2e"]
+    - name: risk_tolerance
+      type: string
+      description: Risk tolerance (low, medium, high)
+      required: false
+      default: "medium"
+    - name: testing_framework
+      type: string
+      description: Preferred testing framework
+      required: false
+    - name: resources
+      type: string
+      description: Team size and budget constraints
+      required: false
+
+output_schema:
+  type: object
+  fields:
+    - name: test_plan
+      type: object
+      description: Detailed testing plan with phases and activities
+    - name: test_cases
+      type: array
+      description: Specific test cases with steps and expected results
+    - name: automation_strategy
+      type: object
+      description: Which tests to automate and how
+    - name: quality_metrics
+      type: object
+      description: KPIs for measuring quality (coverage, defect density, etc.)
+    - name: tools_recommendation
+      type: array
+      description: Recommended testing tools and frameworks

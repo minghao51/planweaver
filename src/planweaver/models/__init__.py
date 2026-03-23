@@ -1,4 +1,4 @@
-from .plan import Plan, PlanStatus, ExecutionStep, StepStatus
+from .plan import Plan, PlanStatus, ExecutionStep, StepStatus, PreconditionAnnotation
 from .scenario import Scenario, InputSchema, OutputSchema
 
 __all__ = [
@@ -6,6 +6,7 @@ __all__ = [
     "PlanStatus",
     "ExecutionStep",
     "StepStatus",
+    "PreconditionAnnotation",
     "Scenario",
     "InputSchema",
     "OutputSchema",

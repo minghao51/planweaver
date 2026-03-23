@@ -31,12 +31,8 @@ class PairwiseComparisonService:
         left_evaluations: Dict[str, PlanEvaluation],
         right_evaluations: Dict[str, PlanEvaluation],
     ) -> PairwisePlanComparison:
-        left_score = mean(
-            evaluation.overall_score for evaluation in left_evaluations.values()
-        )
-        right_score = mean(
-            evaluation.overall_score for evaluation in right_evaluations.values()
-        )
+        left_score = mean(evaluation.overall_score for evaluation in left_evaluations.values())
+        right_score = mean(evaluation.overall_score for evaluation in right_evaluations.values())
 
         if left_score >= right_score:
             winner_plan = left_plan
@@ -91,15 +87,11 @@ class PairwiseComparisonService:
                     "plan": plan,
                     "final_score": round(avg_score, 2),
                     "confidence": round(
-                        mean(
-                            evaluation.confidence for evaluation in evaluations.values()
-                        ),
+                        mean(evaluation.confidence for evaluation in evaluations.values()),
                         2,
                     ),
                     "disagreement_level": disagreement,
-                    "recommendation_reason": self._recommendation_reason(
-                        plan, evaluations
-                    ),
+                    "recommendation_reason": self._recommendation_reason(plan, evaluations),
                 }
             )
 
@@ -159,9 +151,7 @@ class PairwiseComparisonService:
         deltas.sort(key=lambda item: abs(item[1]), reverse=True)
         return [criterion for criterion, _ in deltas[:3]]
 
-    def _average_rubric_scores(
-        self, evaluations: Dict[str, PlanEvaluation]
-    ) -> Dict[str, float]:
+    def _average_rubric_scores(self, evaluations: Dict[str, PlanEvaluation]) -> Dict[str, float]:
         if not evaluations:
             return {}
         rubric_totals: Dict[str, List[float]] = {}

@@ -106,11 +106,7 @@ class OpenRouterScraper:
                 model_data["context_length"] = None
                 model_data["is_active"] = True
 
-                existing = (
-                    session.query(AvailableModel)
-                    .filter_by(model_id=model_data["model_id"])
-                    .first()
-                )
+                existing = session.query(AvailableModel).filter_by(model_id=model_data["model_id"]).first()
 
                 if existing:
                     # Update existing model
@@ -129,9 +125,7 @@ class OpenRouterScraper:
                 session.commit()
 
             except IntegrityError as e:
-                logger.warning(
-                    f"Integrity error for model {model_data.get('model_id')}: {e}"
-                )
+                logger.warning(f"Integrity error for model {model_data.get('model_id')}: {e}")
                 session.rollback()
                 stats["failed"] += 1
             except Exception as e:

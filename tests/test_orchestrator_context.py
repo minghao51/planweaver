@@ -70,9 +70,7 @@ def test_add_multiple_contexts(mock_orchestrator):
 
 def test_get_session_includes_contexts(mock_orchestrator):
     """Test that get_session loads external contexts"""
-    contexts = [
-        ExternalContext(source_type="file_upload", content_summary="File content")
-    ]
+    contexts = [ExternalContext(source_type="file_upload", content_summary="File content")]
 
     plan = mock_orchestrator.start_session("Test", external_contexts=contexts)
     retrieved_plan = mock_orchestrator.get_session(plan.session_id)

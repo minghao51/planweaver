@@ -30,9 +30,7 @@ class ProposalComparisonService:
             maxsize=_CACHE_MAX_SIZE, ttl=_CACHE_TTL_SECONDS
         )
 
-    def compare_proposals(
-        self, plan: Plan, proposal_ids: List[str]
-    ) -> ProposalComparison:
+    def compare_proposals(self, plan: Plan, proposal_ids: List[str]) -> ProposalComparison:
         """Generate detailed comparison of selected proposals.
 
         Args:
@@ -46,9 +44,7 @@ class ProposalComparisonService:
             ValueError: If fewer than 2 proposals provided
         """
         if len(proposal_ids) < 2:
-            raise ValueError(
-                f"Comparison requires at least 2 proposals. Got {len(proposal_ids)}"
-            )
+            raise ValueError(f"Comparison requires at least 2 proposals. Got {len(proposal_ids)}")
 
         # Generate full execution graphs for each proposal
         proposal_details = []
@@ -87,15 +83,9 @@ class ProposalComparisonService:
         unique_steps = self._find_unique_steps(proposal_details, common_steps)
 
         # Build comparison metrics
-        time_comparison = {
-            p.proposal_id: p.accurate_time_estimate for p in proposal_details
-        }
-        cost_comparison = {
-            p.proposal_id: p.accurate_cost_estimate for p in proposal_details
-        }
-        complexity_comparison = {
-            p.proposal_id: self._calculate_complexity_score(p) for p in proposal_details
-        }
+        time_comparison = {p.proposal_id: p.accurate_time_estimate for p in proposal_details}
+        cost_comparison = {p.proposal_id: p.accurate_cost_estimate for p in proposal_details}
+        complexity_comparison = {p.proposal_id: self._calculate_complexity_score(p) for p in proposal_details}
 
         return ProposalComparison(
             session_id=plan.session_id,
@@ -107,9 +97,7 @@ class ProposalComparisonService:
             complexity_comparison=complexity_comparison,
         )
 
-    def _generate_or_get_execution_graph(
-        self, plan: Plan, proposal_id: str
-    ) -> List[ExecutionStep]:
+    def _generate_or_get_execution_graph(self, plan: Plan, proposal_id: str) -> List[ExecutionStep]:
         """Generate execution graph or retrieve from cache."""
         cache_key = (plan.session_id, proposal_id)
 
@@ -166,9 +154,7 @@ class ProposalComparisonService:
 
         return common
 
-    def _has_similar_step(
-        self, step: ExecutionStep, steps: List[ExecutionStep]
-    ) -> bool:
+    def _has_similar_step(self, step: ExecutionStep, steps: List[ExecutionStep]) -> bool:
         """Check if a similar step exists in the list."""
         step_lower = step.task.lower()
         step_words = set(step_lower.split())
@@ -217,9 +203,7 @@ class ProposalComparisonService:
 
         return unique_by_proposal
 
-    def _infer_step_complexity(
-        self, step: ExecutionStep
-    ) -> Literal["Low", "Medium", "High"]:
+    def _infer_step_complexity(self, step: ExecutionStep) -> Literal["Low", "Medium", "High"]:
         """Infer complexity from step description."""
         task_lower = step.task.lower()
 
@@ -240,16 +224,12 @@ class ProposalComparisonService:
 
         return "Medium"
 
-    def _calculate_complexity_score(
-        self, prop: ProposalDetail
-    ) -> Literal["Low", "Medium", "High"]:
+    def _calculate_complexity_score(self, prop: ProposalDetail) -> Literal["Low", "Medium", "High"]:
         """Calculate overall complexity score for proposal."""
         if not prop.full_execution_graph:
             return "Medium"
 
-        complexities = [
-            self._infer_step_complexity(s) for s in prop.full_execution_graph
-        ]
+        complexities = [self._infer_step_complexity(s) for s in prop.full_execution_graph]
 
         high_count = complexities.count("High")
         if high_count >= len(complexities) / 2:
@@ -302,11 +282,7 @@ class ProposalComparisonService:
         # Try prefix match (e.g., "gemini-" -> 0.15)
         else:
             price_per_m = next(
-                (
-                    v
-                    for k, v in pricing.items()
-                    if model.startswith(k) or k.endswith(model)
-                ),
+                (v for k, v in pricing.items() if model.startswith(k) or k.endswith(model)),
                 0.15,  # Default conservative estimate
             )
 
