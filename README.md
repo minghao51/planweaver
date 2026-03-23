@@ -13,7 +13,6 @@ PlanWeaver separates planning from execution. A planning model decomposes the re
 - DAG-based execution with retries
 - External context from GitHub, web search, and file uploads
 - Manual plan normalization, evaluation, and comparison
-- React frontend for planning, history, and optimizer flows
 
 ## Quick Start
 
@@ -48,7 +47,6 @@ Defaults in [`src/planweaver/config.py`](/Users/minghao/Desktop/personal/planwea
 ## Project Layout
 
 - [`src/planweaver`](/Users/minghao/Desktop/personal/planweaver/src/planweaver) contains the backend package
-- [`frontend`](/Users/minghao/Desktop/personal/planweaver/frontend) contains the React app
 - [`scenarios`](/Users/minghao/Desktop/personal/planweaver/scenarios) contains reusable YAML workflows
 - [`docs/README.md`](/Users/minghao/Desktop/personal/planweaver/docs/README.md) is the documentation entry point
 - [`scripts/README.md`](/Users/minghao/Desktop/personal/planweaver/scripts/README.md) documents maintenance scripts

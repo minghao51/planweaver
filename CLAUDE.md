@@ -15,9 +15,7 @@
 9. When doing git commit, make sure the message is concise, and do not mentioned claude code.
 10. When asked for a comprehensive review of changes, run the following verification commands:
     - `uv run pytest` - Run full backend test suite
-    - `cd frontend && npm run e2e` - Run Playwright browser tests
     - `uv run ruff check .` - Run Python linter
     - `uv run ruff format --check .` - Check Python code formatting
     - `uv run mypy src/planweaver` - Run Python type checker
-    - `cd frontend && npm run test:run` - Run frontend unit tests
 ---
