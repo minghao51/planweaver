@@ -1,7 +1,9 @@
 import click
 from .orchestrator import Orchestrator
 from .api.main import app
+from .mcp_server import MCPServer
 import uvicorn
+import asyncio
 
 
 @click.group()
@@ -92,6 +94,20 @@ def execute(session_id: str, executor: str):
 def serve():
     """Start the PlanWeaver API server"""
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
+@cli.command()
+@click.option("--host", "-h", default="localhost", help="MCP server host")
+@click.option("--port", "-p", default=8001, help="MCP server port")
+def mcp_server(host: str, port: int):
+    """Start the PlanWeaver MCP server for agent communication"""
+    orchestrator = Orchestrator()
+    mcp_server = MCPServer(orchestrator)
+
+    click.echo(f"Starting PlanWeaver MCP server on {host}:{port}")
+
+    # Run async
+    asyncio.run(mcp_server.run(host, port))
 
 
 if __name__ == "__main__":

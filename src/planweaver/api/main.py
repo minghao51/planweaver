@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from loguru import logger
 from .routes import router
 from ..db.database import init_db, cleanup_expired_sessions, run_migrations
@@ -54,6 +56,14 @@ app.add_middleware(
 )
 
 app.include_router(router, prefix="/api/v1")
+
+# Mount static files for UI
+static_dir = Path(__file__).parent.parent.parent.parent / "static"
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+    logger.info(f"Static files mounted from {static_dir}")
+else:
+    logger.warning(f"Static directory not found: {static_dir}")
 
 
 @app.get("/health")

@@ -2,8 +2,9 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import or_
+from sqlalchemy.exc import OperationalError
 
-from .database import get_session
+from .database import ensure_db_ready, get_session
 from .models import SessionModel as DBSession
 from ..config import get_settings
 from ..models.plan import (
@@ -35,72 +36,93 @@ class PlanRepository:
         status: Optional[str] = None,
         query: Optional[str] = None,
     ) -> dict:
-        db_session = self._db_session or get_session()
-        try:
-            db_query = db_session.query(DBSession)
+        for attempt in range(2):
+            ensure_db_ready(force=attempt > 0)
+            db_session = self._db_session or get_session()
+            try:
+                db_query = db_session.query(DBSession)
 
-            if status:
-                db_query = db_query.filter(DBSession.status == status)
+                if status:
+                    db_query = db_query.filter(DBSession.status == status)
 
-            if query:
-                pattern = f"%{query.strip()}%"
-                db_query = db_query.filter(
-                    or_(
-                        DBSession.user_intent.ilike(pattern),
-                        DBSession.scenario_name.ilike(pattern),
+                if query:
+                    pattern = f"%{query.strip()}%"
+                    db_query = db_query.filter(
+                        or_(
+                            DBSession.user_intent.ilike(pattern),
+                            DBSession.scenario_name.ilike(pattern),
+                        )
                     )
-                )
 
-            total = db_query.count()
-            rows = db_query.order_by(DBSession.updated_at.desc()).offset(offset).limit(limit).all()
-            return {
-                "sessions": [
-                    {
-                        "session_id": row.id,
-                        "status": row.status,
-                        "user_intent": row.user_intent,
-                        "scenario_name": row.scenario_name,
-                        "created_at": row.created_at.isoformat() if row.created_at else None,
-                        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
-                    }
-                    for row in rows
-                ],
-                "total": total,
-                "limit": limit,
-                "offset": offset,
-            }
-        finally:
-            if self._db_session is not db_session:
-                db_session.close()
+                total = db_query.count()
+                rows = db_query.order_by(DBSession.updated_at.desc()).offset(offset).limit(limit).all()
+                return {
+                    "sessions": [
+                        {
+                            "session_id": row.id,
+                            "status": row.status,
+                            "user_intent": row.user_intent,
+                            "scenario_name": row.scenario_name,
+                            "created_at": row.created_at.isoformat() if row.created_at else None,
+                            "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+                        }
+                        for row in rows
+                    ],
+                    "total": total,
+                    "limit": limit,
+                    "offset": offset,
+                }
+            except OperationalError as exc:
+                if attempt == 0 and "no such table" in str(exc).lower():
+                    continue
+                raise
+            finally:
+                if self._db_session is not db_session:
+                    db_session.close()
 
     def get(self, session_id: str) -> Optional[Plan]:
-        db_session = self._db_session or get_session()
-        try:
-            db_plan = db_session.query(DBSession).filter_by(id=session_id).first()
-            if not db_plan:
-                return None
-            return self._db_to_plan(db_plan)
-        finally:
-            if self._db_session is not db_session:
-                db_session.close()
+        for attempt in range(2):
+            ensure_db_ready(force=attempt > 0)
+            db_session = self._db_session or get_session()
+            try:
+                db_plan = db_session.query(DBSession).filter_by(id=session_id).first()
+                if not db_plan:
+                    return None
+                return self._db_to_plan(db_plan)
+            except OperationalError as exc:
+                if attempt == 0 and "no such table" in str(exc).lower():
+                    continue
+                raise
+            finally:
+                if self._db_session is not db_session:
+                    db_session.close()
 
     def save(self, plan: Plan) -> None:
-        db_session = self._db_session or get_session()
-        try:
-            existing = db_session.query(DBSession).filter_by(id=plan.session_id).first()
+        for attempt in range(2):
+            ensure_db_ready(force=attempt > 0)
+            db_session = self._db_session or get_session()
+            try:
+                existing = db_session.query(DBSession).filter_by(id=plan.session_id).first()
 
-            payload = self._plan_to_db_payload(plan)
-            if existing:
-                for field, value in payload.items():
-                    setattr(existing, field, value)
-                existing.updated_at = datetime.now(timezone.utc)
-            else:
-                db_session.add(DBSession(id=plan.session_id, **payload))
+                payload = self._plan_to_db_payload(plan)
+                if existing:
+                    for field, value in payload.items():
+                        setattr(existing, field, value)
+                    existing.updated_at = datetime.now(timezone.utc)
+                else:
+                    db_session.add(DBSession(id=plan.session_id, **payload))
 
-            db_session.commit()
-        finally:
-            if self._db_session is not db_session:
-                db_session.close()
+                db_session.commit()
+                return
+            except OperationalError as exc:
+                if self._db_session is not db_session:
+                    db_session.rollback()
+                if attempt == 0 and "no such table" in str(exc).lower():
+                    continue
+                raise
+            finally:
+                if self._db_session is not db_session:
+                    db_session.close()
 
     def _plan_to_db_payload(self, plan: Plan) -> dict:
         locked_constraints = dict(plan.locked_constraints)
@@ -128,6 +150,7 @@ class PlanRepository:
             "context_suggestions": self._model_dump_list(plan.context_suggestions, mode="json"),
             "selected_candidate_id": plan.selected_candidate_id,
             "approved_candidate_id": plan.approved_candidate_id,
+            "session_metadata": dict(plan.metadata),
             "expires_at": expires_at,
             "final_output": plan.final_output,
         }
@@ -167,5 +190,6 @@ class PlanRepository:
             approved_candidate_id=db_plan.approved_candidate_id,
             planner_model=planner_model,
             executor_model=executor_model,
+            metadata=dict(db_plan.session_metadata or {}),
             final_output=db_plan.final_output,
         )

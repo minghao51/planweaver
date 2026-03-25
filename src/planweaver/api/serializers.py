@@ -16,10 +16,16 @@ def _optional_payload_attr(plan: object, name: str):
     return value if isinstance(value, (dict, list, str, int, float, bool)) or value is None else None
 
 
+def _metadata_attr(plan: object) -> dict:
+    value = getattr(plan, "metadata", None)
+    return value if isinstance(value, dict) else {}
+
+
 def serialize_plan_summary(plan: Plan) -> dict:
     return {
         "session_id": plan.session_id,
         "status": plan.status.value,
+        "planning_mode": _metadata_attr(plan).get("planning_mode", "baseline"),
         "open_questions": [q.model_dump() for q in _list_attr(plan, "open_questions")],
         "selected_candidate_id": _optional_str_attr(plan, "selected_candidate_id"),
         "approved_candidate_id": _optional_str_attr(plan, "approved_candidate_id"),
@@ -53,6 +59,8 @@ def serialize_plan_detail(plan: Plan) -> dict:
         "planning_outcomes": [o.model_dump(mode="json") for o in _list_attr(plan, "planning_outcomes")],
         "selected_candidate_id": _optional_str_attr(plan, "selected_candidate_id"),
         "approved_candidate_id": _optional_str_attr(plan, "approved_candidate_id"),
+        "planning_mode": _metadata_attr(plan).get("planning_mode", "baseline"),
+        "metadata": _metadata_attr(plan),
         "final_output": _optional_payload_attr(plan, "final_output"),
     }
 

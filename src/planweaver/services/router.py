@@ -11,6 +11,7 @@ import logging
 from datetime import datetime, timezone
 
 from ..models.plan import Plan, ExecutionStep, StepStatus, PlanStatus
+from ..observer import Observer, ObservationResult
 from .llm_gateway import LLMGateway
 from .template_engine import TemplateEngine
 
@@ -181,12 +182,15 @@ class ExecutionRouter:
         context: Optional[Dict[str, Any]] = None,
         max_steps: int = 100,
         model_override: Optional[str] = None,
+        observer: Optional[Observer] = None,
+        observer_drift_threshold: float = 0.8,
     ) -> Plan:
         if context is None:
             context = {}
 
         self._validate_execution_graph(plan)
         plan.status = PlanStatus.EXECUTING
+        plan.metadata.pop("observer_signal", None)
         step_count = 0
 
         while step_count < max_steps:
@@ -203,6 +207,18 @@ class ExecutionRouter:
                     plan.status = PlanStatus.FAILED
                     return plan
 
+                if observer is not None:
+                    observation = await observer.on_step_complete(step, plan)
+                    self._store_observation(plan, observation)
+                    if (
+                        observation.drift_detected
+                        and observation.confidence >= observer_drift_threshold
+                        and observation.recommended_action == "replan_from_here"
+                    ):
+                        plan.status = PlanStatus.APPROVED
+                        plan.metadata["observer_signal"] = observation.model_dump(mode="json")
+                        return plan
+
             if not self.get_executable_steps(plan):
                 break
 
@@ -217,6 +233,10 @@ class ExecutionRouter:
             plan.status = PlanStatus.FAILED
 
         return plan
+
+    def _store_observation(self, plan: Plan, observation: ObservationResult) -> None:
+        history = plan.metadata.setdefault("observer_history", [])
+        history.append(observation.model_dump(mode="json"))
 
     def _aggregate_outputs(self, plan: Plan) -> Dict[str, Any]:
         outputs = {}

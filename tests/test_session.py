@@ -155,6 +155,23 @@ class TestSessionStateMachine:
 
         assert sm._convergence_rounds == 1
 
+    def test_convergence_state_can_be_persisted_and_restored(self):
+        sm = SessionStateMachine("test-123", SessionState.NEGOTIATING)
+        sm.record_negotiation_round(had_mutation=False)
+        sm.record_negotiation_round(had_mutation=False)
+
+        saved = sm.dump_convergence_state()
+
+        restored = SessionStateMachine("test-123", SessionState.NEGOTIATING)
+        restored.load_convergence_state(
+            rounds_without_change=saved["rounds_without_change"],
+            last_mutation_round=saved["last_mutation_round"],
+        )
+
+        convergence = restored.check_convergence(max_rounds=5, min_rounds=2)
+        assert convergence.is_converged
+        assert convergence.rounds_without_change == 2
+
     def test_event_handler_called_on_transition(self):
         sm = SessionStateMachine("test-123")
         called = []

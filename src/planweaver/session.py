@@ -163,6 +163,18 @@ class SessionStateMachine:
             reasons=reasons,
         )
 
+    def load_convergence_state(self, rounds_without_change: int, last_mutation_round: int) -> None:
+        """Restore persisted convergence counters for a session."""
+        self._convergence_rounds = max(0, rounds_without_change)
+        self._last_mutation_round = max(0, last_mutation_round)
+
+    def dump_convergence_state(self) -> dict[str, int]:
+        """Return convergence counters for persistence."""
+        return {
+            "rounds_without_change": self._convergence_rounds,
+            "last_mutation_round": self._last_mutation_round,
+        }
+
     def on(self, event: str, handler: Callable[[StateTransitionEvent], None]) -> None:
         """Register an event handler for a transition event."""
         if event not in self._event_handlers:

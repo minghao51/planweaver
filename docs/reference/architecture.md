@@ -19,6 +19,7 @@ User Intent + External Context → Planner → Execution Graph → Executor → 
 | `Orchestrator` | `orchestrator.py` | Main coordinator - session lifecycle, plan management, context handling |
 | `Planner` | `services/planner.py` | Intent analysis, question generation, task decomposition with context awareness |
 | `ExecutionRouter` | `services/router.py` | Execute DAG steps in dependency order with retries |
+| `Observer` | `observer.py` | Detect execution drift and trigger checkpoint-safe replanning |
 | `LLMGateway` | `services/llm_gateway.py` | LiteLLM wrapper - unified API for all models |
 | `TemplateEngine` | `services/template_engine.py` | Load/render YAML scenario templates |
 | `ContextService` | `services/context_service.py` | External context manager for GitHub, web search, file uploads |
@@ -60,7 +61,12 @@ User Intent + External Context → Planner → Execution Graph → Executor → 
    - Render prompt from scenario template
    - Call LLM via LLMGateway
    - Store result
-3. Aggregate all outputs → `final_output`
+   - Run `Observer.on_step_complete()` on successful steps
+3. If the Observer detects drift above threshold:
+   - Pause execution at the current checkpoint
+   - Regenerate the impacted suffix of the approved execution graph
+   - Resume execution, bounded by `max_replans_per_session`
+4. Aggregate all outputs → `final_output`
 
 ### External Context Flow
 

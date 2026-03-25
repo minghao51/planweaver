@@ -35,6 +35,14 @@ class Settings(BaseSettings):
     # Session Cleanup Configuration
     session_ttl_days: int = Field(7, description="Days until sessions expire and are deleted")
 
+    # Embedding Configuration (Qwen/Dashscope)
+    dashscope_api_key: Optional[str] = Field(None, description="Alibaba Dashscope API key for Qwen embeddings")
+    qwen_base_url: str = Field(
+        "https://dashscope-intl.aliyuncs.com/compatible-mode/v1", description="Qwen API base URL (OpenAI compatible)"
+    )
+    embedding_model: str = Field("text-embedding-v4", description="Qwen embedding model")
+    embedding_batch_size: int = Field(10, description="Batch size for embedding generation")
+
 
 @lru_cache
 def get_settings() -> Settings:

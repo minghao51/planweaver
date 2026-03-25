@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, List, Dict, Any, Literal
 from enum import Enum
 from datetime import datetime, timezone
@@ -77,8 +77,7 @@ class ProposalWithAnalysis(BaseModel):
     estimated_cost_usd: Decimal
     risk_factors: List[str]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PreconditionAnnotation(BaseModel):

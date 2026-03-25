@@ -1,9 +1,10 @@
 from typing import Optional, cast, Literal
 import logging
+import inspect
 
 from fastapi import APIRouter, HTTPException, Query, Depends, Request
 
-from ...models.plan import PlanStatus, ComparisonRequest, ProposalComparison
+from ...models.plan import Plan, PlanStatus, ComparisonRequest, ProposalComparison
 from ...models.session import SessionState, SessionMessage, NegotiatorIntent
 from ...services.comparison_service import ProposalComparisonService
 from ...session import SessionStateMachine
@@ -38,15 +39,59 @@ router = APIRouter()
 
 @router.post("/sessions")
 @limiter.limit("10/hour")
-def create_session(request: Request, body: CreateSessionRequest):
+async def create_session(request: Request, body: CreateSessionRequest):
     try:
         orch = get_orchestrator()
-        plan = orch.start_session(
-            body.user_intent,
-            body.scenario_name,
-            planner_model=body.planner_model,
-            executor_model=body.executor_model,
-        )
+
+        # Route to appropriate planning mode
+        if body.planning_mode == "specialist":
+            plan = await orch.start_specialist_session(
+                body.user_intent,
+                body.scenario_name,
+                body.specialist_domains,
+                body.planner_model,
+                body.executor_model,
+            )
+        elif body.planning_mode == "ensemble":
+            plan = await orch.start_ensemble_session(
+                body.user_intent,
+                body.scenario_name,
+                body.ensemble_models,
+                body.planner_model,
+                body.executor_model,
+            )
+        elif body.planning_mode == "debate":
+            plan = await orch.start_debate_session(
+                body.user_intent,
+                body.scenario_name,
+                body.planner_model,
+                body.executor_model,
+            )
+        else:
+            # Baseline mode (existing flow)
+            plan = None
+            start_session_async = getattr(orch, "start_session_async", None)
+            if callable(start_session_async):
+                result = start_session_async(
+                    body.user_intent,
+                    body.scenario_name,
+                    external_contexts=None,
+                    planner_model=body.planner_model,
+                    executor_model=body.executor_model,
+                )
+                if inspect.isawaitable(result):
+                    plan = await result
+                else:
+                    plan = result
+            if plan is None:
+                plan = orch.start_session(
+                    body.user_intent,
+                    body.scenario_name,
+                    planner_model=body.planner_model,
+                    executor_model=body.executor_model,
+                )
+
+        assert plan is not None, "Plan should never be None at this point"
         return serialize_plan_summary(plan)
     except ValueError as e:
         logger.warning(f"Validation error: {e}")
@@ -81,7 +126,10 @@ def list_sessions(
 @limiter.limit("60/minute")
 def get_session(request: Request, session_id: str):
     try:
-        _, plan = get_plan_or_404(session_id)
+        orch = get_orchestrator()
+        plan = orch.get_session(session_id)
+        if not plan:
+            raise HTTPException(status_code=404, detail="Session not found")
         return serialize_plan_detail(plan)
     except HTTPException:
         raise
@@ -138,6 +186,8 @@ def approve_plan(session_id: str):
             "execution_graph": serialize_execution_graph(updated_plan),
             "approved_candidate_id": updated_plan.approved_candidate_id,
         }
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except HTTPException:
         raise
     except Exception:
@@ -333,6 +383,41 @@ def list_outcomes(request: Request, session_id: str):
     }
 
 
+@router.get("/sessions/{session_id}/similar-plans")
+@limiter.limit("30/minute")
+async def get_similar_plans(
+    request: Request,
+    session_id: str,
+    query: str = Query(default="", description="Search query for similar plans"),
+    limit: int = Query(default=5, ge=1, le=20),
+):
+    """Get similar historical plans using memory layer search."""
+    try:
+        orch, plan = get_plan_or_404(session_id)
+
+        # Use user_intent as default query if not provided
+        search_query = query or plan.user_intent
+
+        results = await orch.search_similar_plans(
+            query=search_query,
+            limit=limit,
+            similarity_threshold=0.7,
+        )
+
+        return {
+            "session_id": session_id,
+            "query": search_query,
+            "similar_plans": results,
+            "count": len(results),
+        }
+
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Unexpected error getting similar plans")
+        raise HTTPException(status_code=500, detail="Operation failed. Please try again.")
+
+
 def _get_message_history(session_id: str) -> list:
     """Get message history for a session."""
     db = SessionLocal()
@@ -378,6 +463,73 @@ def _intent_to_event(intent: NegotiatorIntent) -> str:
     return mapping.get(intent, "request_revision")
 
 
+def _plan_status_to_session_state(plan: Plan) -> SessionState:
+    """Map persisted plan state into the conversational session state machine."""
+    if plan.status == PlanStatus.EXECUTING:
+        return SessionState.EXECUTING
+    if plan.status in {PlanStatus.COMPLETED, PlanStatus.FAILED}:
+        return SessionState.DONE
+    if plan.status in {PlanStatus.AWAITING_APPROVAL, PlanStatus.APPROVED}:
+        return SessionState.NEGOTIATING
+    if any(not question.answered for question in plan.open_questions):
+        return SessionState.CLARIFYING
+    return SessionState.PLANNING
+
+
+def _session_transition_event(
+    current_state: SessionState,
+    next_state: SessionState,
+    intent: NegotiatorIntent,
+) -> Optional[str]:
+    """Resolve a valid state machine event for an LLM-requested transition."""
+    direct_mapping = {
+        (SessionState.GOAL_RECEIVED, SessionState.CLARIFYING): "start_clarifying",
+        (SessionState.GOAL_RECEIVED, SessionState.PLANNING): "start_planning",
+        (SessionState.CLARIFYING, SessionState.PLANNING): "all_questions_answered",
+        (SessionState.PLANNING, SessionState.NEGOTIATING): "plan_ready",
+        (SessionState.NEGOTIATING, SessionState.PLANNING): "request_revision",
+        (SessionState.NEGOTIATING, SessionState.EXECUTING): "approve",
+        (SessionState.EXECUTING, SessionState.DONE): "execution_complete",
+    }
+    if current_state == next_state:
+        return None
+    direct_event = direct_mapping.get((current_state, next_state))
+    if direct_event is not None:
+        return direct_event
+    if next_state == SessionState.DONE:
+        return "cancel"
+    return _intent_to_event(intent)
+
+
+def _session_state_to_plan_status(current_status: PlanStatus, next_state: SessionState) -> PlanStatus:
+    """Map conversational session transitions back into persisted plan state."""
+    if next_state in {SessionState.GOAL_RECEIVED, SessionState.CLARIFYING, SessionState.PLANNING}:
+        return PlanStatus.BRAINSTORMING
+    if next_state == SessionState.NEGOTIATING:
+        return PlanStatus.AWAITING_APPROVAL
+    if next_state == SessionState.EXECUTING:
+        # Approval happens here, but actual execution still runs through /execute.
+        return PlanStatus.APPROVED
+    return current_status
+
+
+def _restore_convergence_state(state_machine: SessionStateMachine, plan: Plan) -> None:
+    counters = plan.metadata.get("negotiation_convergence")
+    if not isinstance(counters, dict):
+        return
+    rounds_without_change = counters.get("rounds_without_change", 0)
+    last_mutation_round = counters.get("last_mutation_round", 0)
+    if isinstance(rounds_without_change, int) and isinstance(last_mutation_round, int):
+        state_machine.load_convergence_state(rounds_without_change, last_mutation_round)
+
+
+def _persist_convergence_state(state_machine: SessionStateMachine, plan: Plan) -> None:
+    if state_machine.get_state() == SessionState.NEGOTIATING:
+        plan.metadata["negotiation_convergence"] = state_machine.dump_convergence_state()
+    else:
+        plan.metadata.pop("negotiation_convergence", None)
+
+
 @router.post("/sessions/{session_id}/message", response_model=MessageResponse)
 @limiter.limit("30/minute")
 async def send_message(
@@ -394,8 +546,9 @@ async def send_message(
     """
     orch, plan = get_plan_or_404(session_id)
 
-    current_state = SessionState(plan.status.value.lower())
+    current_state = _plan_status_to_session_state(plan)
     state_machine = SessionStateMachine(session_id, current_state)
+    _restore_convergence_state(state_machine, plan)
 
     negotiator = Negotiator()
 
@@ -414,8 +567,10 @@ async def send_message(
         plan = negotiator.apply_mutations(output.mutations, plan)
 
     if output.state_transition:
-        state_machine.transition(_intent_to_event(output.intent), {"mutations": len(output.mutations)})
-        plan.status = PlanStatus(output.state_transition.value.upper())
+        transition_event = _session_transition_event(state_machine.get_state(), output.state_transition, output.intent)
+        if transition_event:
+            state_machine.transition(transition_event, {"mutations": len(output.mutations)})
+        plan.status = _session_state_to_plan_status(plan.status, output.state_transition)
     else:
         state_machine.record_negotiation_round(had_mutation)
 
@@ -427,7 +582,20 @@ async def send_message(
         metadata=body.metadata,
     )
     _save_session_message(session_message)
+    _save_session_message(
+        SessionMessage(
+            session_id=session_id,
+            role="assistant",
+            content=output.response_message,
+            intent=output.intent,
+            metadata={
+                "state_transition": output.state_transition.value if output.state_transition else None,
+                "mutations_applied": len(output.mutations),
+            },
+        )
+    )
 
+    _persist_convergence_state(state_machine, plan)
     orch.plan_repository.save(plan)
 
     convergence = None

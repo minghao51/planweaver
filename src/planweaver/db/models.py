@@ -59,6 +59,7 @@ class SessionModel(Base):
     context_suggestions = Column(JSON, default=list)
     selected_candidate_id = Column(String(36), nullable=True)
     approved_candidate_id = Column(String(36), nullable=True)
+    session_metadata = Column("metadata", JSON, default=dict)
     final_output = Column(JSON, nullable=True)
 
 

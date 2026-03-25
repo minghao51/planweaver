@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PlanWeaver - Universal LLM Planning Engine</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .header h1 { color: #333; }
+        .card { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: 500; color: #555; }
+        input, textarea, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+        textarea { resize: vertical; min-height: 80px; }
+        button { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        .btn-secondary { background: #6c757d; }
+        .btn-secondary:hover { background: #545b62; }
+        .btn-success { background: #28a745; }
+        .btn-success:hover { background: #218838; }
+        .session-list { display: grid; gap: 10px; }
+        .session-item { padding: 15px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; transition: background 0.2s; }
+        .session-item:hover { background: #f8f9fa; }
+        .session-item.active { border-color: #007bff; background: #e7f3ff; }
+        .status-badge { display: inline-block; padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: 500; }
+        .status-BRAINSTORMING { background: #fff3cd; color: #856404; }
+        .status-AWAITING_APPROVAL { background: #cce5ff; color: #004085; }
+        .status-APPROVED { background: #d4edda; color: #155724; }
+        .status-EXECUTING { background: #e2e3e5; color: #383d41; }
+        .status-COMPLETED { background: #d4edda; color: #155724; }
+        .execution-graph { margin-top: 15px; }
+        .step { padding: 10px; border-left: 3px solid #007bff; margin-bottom: 10px; background: #f8f9fa; }
+        .step.completed { border-left-color: #28a745; }
+        .step.failed { border-left-color: #dc3545; }
+        .chat-messages { max-height: 400px; overflow-y: auto; margin-bottom: 15px; }
+        .message { padding: 10px; margin-bottom: 10px; border-radius: 4px; }
+        .message.user { background: #e3f2fd; text-align: right; }
+        .message.assistant { background: #f5f5f5; }
+        .hidden { display: none; }
+        .loading { text-align: center; padding: 20px; color: #666; }
+        .error { color: #dc3545; padding: 10px; background: #f8d7da; border-radius: 4px; margin-bottom: 15px; }
+        .two-column { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 768px) { .two-column { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧠 PlanWeaver</h1>
+            <p>Universal LLM Planning & Execution Engine</p>
+        </div>
+
+        <div id="error" class="error hidden"></div>
+
+        <!-- Session Creation -->
+        <div id="create-session" class="card">
+            <h2>Create New Session</h2>
+            <form id="session-form">
+                <div class="form-group">
+                    <label for="user-intent">What would you like to plan?</label>
+                    <textarea id="user-intent" placeholder="e.g., Build a REST API with FastAPI that includes user authentication" required></textarea>
+                </div>
+                <div class="two-column">
+                    <div class="form-group">
+                        <label for="scenario-name">Scenario (optional)</label>
+                        <input type="text" id="scenario-name" placeholder="e.g., web_development">
+                    </div>
+                    <div class="form-group">
+                        <label for="planning-mode">Planning Mode</label>
+                        <select id="planning-mode">
+                            <option value="baseline">Baseline</option>
+                            <option value="specialist">Specialist</option>
+                            <option value="ensemble">Ensemble</option>
+                            <option value="debate">Debate</option>
+                        </select>
+                    </div>
+                </div>
+                <button type="submit">Create Session</button>
+            </form>
+        </div>
+
+        <!-- Session List -->
+        <div id="session-list-container" class="card hidden">
+            <h2>Recent Sessions</h2>
+            <div id="session-list" class="session-list"></div>
+        </div>
+
+        <!-- Session Detail -->
+        <div id="session-detail" class="card hidden">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h2 id="session-title">Session Detail</h2>
+                <button id="back-button" class="btn-secondary">← Back</button>
+            </div>
+            <div id="session-info"></div>
+
+            <!-- Chat Interface -->
+            <div id="chat-interface" class="hidden">
+                <h3>Conversation</h3>
+                <div id="chat-messages" class="chat-messages"></div>
+                <form id="chat-form">
+                    <div class="form-group">
+                        <input type="text" id="chat-input" placeholder="Type your message..." required>
+                    </div>
+                    <button type="submit">Send</button>
+                </form>
+            </div>
+
+            <!-- Execution Graph -->
+            <div id="execution-graph-container" class="hidden">
+                <h3>Execution Steps</h3>
+                <div id="execution-graph" class="execution-graph"></div>
+            </div>
+
+            <!-- Candidates -->
+            <div id="candidates-container" class="hidden">
+                <h3>Plan Candidates</h3>
+                <div id="candidates-list"></div>
+            </div>
+
+            <!-- Approve Button -->
+            <div id="approve-container" class="hidden" style="margin-top: 15px;">
+                <button id="approve-button" class="btn-success">Approve Plan</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/v1';
+        let currentSessionId = null;
+
+        // DOM Elements
+        const errorEl = document.getElementById('error');
+        const createSessionEl = document.getElementById('create-session');
+        const sessionListContainer = document.getElementById('session-list-container');
+        const sessionListEl = document.getElementById('session-list');
+        const sessionDetailEl = document.getElementById('session-detail');
+        const sessionTitleEl = document.getElementById('session-title');
+        const sessionInfoEl = document.getElementById('session-info');
+        const chatInterface = document.getElementById('chat-interface');
+        const chatMessages = document.getElementById('chat-messages');
+        const chatForm = document.getElementById('chat-form');
+        const chatInput = document.getElementById('chat-input');
+        const executionGraphContainer = document.getElementById('execution-graph-container');
+        const executionGraph = document.getElementById('execution-graph');
+        const candidatesContainer = document.getElementById('candidates-container');
+        const candidatesList = document.getElementById('candidates-list');
+        const approveContainer = document.getElementById('approve-container');
+        const backButton = document.getElementById('back-button');
+
+        // Utility Functions
+        function showError(message) {
+            errorEl.textContent = message;
+            errorEl.classList.remove('hidden');
+            setTimeout(() => errorEl.classList.add('hidden'), 5000);
+        }
+
+        function showLoading(element) {
+            element.innerHTML = '<div class="loading">Loading...</div>';
+        }
+
+        // Session Creation
+        document.getElementById('session-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const userIntent = document.getElementById('user-intent').value;
+            const scenarioName = document.getElementById('scenario-name').value;
+            const planningMode = document.getElementById('planning-mode').value;
+
+            try {
+                const response = await fetch(`${API_BASE}/sessions`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_intent: userIntent,
+                        scenario_name: scenarioName || null,
+                        planning_mode: planningMode,
+                    }),
+                });
+
+                if (!response.ok) throw new Error('Failed to create session');
+
+                const session = await response.json();
+                loadSessionDetail(session.session_id);
+            } catch (error) {
+                showError(error.message);
+            }
+        });
+
+        // Load Session List
+        async function loadSessionList() {
+            showLoading(sessionListEl);
+            try {
+                const response = await fetch(`${API_BASE}/sessions?limit=10`);
+                const data = await response.json();
+
+                sessionListEl.innerHTML = data.sessions.map(session => `
+                    <div class="session-item" data-session-id="${session.session_id}">
+                        <strong>${session.user_intent.substring(0, 100)}...</strong>
+                        <span class="status-badge status-${session.status}">${session.status}</span>
+                        <small style="display: block; color: #666; margin-top: 5px;">
+                            ${new Date(session.created_at).toLocaleString()}
+                        </small>
+                    </div>
+                `).join('');
+
+                sessionListContainer.classList.remove('hidden');
+
+                // Add click handlers
+                document.querySelectorAll('.session-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        loadSessionDetail(item.dataset.sessionId);
+                    });
+                });
+            } catch (error) {
+                showError('Failed to load sessions');
+            }
+        }
+
+        // Load Session Detail
+        async function loadSessionDetail(sessionId) {
+            currentSessionId = sessionId;
+            createSessionEl.classList.add('hidden');
+            sessionListContainer.classList.add('hidden');
+            sessionDetailEl.classList.remove('hidden');
+
+            showLoading(sessionInfoEl);
+            showLoading(executionGraph);
+            showLoading(candidatesList);
+
+            try {
+                const response = await fetch(`${API_BASE}/sessions/${sessionId}`);
+                const session = await response.json();
+
+                sessionTitleEl.textContent = session.user_intent.substring(0, 50);
+                sessionInfoEl.innerHTML = `
+                    <p><strong>Status:</strong> <span class="status-badge status-${session.status}">${session.status}</span></p>
+                    <p><strong>Created:</strong> ${new Date(session.created_at).toLocaleString()}</p>
+                    ${session.scenario_name ? `<p><strong>Scenario:</strong> ${session.scenario_name}</p>` : ''}
+                `;
+
+                // Load execution graph if available
+                if (session.execution_graph && session.execution_graph.length > 0) {
+                    executionGraphContainer.classList.remove('hidden');
+                    executionGraph.innerHTML = session.execution_graph.map((step, i) => `
+                        <div class="step ${step.status.toLowerCase()}">
+                            <strong>Step ${step.step_id}:</strong> ${step.task}
+                            ${step.status !== 'PENDING' ? `<span class="status-badge status-${step.status}">${step.status}</span>` : ''}
+                        </div>
+                    `).join('');
+
+                    if (session.status === 'AWAITING_APPROVAL') {
+                        approveContainer.classList.remove('hidden');
+                    }
+                }
+
+                // Load candidates if available
+                if (session.candidate_plans && session.candidate_plans.length > 0) {
+                    candidatesContainer.classList.remove('hidden');
+                    candidatesList.innerHTML = session.candidate_plans.map(candidate => `
+                        <div class="session-item">
+                            <strong>${candidate.title}</strong>
+                            <p>${candidate.summary}</p>
+                            ${candidate.selected ? '<span class="status-badge status-APPROVED">Selected</span>' : ''}
+                        </div>
+                    `).join('');
+                }
+
+                // Show chat interface
+                chatInterface.classList.remove('hidden');
+
+            } catch (error) {
+                showError('Failed to load session detail');
+            }
+        }
+
+        // Chat Interface
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const message = chatInput.value.trim();
+            if (!message || !currentSessionId) return;
+
+            // Add user message to UI
+            addMessage('user', message);
+            chatInput.value = '';
+
+            try {
+                const response = await fetch(`${API_BASE}/sessions/${currentSessionId}/message`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        content: message,
+                        role: 'user',
+                    }),
+                });
+
+                if (!response.ok) throw new Error('Failed to send message');
+
+                const data = await response.json();
+                addMessage('assistant', data.response_message);
+
+                // Refresh session if state changed
+                if (data.state_transition) {
+                    loadSessionDetail(currentSessionId);
+                }
+            } catch (error) {
+                addMessage('assistant', 'Sorry, there was an error processing your message.');
+            }
+        });
+
+        function addMessage(role, content) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}`;
+            messageDiv.textContent = content;
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Approve Plan
+        document.getElementById('approve-button').addEventListener('click', async () => {
+            if (!currentSessionId) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/sessions/${currentSessionId}/approve`, {
+                    method: 'POST',
+                });
+
+                if (!response.ok) throw new Error('Failed to approve plan');
+
+                loadSessionDetail(currentSessionId);
+            } catch (error) {
+                showError(error.message);
+            }
+        });
+
+        // Back Button
+        backButton.addEventListener('click', () => {
+            sessionDetailEl.classList.add('hidden');
+            createSessionEl.classList.remove('hidden');
+            loadSessionList();
+        });
+
+        // Load initial session list
+        loadSessionList();
+    </script>
+</body>
+</html>

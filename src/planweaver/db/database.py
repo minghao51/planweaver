@@ -1,5 +1,8 @@
-from sqlalchemy import and_, create_engine, event, or_, text
+from sqlalchemy import and_, create_engine, event, inspect, or_, text
 from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.pool import StaticPool
+from threading import Lock
+from typing import Dict, Any
 from .models import (
     Base,
     ExecutionLog,
@@ -17,14 +20,20 @@ from datetime import datetime, timezone, timedelta
 import logging
 
 logger = logging.getLogger(__name__)
+_db_init_lock = Lock()
+_db_initialized = False
 
 settings = get_settings()
 
-engine = create_engine(
-    settings.database_url,
-    connect_args={"check_same_thread": False} if "sqlite" in settings.database_url else {},
-    echo=False,
-)
+engine_kwargs: Dict[str, Any] = {
+    "echo": False,
+}
+if "sqlite" in settings.database_url:
+    engine_kwargs["connect_args"] = {"check_same_thread": False}
+    if ":memory:" in settings.database_url:
+        engine_kwargs["poolclass"] = StaticPool
+
+engine = create_engine(settings.database_url, **engine_kwargs)
 
 if "sqlite" in settings.database_url:
 
@@ -40,6 +49,32 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+
+
+def ensure_db_ready(force: bool = False) -> None:
+    """
+    Ensure the database schema and migrations are applied.
+
+    This is safe to call repeatedly and is used by integration-style entry
+    points that may operate outside the API lifespan hooks.
+    """
+    global _db_initialized
+
+    if _db_initialized and not force:
+        return
+
+    with _db_init_lock:
+        if _db_initialized and not force:
+            return
+
+        init_db()
+        run_migrations()
+
+        inspector = inspect(engine)
+        if "sessions" not in inspector.get_table_names():
+            raise RuntimeError("Database initialization failed: missing 'sessions' table")
+
+        _db_initialized = True
 
 
 MIGRATIONS = [
@@ -96,6 +131,93 @@ MIGRATIONS = [
             CREATE INDEX IF NOT EXISTS idx_session_messages_created_at ON session_messages(created_at);
         """,
     },
+    {
+        "version": 9,
+        "name": "add_plan_embeddings_table",
+        "up": """
+            CREATE TABLE IF NOT EXISTS plan_embeddings (
+                id VARCHAR(36) PRIMARY KEY,
+                session_id VARCHAR(36) NOT NULL,
+                user_intent_embedding BLOB,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (session_id) REFERENCES sessions(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_plan_embeddings_session_id ON plan_embeddings(session_id);
+        """,
+    },
+    {
+        "version": 10,
+        "name": "add_execution_outcomes_table",
+        "up": """
+            CREATE TABLE IF NOT EXISTS execution_outcomes (
+                id VARCHAR(36) PRIMARY KEY,
+                session_id VARCHAR(36) NOT NULL,
+                outcome_type VARCHAR(50),
+                summary TEXT,
+                metadata JSON DEFAULT '{}',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (session_id) REFERENCES sessions(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_execution_outcomes_session_id ON execution_outcomes(session_id);
+        """,
+    },
+    {
+        "version": 11,
+        "name": "add_plan_templates_table",
+        "up": """
+            CREATE TABLE IF NOT EXISTS plan_templates (
+                id VARCHAR(36) PRIMARY KEY,
+                template_name VARCHAR(255) NOT NULL,
+                user_intent_pattern VARCHAR(500),
+                execution_graph_template JSON,
+                metadata JSON DEFAULT '{}',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE INDEX IF NOT EXISTS idx_plan_templates_name ON plan_templates(template_name);
+        """,
+    },
+    {
+        "version": 12,
+        "name": "add_decision_records_table",
+        "up": """
+            CREATE TABLE IF NOT EXISTS decision_records (
+                id VARCHAR(36) PRIMARY KEY,
+                session_id VARCHAR(36) NOT NULL,
+                decision_point VARCHAR(255),
+                debate_outcome JSON,
+                selected_option VARCHAR(255),
+                rationale TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (session_id) REFERENCES sessions(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_decision_records_session_id ON decision_records(session_id);
+        """,
+    },
+    {
+        "version": 13,
+        "name": "add_precondition_results_table",
+        "up": """
+            CREATE TABLE IF NOT EXISTS precondition_results (
+                id VARCHAR(36) PRIMARY KEY,
+                session_id VARCHAR(36) NOT NULL,
+                step_id INTEGER NOT NULL,
+                precondition_type VARCHAR(50),
+                check_expression VARCHAR(500),
+                probe_result BOOLEAN,
+                probe_error TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (session_id) REFERENCES sessions(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_precondition_results_session_id ON precondition_results(session_id);
+        """,
+    },
+    {
+        "version": 14,
+        "name": "add_session_metadata_column",
+        "up": """
+            ALTER TABLE sessions ADD COLUMN metadata JSON DEFAULT '{}';
+        """,
+    },
 ]
 
 
@@ -130,7 +252,13 @@ def run_migrations():
             if migration["version"] > current_version:
                 logger.info(f"Running migration v{migration['version']}: {migration['name']}")
                 try:
-                    db.execute(text(migration["up"]))
+                    # Split multi-statement migrations for SQLite compatibility
+                    statements = [s.strip() for s in migration["up"].split(";") if s.strip()]
+
+                    for statement in statements:
+                        db.execute(text(statement))
+
+                    # Record migration
                     db.execute(
                         text("INSERT INTO db_version (version) VALUES (:version)"),
                         {"version": migration["version"]},
@@ -214,6 +342,7 @@ def cleanup_expired_sessions() -> int:
 
 
 def get_db():
+    ensure_db_ready()
     db = SessionLocal()
     try:
         yield db
@@ -226,4 +355,5 @@ def get_engine():
 
 
 def get_session() -> Session:
+    ensure_db_ready()
     return SessionLocal()

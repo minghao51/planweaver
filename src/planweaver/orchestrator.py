@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from typing import Dict, Any, Optional, List, Iterable
 from datetime import datetime, timezone
+import asyncio
+import logging
 
 from .models.plan import (
     CandidatePlan,
@@ -30,11 +32,22 @@ from .services.planner import Planner
 from .services.router import ExecutionRouter
 from .services.template_engine import TemplateEngine
 from .services.llm_gateway import LLMGateway
+from .services.coordinator import Coordinator
+from .services.ensemble import EnsembleService
+from .services.debate import DebateService
+from .services.plan_evaluator import PlanEvaluator
+from .services.pairwise_comparison_service import PairwiseComparisonService
 from .db.repositories import PlanRepository
 from .scout import PreconditionScout
+from .memory import MemoryLayer, MemorySearchQuery
+from .critic import Critic
+from .context_synthesis import ContextSynthesizer
+from .db.database import ensure_db_ready, get_session
+from .observer import Observer
 
 
 PLANNING_STYLES = ("baseline", "fast", "risk_averse", "cost_aware")
+logger = logging.getLogger(__name__)
 
 
 class Orchestrator:
@@ -49,6 +62,7 @@ class Orchestrator:
         scenarios_path: str = "scenarios",
         scout_enabled: bool = False,
     ):
+        ensure_db_ready()
         self.planner_model = planner_model
         self.executor_model = executor_model
         self.template_engine = TemplateEngine(scenarios_path)
@@ -59,6 +73,19 @@ class Orchestrator:
         self.plan_normalizer = PlanNormalizer()
         self.scout = PreconditionScout()
         self.scout_enabled = scout_enabled
+        self.coordinator = Coordinator(self.llm)
+        self.ensemble = EnsembleService(
+            self.llm,
+            self.planner,
+            PlanEvaluator(),
+            PairwiseComparisonService(),
+            self.plan_normalizer,
+        )
+        self.debate = DebateService(self.llm)
+        self.memory = MemoryLayer(self.llm, get_session())
+        self.critic = Critic(self.llm)
+        self.context_synthesizer = ContextSynthesizer(self.llm, self.memory)
+        self.observer = Observer()
 
     def start_session(
         self,
@@ -69,8 +96,23 @@ class Orchestrator:
         executor_model: Optional[str] = None,
     ) -> Plan:
         planner = planner_model or self.planner_model
+        metadata = {"planning_mode": "baseline"}
+        brief = self._run_context_synthesis_sync(
+            user_intent=user_intent,
+            scenario_name=scenario_name,
+            external_contexts=external_contexts or [],
+            planning_mode="baseline",
+        )
+        if brief is not None:
+            metadata["context_brief"] = brief.model_dump(mode="json")
 
-        plan = self.planner.create_initial_plan(user_intent=user_intent, scenario_name=scenario_name, model=planner)
+        plan = self.planner.create_initial_plan(
+            user_intent=user_intent,
+            scenario_name=scenario_name,
+            external_contexts=external_contexts or [],
+            metadata=metadata,
+            model=planner,
+        )
         plan.planner_model = planner_model
         plan.executor_model = executor_model
         plan.external_contexts = external_contexts or []
@@ -81,6 +123,240 @@ class Orchestrator:
         if plan.external_contexts:
             self._refresh_candidate_context_references(plan)
         self.plan_repository.save(plan)
+        return plan
+
+    async def start_session_async(
+        self,
+        user_intent: str,
+        scenario_name: Optional[str] = None,
+        external_contexts: Optional[List[ExternalContext]] = None,
+        planner_model: Optional[str] = None,
+        executor_model: Optional[str] = None,
+    ) -> Plan:
+        planner = planner_model or self.planner_model
+        metadata = {"planning_mode": "baseline"}
+        brief = await self._synthesize_context_for_intent(
+            user_intent=user_intent,
+            scenario_name=scenario_name,
+            external_contexts=external_contexts or [],
+            planning_mode="baseline",
+        )
+        if brief is not None:
+            metadata["context_brief"] = brief.model_dump(mode="json")
+
+        plan = self.planner.create_initial_plan(
+            user_intent=user_intent,
+            scenario_name=scenario_name,
+            external_contexts=external_contexts or [],
+            metadata=metadata,
+            model=planner,
+        )
+        plan.planner_model = planner_model
+        plan.executor_model = executor_model
+        plan.external_contexts = external_contexts or []
+        plan.context_suggestions = self._safe_suggestions(
+            self.planner.suggest_context_sources(user_intent, plan.external_contexts)
+        )
+        self._ensure_seed_candidate(plan)
+        if plan.external_contexts:
+            self._refresh_candidate_context_references(plan)
+        self.plan_repository.save(plan)
+        await self._index_plan_if_needed(plan)
+        return plan
+
+    async def _synthesize_context_for_intent(
+        self,
+        user_intent: str,
+        scenario_name: Optional[str],
+        external_contexts: List[ExternalContext],
+        planning_mode: str,
+    ):
+        try:
+            seed_plan = Plan(
+                user_intent=user_intent,
+                scenario_name=scenario_name,
+                external_contexts=list(external_contexts),
+                metadata={"planning_mode": planning_mode},
+            )
+            return await self.context_synthesizer.synthesize(seed_plan, external_contexts)
+        except Exception as exc:
+            logger.warning(f"Context synthesis failed: {exc}")
+            return None
+
+    def _run_context_synthesis_sync(
+        self,
+        user_intent: str,
+        scenario_name: Optional[str],
+        external_contexts: List[ExternalContext],
+        planning_mode: str,
+    ):
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(
+                self._synthesize_context_for_intent(
+                    user_intent=user_intent,
+                    scenario_name=scenario_name,
+                    external_contexts=external_contexts,
+                    planning_mode=planning_mode,
+                )
+            )
+        return None
+
+    async def start_specialist_session(
+        self,
+        user_intent: str,
+        scenario_name: Optional[str] = None,
+        specialist_domains: Optional[List[str]] = None,
+        planner_model: Optional[str] = None,
+        executor_model: Optional[str] = None,
+        external_contexts: Optional[List[ExternalContext]] = None,
+    ) -> Plan:
+        metadata = {"planning_mode": "specialist"}
+        brief = await self._synthesize_context_for_intent(
+            user_intent=user_intent,
+            scenario_name=scenario_name,
+            external_contexts=external_contexts or [],
+            planning_mode="specialist",
+        )
+        if brief is not None:
+            metadata["context_brief"] = brief.model_dump(mode="json")
+
+        plan = self.planner.create_initial_plan(
+            user_intent=user_intent,
+            scenario_name=scenario_name,
+            external_contexts=external_contexts or [],
+            metadata=metadata,
+            model=planner_model or self.planner_model,
+        )
+        plan.planner_model = planner_model
+        plan.executor_model = executor_model
+        plan.external_contexts = external_contexts or []
+
+        fragments = await self.coordinator.coordinate_specialists(
+            user_intent,
+            specialist_domains or ["code", "infra"],
+            plan.locked_constraints,
+            scenario_name,
+            planner_model or self.planner_model,
+        )
+        plan.execution_graph = self.coordinator.merge_fragments(fragments)
+        plan.status = PlanStatus.AWAITING_APPROVAL
+
+        self._ensure_seed_candidate(plan)
+        self.plan_repository.save(plan)
+        await self._index_plan_if_needed(plan)
+        return plan
+
+    async def start_ensemble_session(
+        self,
+        user_intent: str,
+        scenario_name: Optional[str] = None,
+        ensemble_models: Optional[List[str]] = None,
+        planner_model: Optional[str] = None,
+        executor_model: Optional[str] = None,
+        external_contexts: Optional[List[ExternalContext]] = None,
+    ) -> Plan:
+        models = ensemble_models or EnsembleService.DEFAULT_MODELS
+        metadata = {"planning_mode": "ensemble", "ensemble_models": models}
+        brief = await self._synthesize_context_for_intent(
+            user_intent=user_intent,
+            scenario_name=scenario_name,
+            external_contexts=external_contexts or [],
+            planning_mode="ensemble",
+        )
+        if brief is not None:
+            metadata["context_brief"] = brief.model_dump(mode="json")
+
+        plan = self.planner.create_initial_plan(
+            user_intent=user_intent,
+            scenario_name=scenario_name,
+            external_contexts=external_contexts or [],
+            metadata=metadata,
+            model=planner_model or self.planner_model,
+        )
+        plan.planner_model = planner_model
+        plan.executor_model = executor_model
+        plan.external_contexts = external_contexts or []
+
+        winner = await self.ensemble.run_ensemble(
+            user_intent,
+            models,
+            plan.locked_constraints,
+            scenario_name,
+            plan.session_id,
+        )
+        if winner is not None:
+            plan.execution_graph = self._steps_from_normalized_plan(winner.steps)
+            plan.metadata["ensemble_winner"] = winner.id
+            plan.metadata["ensemble_score"] = winner.metadata.get("final_score", 0.0)
+        else:
+            steps = self.planner.decompose_into_steps(
+                user_intent,
+                plan.locked_constraints,
+                scenario_name,
+                planner_model or self.planner_model,
+            )
+            plan.execution_graph = steps if isinstance(steps, list) else []
+            plan.metadata["ensemble_error"] = "Ensemble failed, using baseline"
+
+        plan.status = PlanStatus.AWAITING_APPROVAL
+        self._ensure_seed_candidate(plan)
+        self.plan_repository.save(plan)
+        await self._index_plan_if_needed(plan)
+        return plan
+
+    async def start_debate_session(
+        self,
+        user_intent: str,
+        scenario_name: Optional[str] = None,
+        planner_model: Optional[str] = None,
+        executor_model: Optional[str] = None,
+        external_contexts: Optional[List[ExternalContext]] = None,
+    ) -> Plan:
+        metadata = {"planning_mode": "debate"}
+        brief = await self._synthesize_context_for_intent(
+            user_intent=user_intent,
+            scenario_name=scenario_name,
+            external_contexts=external_contexts or [],
+            planning_mode="debate",
+        )
+        if brief is not None:
+            metadata["context_brief"] = brief.model_dump(mode="json")
+
+        plan = self.planner.create_initial_plan(
+            user_intent=user_intent,
+            scenario_name=scenario_name,
+            external_contexts=external_contexts or [],
+            metadata=metadata,
+            model=planner_model or self.planner_model,
+        )
+        plan.planner_model = planner_model
+        plan.executor_model = executor_model
+        plan.external_contexts = external_contexts or []
+
+        steps = self.planner.decompose_into_steps(
+            user_intent,
+            plan.locked_constraints,
+            scenario_name,
+            planner_model or self.planner_model,
+        )
+        plan.execution_graph = steps if isinstance(steps, list) else []
+
+        debate_rounds = []
+        for decision_point in self.debate.detect_decision_points(plan)[:3]:
+            try:
+                debate_rounds.append(await self.debate.conduct_debate_round(decision_point, plan))
+            except Exception as exc:
+                logger.error(f"Debate round failed for '{decision_point}': {exc}")
+
+        plan.metadata["debate_rounds"] = [round_result.model_dump(mode="json") for round_result in debate_rounds]
+        plan.metadata["debate_count"] = len(debate_rounds)
+        plan.status = PlanStatus.AWAITING_APPROVAL
+
+        self._ensure_seed_candidate(plan)
+        self.plan_repository.save(plan)
+        await self._index_plan_if_needed(plan)
         return plan
 
     def get_session(self, session_id: str) -> Optional[Plan]:
@@ -181,6 +457,9 @@ class Orchestrator:
     def approve_plan(self, plan: Plan) -> Plan:
         if not plan.execution_graph:
             raise ValueError("No candidate execution graph has been adopted yet.")
+        can_approve, reason = self.can_approve_plan(plan)
+        if not can_approve:
+            raise ValueError(reason)
         plan.status = PlanStatus.APPROVED
         self._record_outcome(
             plan,
@@ -340,7 +619,36 @@ class Orchestrator:
         if plan.status != PlanStatus.APPROVED:
             raise ValueError("Plan must be APPROVED before execution")
 
-        plan = await self.router.execute_plan(plan=plan, context=context or {}, model_override=plan.executor_model)
+        replan_limit = int(plan.metadata.get("max_replans_per_session", 1))
+        drift_threshold = float(plan.metadata.get("observer_drift_confidence_threshold", 0.8))
+
+        while True:
+            plan = await self.router.execute_plan(
+                plan=plan,
+                context=context or {},
+                model_override=plan.executor_model,
+                observer=self.observer,
+                observer_drift_threshold=drift_threshold,
+            )
+            observer_signal = plan.metadata.get("observer_signal")
+            if not observer_signal:
+                break
+
+            replan_count = int(plan.metadata.get("observer_replan_count", 0))
+            if replan_count >= replan_limit:
+                plan.status = PlanStatus.FAILED
+                self._record_outcome(
+                    plan,
+                    event_type="observer_replan_limit_reached",
+                    candidate_id=plan.approved_candidate_id,
+                    summary="Execution drift was detected, but the session reached its re-plan limit.",
+                    metadata={"observer_signal": observer_signal, "max_replans_per_session": replan_limit},
+                )
+                break
+
+            self._apply_observer_replan(plan, observer_signal)
+            plan.metadata["observer_replan_count"] = replan_count + 1
+            plan.metadata.pop("observer_signal", None)
 
         self._record_outcome(
             plan,
@@ -355,6 +663,62 @@ class Orchestrator:
         )
         self.plan_repository.save(plan)
         return plan
+
+    def _apply_observer_replan(self, plan: Plan, observer_signal: Dict[str, Any]) -> None:
+        step_id = observer_signal.get("step_id")
+        if not isinstance(step_id, int):
+            raise ValueError("Observer signal is missing a valid step_id")
+
+        candidate = self._candidate_for_replanning(plan)
+        candidate.execution_graph = [ExecutionStep(**step.model_dump()) for step in plan.execution_graph]
+        candidate.execution_graph = self.planner.regenerate_steps_from_point(
+            user_intent=plan.user_intent,
+            locked_constraints=plan.locked_constraints,
+            candidate=candidate,
+            regenerate_from_step_id=step_id,
+            note=observer_signal.get("drift_description") or "Observer-triggered replan from execution drift.",
+            model=plan.planner_model or self.planner_model,
+        )
+        candidate.metadata["observer_last_signal"] = dict(observer_signal)
+        self._refresh_candidate_normalization(candidate, plan)
+        plan.upsert_candidate(candidate)
+        plan.execution_graph = [ExecutionStep(**step.model_dump()) for step in candidate.execution_graph]
+        plan.status = PlanStatus.APPROVED
+        self._record_revision(
+            plan,
+            candidate,
+            "observer_replan",
+            observer_signal.get("drift_description") or "Observer triggered reactive replanning.",
+        )
+        self._record_outcome(
+            plan,
+            event_type="observer_replan_triggered",
+            candidate_id=candidate.candidate_id,
+            summary=f"Observer triggered replanning from step {step_id}.",
+            metadata={"observer_signal": observer_signal},
+        )
+        self.plan_repository.save(plan)
+
+    def _candidate_for_replanning(self, plan: Plan) -> CandidatePlan:
+        if plan.approved_candidate_id:
+            return plan.get_candidate_by_id(plan.approved_candidate_id)
+
+        fallback = CandidatePlan(
+            session_id=plan.session_id,
+            title="Execution plan",
+            summary=plan.user_intent,
+            source_type=PlanSourceType.LLM_GENERATED,
+            source_model=plan.planner_model or self.planner_model,
+            planning_style=str(plan.metadata.get("planning_mode", "baseline")),
+            status=CandidatePlanStatus.APPROVED,
+            execution_graph=[ExecutionStep(**step.model_dump()) for step in plan.execution_graph],
+            metadata={"origin": "observer_replan_fallback"},
+        )
+        plan.upsert_candidate(fallback)
+        plan.approved_candidate_id = fallback.candidate_id
+        if not plan.selected_candidate_id:
+            plan.selected_candidate_id = fallback.candidate_id
+        return fallback
 
     def get_next_executable_step(self, plan: Plan) -> Optional[ExecutionStep]:
         return self.router.get_executable_steps(plan)[0] if plan.execution_graph else None
@@ -399,6 +763,59 @@ class Orchestrator:
     def get_outcomes(self, plan: Plan) -> List[PlanningOutcome]:
         return plan.planning_outcomes
 
+    async def search_similar_plans(
+        self,
+        query: str,
+        limit: int = 5,
+        similarity_threshold: float = 0.7,
+    ) -> List[Dict[str, Any]]:
+        results = await self.memory.search_similar_plans(
+            MemorySearchQuery(
+                query=query,
+                limit=limit,
+                similarity_threshold=similarity_threshold,
+            )
+        )
+        return [result.model_dump(mode="json") for result in results]
+
+    async def review_candidate_with_critic(self, plan: Plan, candidate: CandidatePlan) -> CandidatePlan:
+        try:
+            report = await self.critic.review_plan(plan, candidate)
+            candidate.metadata["critic_report"] = report.model_dump(mode="json")
+            logger.info(
+                f"Critic review for candidate {candidate.candidate_id}: "
+                f"{report.overall_verdict.value} ({report.critical_issue_count} critical, "
+                f"{report.high_issue_count} high)"
+            )
+            return candidate
+        except Exception as exc:
+            logger.warning(f"Critic review failed for {candidate.candidate_id}: {exc}")
+            return candidate
+
+    def can_approve_plan(self, plan: Plan) -> tuple[bool, str]:
+        candidate_to_check: Optional[CandidatePlan] = None
+        if plan.approved_candidate_id:
+            candidate_to_check = plan.get_candidate_by_id(plan.approved_candidate_id)
+        elif plan.selected_candidate_id:
+            candidate_to_check = plan.get_candidate_by_id(plan.selected_candidate_id)
+        elif plan.candidate_plans:
+            candidate_to_check = plan.candidate_plans[0]
+
+        if candidate_to_check is None:
+            return True, "Plan can be approved"
+
+        critic_report = candidate_to_check.metadata.get("critic_report")
+        if critic_report and critic_report.get("overall_verdict") == "reject":
+            return False, f"Candidate {candidate_to_check.candidate_id} has critical issues and must be revised"
+
+        return True, "Plan can be approved"
+
+    async def _index_plan_if_needed(self, plan: Plan) -> None:
+        try:
+            await self.memory.index_session(plan)
+        except Exception as exc:
+            logger.warning(f"Failed to index plan {plan.session_id}: {exc}")
+
     def _ensure_seed_candidate(self, plan: Plan) -> CandidatePlan:
         if plan.candidate_plans:
             return plan.candidate_plans[0]
@@ -431,7 +848,25 @@ class Orchestrator:
         plan.upsert_candidate(candidate)
         plan.selected_candidate_id = candidate.candidate_id
         self._record_revision(plan, candidate, "created", "Seed baseline candidate created.")
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(self._review_candidate_async(plan, candidate))
+        except RuntimeError:
+            try:
+                asyncio.run(self._review_candidate_async(plan, candidate))
+            except Exception as exc:
+                logger.warning(f"Critic review failed: {exc}")
+        except Exception as exc:
+            logger.warning(f"Failed to schedule critic review asynchronously: {exc}")
         return candidate
+
+    async def _review_candidate_async(self, plan: Plan, candidate: CandidatePlan) -> None:
+        try:
+            reviewed_candidate = await self.review_candidate_with_critic(plan, candidate)
+            plan.upsert_candidate(reviewed_candidate)
+            self.plan_repository.save(plan)
+        except Exception as exc:
+            logger.warning(f"Critic review failed: {exc}")
 
     def _ensure_proposal_candidates(self, plan: Plan, proposal_id: str) -> List[CandidatePlan]:
         existing = [

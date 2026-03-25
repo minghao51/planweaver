@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import asyncio
 import re
-from typing import Optional
 from dataclasses import dataclass
+from typing import Optional
 
 from planweaver.models.plan import Plan, ExecutionStep, PreconditionAnnotation
 from planweaver.probes import run_probe, PRECONDITION_TYPE_TO_PROBE
@@ -27,7 +27,7 @@ PRECONDITION_PATTERNS = [
     (re.compile(r"env [`'\"](.+?)[`'\"] is set", re.IGNORECASE), "env_var_set"),
     (re.compile(r"\$([A-Z_][A-Z0-9_]*) is set", re.IGNORECASE), "env_var_set"),
     (re.compile(r"service [`'\"](.+?)[`'\"] is running", re.IGNORECASE), "service_running"),
-    (re.compile(r"port [:digit:]+ on (.+?) is open", re.IGNORECASE), "service_running"),
+    (re.compile(r"port (\d+) on (.+?) is open", re.IGNORECASE), "service_running"),
 ]
 
 ASSUMPTION_KEYWORDS = [
@@ -166,7 +166,11 @@ class PreconditionScout:
 
         for pattern, ptype in PRECONDITION_PATTERNS:
             for match in pattern.finditer(task):
-                expr = (match.group(2) or match.group(1)).strip()
+                is_port_check = task[match.start() : match.end()].lower().startswith("port ")
+                if ptype == "service_running" and match.lastindex == 2 and is_port_check:
+                    expr = f"{match.group(2).strip()}:{match.group(1).strip()}"
+                else:
+                    expr = (match.group(2) or match.group(1)).strip()
                 if expr and len(expr) > 1:
                     results.append((ptype, expr, match.group(0)))
 
@@ -220,7 +224,6 @@ class ScoutReport:
         for p in self.failed:
             lines.append(
                 f"  Step {p.step_id}: {p.precondition_type} check '{p.check_expression}'"
-                f" returned False"
-                + (f" (error: {p.probe_error})" if p.probe_error else "")
+                f" returned False" + (f" (error: {p.probe_error})" if p.probe_error else "")
             )
         return "\n".join(lines)

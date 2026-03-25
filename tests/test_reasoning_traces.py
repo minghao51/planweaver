@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from src.planweaver.models.plan import ExecutionStep, Plan, PlanStatus
+from src.planweaver.observer import Observer
 from src.planweaver.services.planner import Planner
 from src.planweaver.services.router import ExecutionRouter
 
@@ -101,3 +102,70 @@ async def test_execute_plan_records_guided_correction_and_retry_success():
 
     assert result.status == PlanStatus.COMPLETED
     assert "retry succeeded" in result.final_output["step_1"]
+
+
+@pytest.mark.asyncio
+async def test_observer_detects_empty_output_as_drift():
+    observer = Observer()
+    plan = Plan(
+        user_intent="Run the approved plan",
+        execution_graph=[
+            ExecutionStep(
+                step_id=1,
+                task="Generate output",
+                prompt_template_id="default",
+                assigned_model="test-model",
+                output="",
+            )
+        ],
+    )
+
+    observation = await observer.on_step_complete(plan.execution_graph[0], plan)
+
+    assert observation.drift_detected is True
+    assert observation.recommended_action == "replan_from_here"
+    assert observation.confidence >= 0.9
+
+
+@pytest.mark.asyncio
+async def test_execute_plan_pauses_at_checkpoint_when_observer_detects_drift():
+    llm = Mock()
+    llm.acomplete = AsyncMock(
+        side_effect=[
+            {"content": "", "model": "test-model", "usage": {}},
+            {"content": "should not run", "model": "test-model", "usage": {}},
+        ]
+    )
+
+    template_engine = Mock()
+    template_engine.render_executor_prompt.return_value = "Execute the step"
+
+    router = ExecutionRouter(llm_gateway=llm, template_engine=template_engine)
+    plan = Plan(
+        user_intent="Run the approved plan",
+        status=PlanStatus.APPROVED,
+        execution_graph=[
+            ExecutionStep(
+                step_id=1,
+                task="Generate output",
+                prompt_template_id="default",
+                assigned_model="test-model",
+                dependencies=[],
+            ),
+            ExecutionStep(
+                step_id=2,
+                task="Use previous output",
+                prompt_template_id="default",
+                assigned_model="test-model",
+                dependencies=[1],
+            ),
+        ],
+    )
+
+    result = await router.execute_plan(plan, context={}, observer=Observer(), observer_drift_threshold=0.8)
+
+    assert result.status == PlanStatus.APPROVED
+    assert result.metadata["observer_signal"]["step_id"] == 1
+    assert result.execution_graph[0].status.value == "COMPLETED"
+    assert result.execution_graph[1].status.value == "PENDING"
+    assert llm.acomplete.await_count == 1

@@ -19,6 +19,7 @@ from ..models.plan import (
     PlanStatus,
     ExecutionStep,
     ExecutionStepsList,
+    ExternalContext,
     ProposalAnalysis,
     StrawmanProposal,
     StrawmanProposalInputList,
@@ -104,7 +105,8 @@ Approach: {p.get("description", "N/A")}
 
     def _build_planner_prompt(self, user_intent: str, plan: Plan) -> str:
         """Build planner prompt with external context"""
-        if not plan.external_contexts:
+        context_brief = plan.metadata.get("context_brief")
+        if not plan.external_contexts and not context_brief:
             return f"User Request: {user_intent}"
 
         lines = [
@@ -116,6 +118,16 @@ Approach: {p.get("description", "N/A")}
             "Use this information to generate better questions and execution steps:",
             "",
         ]
+        if isinstance(context_brief, dict):
+            synthesized_context = context_brief.get("synthesized_context")
+            if synthesized_context:
+                lines.extend(
+                    [
+                        "--- Synthesized Planning Brief ---",
+                        synthesized_context,
+                        "",
+                    ]
+                )
         for i, ctx in enumerate(plan.external_contexts, 1):
             lines.extend(
                 [
@@ -342,6 +354,8 @@ Return a JSON array of steps. Each step should have:
         self,
         user_intent: str,
         scenario_name: Optional[str] = None,
+        external_contexts: Optional[List[ExternalContext]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
         model: str = "deepseek/deepseek-chat",
     ) -> Plan:
         # Create plan first
@@ -349,6 +363,8 @@ Return a JSON array of steps. Each step should have:
             user_intent=user_intent,
             scenario_name=scenario_name,
             status=PlanStatus.BRAINSTORMING,
+            external_contexts=external_contexts or [],
+            metadata=dict(metadata or {}),
         )
 
         # Analyze with context (plan.external_contexts is empty at this point)

@@ -1,6 +1,6 @@
 import re
 from decimal import Decimal
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -21,6 +21,18 @@ class CreateSessionRequest(BaseModel):
     )
     planner_model: Optional[str] = Field(None, description="Override default planner model")
     executor_model: Optional[str] = Field(None, description="Override default executor model")
+    planning_mode: str = Field(
+        default="baseline",
+        description="Planning pattern: baseline, specialist, ensemble, or debate",
+    )
+    specialist_domains: Optional[List[str]] = Field(
+        default=None,
+        description="Domains for specialist mode (e.g., ['code', 'infra'])",
+    )
+    ensemble_models: Optional[List[str]] = Field(
+        default=None,
+        description="Models for ensemble mode (default: 3 from config)",
+    )
 
     @field_validator("user_intent", mode="before")
     @classmethod
@@ -28,6 +40,14 @@ class CreateSessionRequest(BaseModel):
         if isinstance(value, str):
             return sanitize_text(value)
         return value
+
+    @field_validator("planning_mode")
+    @classmethod
+    def validate_planning_mode(cls, v: str) -> str:
+        valid_modes = {"baseline", "specialist", "ensemble", "debate"}
+        if v not in valid_modes:
+            raise ValueError(f"planning_mode must be one of {valid_modes}, got '{v}'")
+        return v
 
 
 class AnswerQuestionsRequest(BaseModel):

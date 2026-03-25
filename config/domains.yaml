@@ -1,0 +1,90 @@
+# Domain specialist registry for multi-agent specialist planning
+specialists:
+  code:
+    name: "Code Specialist"
+    model: "claude-3.5-sonnet"
+    keywords:
+      - "function"
+      - "class"
+      - "refactor"
+      - "api"
+      - "backend"
+      - "frontend"
+      - "implementation"
+      - "programming"
+    system_prompt: "Focus on code structure, dependencies, and implementation details."
+
+  infra:
+    name: "Infrastructure Specialist"
+    model: "gpt-4o"
+    keywords:
+      - "deploy"
+      - "server"
+      - "database"
+      - "scaling"
+      - "monitoring"
+      - "cloud"
+      - "devops"
+      - "infrastructure"
+    system_prompt: "Focus on infrastructure, deployment, and operational concerns."
+
+  research:
+    name: "Research Specialist"
+    model: "deepseek-chat"
+    keywords:
+      - "analyze"
+      - "investigate"
+      - "compare"
+      - "evaluate"
+      - "research"
+      - "study"
+      - "explore"
+    system_prompt: "Focus on analysis, research, and evaluation tasks."
+
+  security:
+    name: "Security Specialist"
+    model: "claude-3.5-sonnet"
+    keywords:
+      - "security"
+      - "authentication"
+      - "authorization"
+      - "encryption"
+      - "vulnerability"
+      - "compliance"
+    system_prompt: "Focus on security, privacy, and compliance requirements."
+
+  testing:
+    name: "Testing Specialist"
+    model: "gpt-4o"
+    keywords:
+      - "test"
+      - "testing"
+      - "quality"
+      - "validation"
+      - "verification"
+      - "coverage"
+    system_prompt: "Focus on testing strategy, quality assurance, and validation."
+
+  data:
+    name: "Data Specialist"
+    model: "deepseek-chat"
+    keywords:
+      - "data"
+      - "database"
+      - "storage"
+      - "migration"
+      - "analytics"
+      - "pipeline"
+    system_prompt: "Focus on data modeling, storage, and processing pipelines."
+
+  uiux:
+    name: "UI/UX Specialist"
+    model: "claude-3.5-sonnet"
+    keywords:
+      - "ui"
+      - "ux"
+      - "interface"
+      - "design"
+      - "user experience"
+      - "accessibility"
+    system_prompt: "Focus on user interface design, user experience, and accessibility."
