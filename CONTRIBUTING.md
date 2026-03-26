@@ -7,7 +7,6 @@ Thank you for your interest in contributing to PlanWeaver! This document provide
 ### Prerequisites
 
 - Python 3.10 or higher
-- Node.js 18+ (for frontend development)
 - Git
 
 ### Getting Started
@@ -33,13 +32,6 @@ Thank you for your interest in contributing to PlanWeaver! This document provide
    # Edit .env and add your API keys
    ```
 
-4. **Install frontend dependencies (optional):**
-   ```bash
-   cd frontend
-   npm install
-   cd ..
-   ```
-
 ### Running Tests
 
 ```bash
@@ -51,10 +43,6 @@ uv run pytest tests/test_planner.py
 
 # Run with coverage
 uv run pytest --cov=src/planweaver
-
-# Run frontend tests
-cd frontend
-npm test
 ```
 
 ## Code Style Guidelines
@@ -70,24 +58,6 @@ npm test
 - Follow PEP 8 style guidelines
 - Use type hints for function signatures
 - Write docstrings for all public classes, methods, and functions
-
-### TypeScript/React
-
-- Use **ESLint** for linting:
-  ```bash
-  cd frontend
-  npm run lint
-  ```
-
-- Use **Prettier** for formatting:
-  ```bash
-  cd frontend
-  npm run format
-  ```
-
-- Follow React best practices
-- Use functional components with hooks
-- Keep components small and focused
 
 ### Documentation
 
@@ -119,12 +89,8 @@ git checkout -b fix/your-bug-fix
 # Run Python tests
 uv run pytest
 
-# Run frontend tests (if applicable)
-cd frontend && npm test
-
 # Check linting
 uv run ruff check src/
-cd frontend && npm run lint
 ```
 
 ### 4. Commit Your Changes
@@ -164,7 +130,6 @@ Commit message prefixes:
    - Clear title describing the change
    - Detailed description of what you did and why
    - Reference any related issues
-   - Screenshots for UI changes (if applicable)
 
 3. Respond to review feedback and make requested changes
 
@@ -207,12 +172,7 @@ Include:
 ### Running the Development Server
 
 ```bash
-# Backend API server
 uv run uvicorn src.planweaver.api.main:app --reload
-
-# Frontend dev server (in separate terminal)
-cd frontend
-npm run dev
 ```
 
 ### Database
@@ -245,12 +205,7 @@ planweaver/
 │   ├── models/              # Pydantic models
 │   ├── services/            # Business logic
 │   └── cli.py               # Command-line interface
-├── frontend/                # React frontend
-│   ├── src/
-│   │   ├── components/      # React components
-│   │   ├── api/             # API client
-│   │   └── hooks/           # Custom hooks
-│   └── package.json
+├── static/                  # Static HTML UI
 ├── tests/                   # Python tests
 ├── scenarios/               # YAML scenario templates
 └── docs/                    # Documentation
