@@ -10,8 +10,8 @@ from src.planweaver.orchestrator import Orchestrator
 from src.planweaver.models.plan import PlanStatus
 
 
-# Mark all tests in this module as integration tests
-pytestmark = pytest.mark.integration
+# Mark all tests in this module as llm_e2e (end-to-end with real LLM calls)
+pytestmark = pytest.mark.llm_e2e
 
 
 @pytest.fixture

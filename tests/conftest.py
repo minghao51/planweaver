@@ -1,8 +1,15 @@
+from pathlib import Path
+from dotenv import load_dotenv
 import pytest
 from unittest.mock import Mock, patch
 from planweaver.config import Settings
 from planweaver.services.llm_gateway import LLMGateway
 from planweaver.db.database import init_db, run_migrations, engine
+
+# Load .env file before any tests run
+env_path = Path(__file__).parent.parent / ".env"
+if env_path.exists():
+    load_dotenv(env_path)
 
 
 @pytest.fixture(scope="session", autouse=True)

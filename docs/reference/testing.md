@@ -64,16 +64,86 @@ The Playwright suite starts Vite locally and intercepts `/api/v1/*` requests. Th
 
 ## Mocking Strategy
 
-- **LLM calls**: Mocked via `unittest.mock.Mock` to avoid actual API calls
+- **LLM calls**: Mocked via `unittest.mock.Mock` to avoid actual API calls (except `llm_e2e` tests)
 - **Database**: Uses the repo test database fixtures from `tests/conftest.py`
 - **API endpoints**: Uses `FastAPI TestClient` with mocked orchestrator
 - **Frontend network calls**: Mocked in Playwright route handlers and Vitest hook stubs
 
+## Test Markers
+
+Tests are categorized using pytest markers to enable selective test execution:
+
+| Marker | Purpose | Files | LLM Calls |
+|--------|---------|-------|-----------|
+| `unit` | Pure unit tests, all mocks | `test_planner.py`, `test_llm_gateway.py`, `test_debate.py`, `test_ensemble.py`, `test_comparison_service.py`, `test_critic.py` | No (mocked) |
+| `integration` | Component integration tests | `test_phase1_integration.py`, `test_phase2_integration.py`, `test_e2e_context.py` | No (mocked) |
+| `llm_e2e` | End-to-end workflows with real LLM | `test_multiagent_integration.py` | **Yes** |
+| `ui_e2e` | UI-only end-to-end (Playwright) | `test_ui_e2e.py` | No |
+
+### Running Tests by Marker
+
+```bash
+# Run only unit tests (default)
+uv run pytest -m "not llm_e2e and not ui_e2e"
+
+# Run only integration tests
+uv run pytest -m integration
+
+# Run only LLM E2E tests (requires API keys)
+uv run pytest -m llm_e2e
+
+# Run only UI E2E tests
+uv run pytest -m ui_e2e
+
+# Skip tests that make actual LLM calls
+uv run pytest -m "not llm_e2e"
+```
+
 ## Environment Variables for Testing
 
-Tests require no external services - all LLM calls are mocked. For integration tests with real APIs:
+- **Unit/Integration tests**: Require no external services - all LLM calls are mocked
+- **LLM E2E tests** (`llm_e2e`): Require actual API keys (stored in `.env` file, auto-loaded by tests)
+
+The `.env` file is auto-loaded by `tests/conftest.py` before tests run. Ensure your API keys are set:
 
 ```bash
 GOOGLE_API_KEY=your-gemini-key
 ANTHROPIC_API_KEY=your-claude-key
 ```
+
+## Coverage Reports
+
+```bash
+# Generate HTML coverage report
+uv run pytest --cov=src/planweaver --cov-report=html
+
+# Open coverage report in browser
+open htmlcov/index.html
+
+# Other coverage formats
+uv run pytest --cov=src/planweaver --cov-report=term-missing  # terminal with missing lines
+uv run pytest --cov=src/planweaver --cov-report=lcov         # lcov format
+```
+
+## HTML Test Reports
+
+Generate HTML test reports with marker breakdown using `pytest-html`:
+
+```bash
+# Generate HTML test report (saved to htmlcov/)
+uv run pytest --html=htmlcov/test-report.html --self-contained-html
+
+# Open test report in browser
+open htmlcov/test-report.html
+
+# Combined: coverage report + test report
+uv run pytest --html=htmlcov/test-report.html --self-contained-html --cov=src/planweaver --cov-report=html
+open htmlcov/index.html          # coverage
+open htmlcov/test-report.html   # test results
+```
+
+The HTML report includes:
+- Test results grouped by file/marker
+- Pass/fail/skip counts
+- Execution time per test
+- Filterable by marker in the UI

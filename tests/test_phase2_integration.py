@@ -12,6 +12,7 @@ from planweaver.context_synthesis import ContextSynthesizer, PlanBrief
 from planweaver.models.plan import (
     CandidatePlan,
     CandidatePlanStatus,
+    ExecutionStep,
     ExternalContext,
     Plan,
     PlanSourceType,
@@ -305,3 +306,67 @@ def test_plan_metadata_enrichment(orchestrator):
 
     # May have context_brief if synthesis completed
     # May have critic reports if candidates were reviewed
+
+
+@pytest.mark.integration
+def test_seed_candidate_uses_existing_execution_graph(orchestrator):
+    """Mode-specific execution graphs should seed the surfaced candidate unchanged."""
+    plan = Plan(
+        session_id="specialist-seed",
+        user_intent="Build a specialist plan",
+        metadata={"planning_mode": "specialist"},
+        execution_graph=[
+            ExecutionStep(
+                step_id=1,
+                task="Use the specialist-generated graph",
+                prompt_template_id="default",
+                assigned_model="test-model",
+            )
+        ],
+    )
+
+    candidate = orchestrator._ensure_seed_candidate(plan)
+
+    assert candidate.planning_style == "specialist"
+    assert candidate.status == CandidatePlanStatus.SELECTED
+    assert candidate.execution_graph[0].task == "Use the specialist-generated graph"
+    assert plan.selected_candidate_id == candidate.candidate_id
+
+
+@pytest.mark.integration
+def test_can_approve_plan_refreshes_stale_critic_review(orchestrator):
+    """Approval should not trust critic metadata after the candidate graph changes."""
+    candidate = CandidatePlan(
+        candidate_id="candidate-1",
+        session_id="approval-refresh",
+        title="Candidate",
+        summary="Refresh critic report",
+        source_type=PlanSourceType.LLM_GENERATED,
+        source_model="test",
+        status=CandidatePlanStatus.SELECTED,
+        execution_graph=[
+            ExecutionStep(
+                step_id=1,
+                task="Delete production data without backup",
+                prompt_template_id="default",
+                assigned_model="test-model",
+            )
+        ],
+        metadata={
+            "critic_report": {"overall_verdict": "accept"},
+            "critic_review_fingerprint": "stale-fingerprint",
+        },
+    )
+    plan = Plan(
+        session_id="approval-refresh",
+        user_intent="Delete production data",
+        candidate_plans=[candidate],
+        selected_candidate_id=candidate.candidate_id,
+        approved_candidate_id=candidate.candidate_id,
+    )
+
+    can_approve, _ = orchestrator.can_approve_plan(plan)
+
+    assert isinstance(can_approve, bool)
+    assert candidate.metadata["critic_review_fingerprint"] != "stale-fingerprint"
+    assert candidate.metadata["critic_report"]["overall_verdict"] in {"revise", "reject"}

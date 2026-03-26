@@ -8,7 +8,7 @@ import pytest
 import pytest_asyncio
 from playwright.async_api import async_playwright, Page, Browser
 
-pytestmark = [pytest.mark.e2e, pytest.mark.asyncio]
+pytestmark = [pytest.mark.ui_e2e, pytest.mark.asyncio]
 UI_URL = "http://localhost:8000/static/index.html"
 
 
@@ -47,7 +47,7 @@ async def test_ui_loads(page: Page, ui_url: str):
 
     # Check that title is visible
     title = await page.text_content("h1")
-    assert "PlanWeaver" in title
+    assert title is not None and "PlanWeaver" in title
 
 
 async def test_session_creation_form_exists(page: Page, ui_url: str):
