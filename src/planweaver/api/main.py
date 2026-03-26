@@ -57,15 +57,15 @@ app.add_middleware(
 
 app.include_router(router, prefix="/api/v1")
 
-# Mount static files for UI
-static_dir = Path(__file__).parent.parent.parent.parent / "static"
-if static_dir.exists():
-    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
-    logger.info(f"Static files mounted from {static_dir}")
-else:
-    logger.warning(f"Static directory not found: {static_dir}")
-
 
 @app.get("/health")
 def health_check():
     return {"status": "healthy", "service": "planweaver"}
+
+
+static_dir = Path(__file__).parent.parent.parent.parent / "static"
+if static_dir.exists():
+    app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
+    logger.info(f"Static files mounted from {static_dir} at /")
+else:
+    logger.warning(f"Static directory not found: {static_dir}")

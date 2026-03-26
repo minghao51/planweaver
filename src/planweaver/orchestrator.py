@@ -12,6 +12,8 @@ from __future__ import annotations
 from typing import Dict, Any, Optional, List, Iterable
 from datetime import datetime, timezone
 import asyncio
+import hashlib
+import json
 import logging
 
 from .models.plan import (
@@ -552,6 +554,7 @@ class Orchestrator:
             metadata=dict(source.metadata),
         )
         self._refresh_candidate_normalization(clone, plan)
+        clone = self._review_candidate_sync(plan, clone)
         plan.upsert_candidate(clone)
         self._record_revision(plan, clone, "branched", note or "Candidate branched from an existing plan.")
         self._record_outcome(
@@ -596,6 +599,7 @@ class Orchestrator:
             raise ValueError(f"Unsupported refine operation '{operation}'")
 
         self._refresh_candidate_normalization(candidate, plan)
+        candidate = self._review_candidate_sync(plan, candidate)
         plan.upsert_candidate(candidate)
         if plan.approved_candidate_id == candidate.candidate_id:
             plan.execution_graph = [ExecutionStep(**step.model_dump()) for step in candidate.execution_graph]
@@ -681,6 +685,7 @@ class Orchestrator:
         )
         candidate.metadata["observer_last_signal"] = dict(observer_signal)
         self._refresh_candidate_normalization(candidate, plan)
+        candidate = self._review_candidate_sync(plan, candidate)
         plan.upsert_candidate(candidate)
         plan.execution_graph = [ExecutionStep(**step.model_dump()) for step in candidate.execution_graph]
         plan.status = PlanStatus.APPROVED
@@ -748,6 +753,7 @@ class Orchestrator:
         for existing in plan.candidate_plans:
             if existing.status == CandidatePlanStatus.SELECTED:
                 existing.status = CandidatePlanStatus.DRAFT
+        candidate = self._review_candidate_sync(plan, candidate)
         plan.upsert_candidate(candidate)
         plan.selected_candidate_id = candidate.candidate_id
         self._record_revision(plan, candidate, "manual", "Manual candidate added.")
@@ -782,6 +788,8 @@ class Orchestrator:
         try:
             report = await self.critic.review_plan(plan, candidate)
             candidate.metadata["critic_report"] = report.model_dump(mode="json")
+            candidate.metadata["critic_review_fingerprint"] = self._candidate_review_fingerprint(candidate)
+            candidate.metadata["critic_reviewed_at"] = report.reviewed_at.isoformat()
             logger.info(
                 f"Critic review for candidate {candidate.candidate_id}: "
                 f"{report.overall_verdict.value} ({report.critical_issue_count} critical, "
@@ -804,6 +812,9 @@ class Orchestrator:
         if candidate_to_check is None:
             return True, "Plan can be approved"
 
+        if self._critic_review_stale(candidate_to_check):
+            candidate_to_check = self._review_candidate_sync(plan, candidate_to_check)
+
         critic_report = candidate_to_check.metadata.get("critic_report")
         if critic_report and critic_report.get("overall_verdict") == "reject":
             return False, f"Candidate {candidate_to_check.candidate_id} has critical issues and must be revised"
@@ -821,7 +832,9 @@ class Orchestrator:
             return plan.candidate_plans[0]
 
         steps: List[ExecutionStep] = []
-        if not plan.open_questions:
+        if plan.execution_graph:
+            steps = [ExecutionStep(**step.model_dump()) for step in plan.execution_graph]
+        elif not plan.open_questions:
             steps = self.planner.decompose_into_steps(
                 user_intent=plan.user_intent,
                 locked_constraints=plan.locked_constraints,
@@ -837,7 +850,8 @@ class Orchestrator:
             summary=plan.user_intent,
             source_type=PlanSourceType.LLM_GENERATED,
             source_model=plan.planner_model or self.planner_model,
-            planning_style="baseline",
+            planning_style=str(plan.metadata.get("planning_mode", "baseline")),
+            status=CandidatePlanStatus.SELECTED,
             execution_graph=steps,
             context_references=self._context_reference_labels(plan.external_contexts),
             confidence=0.55,
@@ -845,6 +859,7 @@ class Orchestrator:
             metadata={"origin": "seed"},
         )
         self._refresh_candidate_normalization(candidate, plan)
+        candidate = self._review_candidate_sync(plan, candidate)
         plan.upsert_candidate(candidate)
         plan.selected_candidate_id = candidate.candidate_id
         self._record_revision(plan, candidate, "created", "Seed baseline candidate created.")
@@ -908,6 +923,7 @@ class Orchestrator:
                 metadata={"origin": "proposal", "proposal_id": proposal.id},
             )
             self._refresh_candidate_normalization(candidate, plan)
+            candidate = self._review_candidate_sync(plan, candidate)
             plan.upsert_candidate(candidate)
             self._record_revision(
                 plan,
@@ -980,6 +996,44 @@ class Orchestrator:
                 metadata=metadata or {},
             )
         )
+
+    def _candidate_review_fingerprint(self, candidate: CandidatePlan) -> str:
+        payload = {
+            "title": candidate.title,
+            "summary": candidate.summary,
+            "planning_style": candidate.planning_style,
+            "execution_graph": [
+                {
+                    "step_id": step.step_id,
+                    "task": step.task,
+                    "prompt_template_id": step.prompt_template_id,
+                    "assigned_model": step.assigned_model,
+                    "dependencies": list(step.dependencies),
+                }
+                for step in candidate.execution_graph
+            ],
+        }
+        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()
+
+    def _critic_review_stale(self, candidate: CandidatePlan) -> bool:
+        critic_report = candidate.metadata.get("critic_report")
+        fingerprint = candidate.metadata.get("critic_review_fingerprint")
+        if not isinstance(critic_report, dict):
+            return True
+        if not isinstance(fingerprint, str):
+            return False
+        return fingerprint != self._candidate_review_fingerprint(candidate)
+
+    def _review_candidate_sync(self, plan: Plan, candidate: CandidatePlan) -> CandidatePlan:
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            try:
+                return asyncio.run(self.review_candidate_with_critic(plan, candidate))
+            except Exception as exc:
+                logger.warning(f"Critic review failed: {exc}")
+        return candidate
 
     def _refresh_candidate_context_references(self, plan: Plan) -> None:
         references = self._context_reference_labels(plan.external_contexts)
