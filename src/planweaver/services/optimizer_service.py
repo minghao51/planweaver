@@ -1,11 +1,9 @@
-from typing import List, Dict, Any, Literal, Optional
+import uuid
 from logging import getLogger
+from typing import Any, Dict, List, Literal, Optional
+
 from sqlalchemy.orm import Session
-from .variant_generator import VariantGenerator
-from .model_rater import ModelRater
-from .plan_evaluator import PlanEvaluator
-from .plan_normalizer import PlanNormalizer
-from .pairwise_comparison_service import PairwiseComparisonService
+
 from ..db.models import (
     NormalizedPlanRecord,
     OptimizedVariant,
@@ -23,11 +21,15 @@ from ..models.plan import (
     NormalizedPlan,
     PairwisePlanComparison,
     PlanEvaluation,
-    PlanSourceType,
     PlanningOutcome,
+    PlanSourceType,
     RankedPlanResult,
 )
-import uuid
+from .model_rater import ModelRater
+from .pairwise_comparison_service import PairwiseComparisonService
+from .plan_evaluator import PlanEvaluator
+from .plan_normalizer import PlanNormalizer
+from .variant_generator import VariantGenerator
 
 logger = getLogger(__name__)
 

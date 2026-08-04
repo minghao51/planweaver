@@ -1,7 +1,8 @@
-from typing import Dict, Any, Optional
-from jinja2 import Environment
 from pathlib import Path
+from typing import Any, Dict, Optional
+
 import yaml
+from jinja2 import Environment
 
 from ..models.scenario import Scenario
 

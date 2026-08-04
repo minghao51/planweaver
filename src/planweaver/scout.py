@@ -13,9 +13,8 @@ import re
 from dataclasses import dataclass
 from typing import Optional
 
-from planweaver.models.plan import Plan, ExecutionStep, PreconditionAnnotation
-from planweaver.probes import run_probe, PRECONDITION_TYPE_TO_PROBE
-
+from planweaver.models.plan import ExecutionStep, Plan, PreconditionAnnotation
+from planweaver.probes import PRECONDITION_TYPE_TO_PROBE, run_probe
 
 PRECONDITION_PATTERNS = [
     (re.compile(r"file [`'\"](.+?)[`'\"] exists", re.IGNORECASE), "file_exists"),

@@ -7,14 +7,14 @@ Validates transitions and emits events for auditing.
 
 from __future__ import annotations
 
-from typing import Dict, Any, Optional, List, Callable
 import logging
+from typing import Any, Callable, Dict, List, Optional
 
 from .models.session import (
-    SessionState,
-    StateTransitionEvent,
     ConvergenceStatus,
     NegotiatorIntent,
+    SessionState,
+    StateTransitionEvent,
 )
 
 logger = logging.getLogger(__name__)

@@ -5,13 +5,13 @@ The Execution Router handles the execution of plans by running
 steps in dependency order with retry logic and error handling.
 """
 
-from typing import Dict, Any, Optional, List
 import asyncio
 import logging
 from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
-from ..models.plan import Plan, ExecutionStep, StepStatus, PlanStatus
-from ..observer import Observer, ObservationResult
+from ..models.plan import ExecutionStep, Plan, PlanStatus, StepStatus
+from ..observer import ObservationResult, Observer
 from .llm_gateway import LLMGateway
 from .template_engine import TemplateEngine
 

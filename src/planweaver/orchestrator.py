@@ -9,13 +9,18 @@ planner and execution router, and persisting state to the database.
 
 from __future__ import annotations
 
-from typing import Dict, Any, Optional, List, Iterable
-from datetime import datetime, timezone
 import asyncio
 import hashlib
 import json
 import logging
+from datetime import datetime, timezone
+from typing import Any, Dict, Iterable, List, Optional
 
+from .context_synthesis import ContextSynthesizer
+from .critic import Critic
+from .db.database import ensure_db_ready, get_session
+from .db.repositories import PlanRepository
+from .memory import MemoryLayer, MemorySearchQuery
 from .models.plan import (
     CandidatePlan,
     CandidatePlanRevision,
@@ -25,28 +30,22 @@ from .models.plan import (
     ExternalContext,
     ManualPlanSubmission,
     Plan,
+    PlanningOutcome,
     PlanSourceType,
     PlanStatus,
-    PlanningOutcome,
 )
+from .observer import Observer
+from .scout import PreconditionScout
+from .services.coordinator import Coordinator
+from .services.debate import DebateService
+from .services.ensemble import EnsembleService
+from .services.llm_gateway import LLMGateway
+from .services.pairwise_comparison_service import PairwiseComparisonService
+from .services.plan_evaluator import PlanEvaluator
 from .services.plan_normalizer import PlanNormalizer
 from .services.planner import Planner
 from .services.router import ExecutionRouter
 from .services.template_engine import TemplateEngine
-from .services.llm_gateway import LLMGateway
-from .services.coordinator import Coordinator
-from .services.ensemble import EnsembleService
-from .services.debate import DebateService
-from .services.plan_evaluator import PlanEvaluator
-from .services.pairwise_comparison_service import PairwiseComparisonService
-from .db.repositories import PlanRepository
-from .scout import PreconditionScout
-from .memory import MemoryLayer, MemorySearchQuery
-from .critic import Critic
-from .context_synthesis import ContextSynthesizer
-from .db.database import ensure_db_ready, get_session
-from .observer import Observer
-
 
 PLANNING_STYLES = ("baseline", "fast", "risk_averse", "cost_aware")
 logger = logging.getLogger(__name__)

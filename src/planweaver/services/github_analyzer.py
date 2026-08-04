@@ -2,8 +2,9 @@
 
 import json
 import re
+from typing import Any, Dict, List
+
 from github import Github, GithubException
-from typing import Dict, Any, List
 
 
 class GitHubAnalyzer:

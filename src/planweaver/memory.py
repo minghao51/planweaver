@@ -7,8 +7,8 @@ Enables semantic search across historical plans to inform future planning.
 from __future__ import annotations
 
 import logging
-from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -16,7 +16,6 @@ from sqlalchemy.orm import Session
 
 from .models.plan import Plan
 from .services.llm_gateway import LLMGateway
-
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +122,7 @@ class MemoryLayer:
         """
         try:
             from openai import OpenAI
+
             from .config import get_settings
 
             settings = get_settings()

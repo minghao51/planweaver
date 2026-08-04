@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-from typing import List, Dict, Any, Optional
 import logging
+from typing import Any, Dict, List, Optional
 
+from ..models.plan import CandidatePlan, NormalizedPlan, PlanSourceType
 from .llm_gateway import LLMGateway
-from .planner import Planner
-from .plan_evaluator import PlanEvaluator
 from .pairwise_comparison_service import PairwiseComparisonService
+from .plan_evaluator import PlanEvaluator
 from .plan_normalizer import PlanNormalizer
-from ..models.plan import CandidatePlan, PlanSourceType, NormalizedPlan
+from .planner import Planner
 
 logger = logging.getLogger(__name__)
 

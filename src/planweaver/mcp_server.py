@@ -6,23 +6,22 @@ Exposes core session operations as MCP tools for external AI agents.
 
 from __future__ import annotations
 
+import inspect
 import json
 import logging
-import inspect
-from typing import Dict, Any, Optional, Literal, cast
+from typing import Any, Dict, Literal, Optional, cast
 
-from pydantic import BaseModel
-from fastapi import FastAPI
 import uvicorn
+from fastapi import FastAPI
+from pydantic import BaseModel
 
-from .models.plan import PlanStatus
-from .models.session import SessionMessage, SessionState
-from .session import SessionStateMachine
-from .negotiator import Negotiator
 from .api.serializers import serialize_plan_detail
 from .db.database import SessionLocal
 from .db.models import SessionMessageModel
-
+from .models.plan import PlanStatus
+from .models.session import SessionMessage, SessionState
+from .negotiator import Negotiator
+from .session import SessionStateMachine
 
 logger = logging.getLogger(__name__)
 

@@ -8,20 +8,20 @@ negotiation.
 
 from __future__ import annotations
 
-from typing import Dict, Any, Optional, List
-from datetime import datetime, timezone
 import logging
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
+from .models.plan import (
+    ExecutionStep,
+    Plan,
+)
 from .models.session import (
     NegotiatorIntent,
     NegotiatorOutput,
     PlanMutation,
     PlanMutationType,
     SessionState,
-)
-from .models.plan import (
-    Plan,
-    ExecutionStep,
 )
 from .services.llm_gateway import LLMGateway
 

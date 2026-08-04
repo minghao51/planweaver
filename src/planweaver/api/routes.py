@@ -3,9 +3,9 @@ from fastapi import APIRouter
 from .routers import (
     context_router,
     metadata_router,
+    optimizer_router,
     sessions_router,
     stream_router,
-    optimizer_router,
 )
 
 router = APIRouter()

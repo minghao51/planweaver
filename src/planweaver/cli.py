@@ -1,9 +1,11 @@
+import asyncio
+
 import click
-from .orchestrator import Orchestrator
+import uvicorn
+
 from .api.main import app
 from .mcp_server import MCPServer
-import uvicorn
-import asyncio
+from .orchestrator import Orchestrator
 
 
 @click.group()

@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from statistics import mean
 from typing import Any, Dict, List, Mapping, Optional, cast
+
 from pydantic import BaseModel, Field
 
-from .llm_gateway import LLMGateway
 from ..models.plan import EvaluationVerdict, NormalizedPlan, PlanEvaluation
+from .llm_gateway import LLMGateway
 
 
 class EvaluationLLMResponse(BaseModel):

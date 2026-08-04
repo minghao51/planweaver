@@ -1,11 +1,11 @@
 """Context service for managing external context sources"""
 
-from ..models.plan import ExternalContext
 from ..config import Settings
+from ..models.plan import ExternalContext
 from ..services.llm_gateway import LLMGateway
+from .file_processor import FileProcessorService
 from .github_analyzer import GitHubAnalyzer
 from .web_search_service import WebSearchService
-from .file_processor import FileProcessorService
 
 
 class ContextService:

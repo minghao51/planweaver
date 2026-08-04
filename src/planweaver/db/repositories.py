@@ -4,8 +4,6 @@ from typing import Optional
 from sqlalchemy import or_
 from sqlalchemy.exc import OperationalError
 
-from .database import ensure_db_ready, get_session
-from .models import SessionModel as DBSession
 from ..config import get_settings
 from ..models.plan import (
     CandidatePlan,
@@ -15,10 +13,12 @@ from ..models.plan import (
     ExternalContext,
     OpenQuestion,
     Plan,
-    PlanStatus,
     PlanningOutcome,
+    PlanStatus,
     StrawmanProposal,
 )
+from .database import ensure_db_ready, get_session
+from .models import SessionModel as DBSession
 
 PLANNER_OVERRIDE_KEY = "__planner_model_override__"
 EXECUTOR_OVERRIDE_KEY = "__executor_model_override__"

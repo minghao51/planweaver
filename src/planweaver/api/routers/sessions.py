@@ -1,15 +1,17 @@
-from typing import Optional, cast, Literal
 import logging
-import inspect
+from typing import Literal, Optional, cast
 
-from fastapi import APIRouter, HTTPException, Query, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from ...models.plan import Plan, PlanStatus, ComparisonRequest, ProposalComparison
-from ...models.session import SessionState, SessionMessage, NegotiatorIntent
+from ...db.database import SessionLocal
+from ...db.models import SessionMessageModel
+from ...models.plan import ComparisonRequest, Plan, PlanStatus, ProposalComparison
+from ...models.session import NegotiatorIntent, SessionMessage, SessionState
+from ...negotiator import Negotiator
 from ...services.comparison_service import ProposalComparisonService
 from ...session import SessionStateMachine
-from ...negotiator import Negotiator
-from ..dependencies import get_orchestrator, get_plan_or_404, get_comparison_service
+from ..dependencies import get_comparison_service, get_orchestrator, plan_or_404
+from ..middleware import limiter
 from ..schemas import (
     AnswerQuestionsRequest,
     BranchCandidateRequest,
@@ -25,12 +27,9 @@ from ..schemas import (
 from ..serializers import (
     serialize_execution_graph,
     serialize_plan_detail,
-    serialize_session_history_item,
     serialize_plan_summary,
+    serialize_session_history_item,
 )
-from ..middleware import limiter
-from ...db.database import SessionLocal
-from ...db.models import SessionMessageModel
 
 logger = logging.getLogger(__name__)
 
@@ -42,65 +41,51 @@ router = APIRouter()
 async def create_session(request: Request, body: CreateSessionRequest):
     try:
         orch = get_orchestrator()
-
-        # Route to appropriate planning mode
-        if body.planning_mode == "specialist":
-            plan = await orch.start_specialist_session(
-                body.user_intent,
-                body.scenario_name,
-                body.specialist_domains,
-                body.planner_model,
-                body.executor_model,
-            )
-        elif body.planning_mode == "ensemble":
-            plan = await orch.start_ensemble_session(
-                body.user_intent,
-                body.scenario_name,
-                body.ensemble_models,
-                body.planner_model,
-                body.executor_model,
-            )
-        elif body.planning_mode == "debate":
-            plan = await orch.start_debate_session(
-                body.user_intent,
-                body.scenario_name,
-                body.planner_model,
-                body.executor_model,
-            )
-        else:
-            # Baseline mode (existing flow)
-            plan = None
-            start_session_async = getattr(orch, "start_session_async", None)
-            if callable(start_session_async):
-                result = start_session_async(
-                    body.user_intent,
-                    body.scenario_name,
-                    external_contexts=None,
-                    planner_model=body.planner_model,
-                    executor_model=body.executor_model,
-                )
-                if inspect.isawaitable(result):
-                    plan = await result
-                else:
-                    plan = result
-            if plan is None:
-                plan = orch.start_session(
-                    body.user_intent,
-                    body.scenario_name,
-                    planner_model=body.planner_model,
-                    executor_model=body.executor_model,
-                )
-
-        assert plan is not None, "Plan should never be None at this point"
+        plan = await _create_plan_by_mode(orch, body)
         return serialize_plan_summary(plan)
     except ValueError as e:
-        logger.warning(f"Validation error: {e}")
+        logger.warning("Validation error: %s", e)
         raise HTTPException(status_code=400, detail=f"Cannot complete operation: {str(e)}")
     except HTTPException:
         raise
     except Exception:
         logger.exception("Unexpected error creating session")
         raise HTTPException(status_code=500, detail="Operation failed. Please try again.")
+
+
+async def _create_plan_by_mode(orch, body):
+    mode_handlers = {
+        "specialist": lambda: orch.start_specialist_session(
+            body.user_intent,
+            body.scenario_name,
+            body.specialist_domains,
+            body.planner_model,
+            body.executor_model,
+        ),
+        "ensemble": lambda: orch.start_ensemble_session(
+            body.user_intent,
+            body.scenario_name,
+            body.ensemble_models,
+            body.planner_model,
+            body.executor_model,
+        ),
+        "debate": lambda: orch.start_debate_session(
+            body.user_intent,
+            body.scenario_name,
+            body.planner_model,
+            body.executor_model,
+        ),
+    }
+    handler = mode_handlers.get(body.planning_mode)
+    if handler:
+        return await handler()
+
+    return await orch.start_session_async(
+        body.user_intent,
+        body.scenario_name,
+        planner_model=body.planner_model,
+        executor_model=body.executor_model,
+    )
 
 
 @router.get("/sessions")
@@ -125,23 +110,17 @@ def list_sessions(
 @router.get("/sessions/{session_id}")
 @limiter.limit("60/minute")
 def get_session(request: Request, session_id: str):
-    try:
-        orch = get_orchestrator()
-        plan = orch.get_session(session_id)
-        if not plan:
-            raise HTTPException(status_code=404, detail="Session not found")
-        return serialize_plan_detail(plan)
-    except HTTPException:
-        raise
-    except Exception:
-        logger.exception("Unexpected error getting session")
-        raise HTTPException(status_code=500, detail="Operation failed. Please try again.")
+    orch = get_orchestrator()
+    plan = orch.get_session(session_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return serialize_plan_detail(plan)
 
 
 @router.post("/sessions/{session_id}/questions")
 @limiter.limit("30/minute")
 def answer_questions(request: Request, session_id: str, answers: AnswerQuestionsRequest):
-    orch, plan = get_plan_or_404(session_id)
+    orch, plan = plan_or_404(session_id)
     updated_plan = orch.answer_questions(plan, answers.answers)
     return {
         "status": updated_plan.status.value,
@@ -154,13 +133,13 @@ def answer_questions(request: Request, session_id: str, answers: AnswerQuestions
 
 @router.get("/sessions/{session_id}/proposals")
 def get_proposals(session_id: str):
-    orch, plan = get_plan_or_404(session_id)
+    orch, plan = plan_or_404(session_id)
     return {"proposals": orch.get_strawman_proposals(plan)}
 
 
 @router.post("/sessions/{session_id}/proposals/{proposal_id}/select")
 def select_proposal(session_id: str, proposal_id: str):
-    orch, plan = get_plan_or_404(session_id)
+    orch, plan = plan_or_404(session_id)
     updated_plan = orch.select_proposal(plan, proposal_id)
     return {
         "status": updated_plan.status.value,
@@ -173,7 +152,7 @@ def select_proposal(session_id: str, proposal_id: str):
 @router.post("/sessions/{session_id}/approve")
 def approve_plan(session_id: str):
     try:
-        orch, plan = get_plan_or_404(session_id)
+        orch, plan = plan_or_404(session_id)
         if not plan.execution_graph:
             raise HTTPException(
                 status_code=400,
@@ -199,7 +178,7 @@ def approve_plan(session_id: str):
 @limiter.limit("10/hour")
 async def execute_plan(request: Request, session_id: str, body: Optional[ExecutePlanRequest] = None):
     try:
-        orch, plan = get_plan_or_404(session_id)
+        orch, plan = plan_or_404(session_id)
         if plan.status != PlanStatus.APPROVED:
             raise HTTPException(status_code=400, detail="Plan must be approved before execution")
 
@@ -237,7 +216,7 @@ def compare_proposals(
         HTTPException 404: If proposal IDs are invalid
         HTTPException 400: If fewer than 2 or more than 10 proposals provided
     """
-    _, plan = get_plan_or_404(session_id)
+    _, plan = plan_or_404(session_id)
 
     # Validate proposal IDs
     valid_ids = {p.id for p in plan.strawman_proposals}
@@ -274,7 +253,7 @@ def compare_proposals(
 )
 @limiter.limit("60/minute")
 def list_candidates(request: Request, session_id: str):
-    orch, plan = get_plan_or_404(session_id)
+    orch, plan = plan_or_404(session_id)
     candidates = orch.list_candidates(plan)
     return {
         "session_id": session_id,
@@ -295,7 +274,7 @@ def refine_candidate(
     candidate_id: str,
     body: RefineCandidateRequest,
 ):
-    orch, plan = get_plan_or_404(session_id)
+    orch, plan = plan_or_404(session_id)
     try:
         candidate = orch.refine_candidate(
             plan,
@@ -331,7 +310,7 @@ def branch_candidate(
     candidate_id: str,
     body: BranchCandidateRequest,
 ):
-    orch, plan = get_plan_or_404(session_id)
+    orch, plan = plan_or_404(session_id)
     try:
         candidate = orch.branch_candidate(plan, candidate_id, title=body.title, note=body.note)
         refreshed = orch.get_session(session_id)
@@ -354,7 +333,7 @@ def branch_candidate(
 )
 @limiter.limit("30/minute")
 def approve_candidate(request: Request, session_id: str, candidate_id: str):
-    orch, plan = get_plan_or_404(session_id)
+    orch, plan = plan_or_404(session_id)
     try:
         updated_plan = orch.approve_candidate(plan, candidate_id)
         candidate = updated_plan.get_candidate_by_id(candidate_id)
@@ -376,7 +355,7 @@ def approve_candidate(request: Request, session_id: str, candidate_id: str):
 )
 @limiter.limit("60/minute")
 def list_outcomes(request: Request, session_id: str):
-    orch, plan = get_plan_or_404(session_id)
+    orch, plan = plan_or_404(session_id)
     return {
         "session_id": session_id,
         "outcomes": [outcome.model_dump(mode="json") for outcome in orch.get_outcomes(plan)],
@@ -393,7 +372,7 @@ async def get_similar_plans(
 ):
     """Get similar historical plans using memory layer search."""
     try:
-        orch, plan = get_plan_or_404(session_id)
+        orch, plan = plan_or_404(session_id)
 
         # Use user_intent as default query if not provided
         search_query = query or plan.user_intent
@@ -544,7 +523,7 @@ async def send_message(
     with a single unified interface. The Negotiator classifies intent and
     applies appropriate mutations to the plan.
     """
-    orch, plan = get_plan_or_404(session_id)
+    orch, plan = plan_or_404(session_id)
 
     current_state = _plan_status_to_session_state(plan)
     state_machine = SessionStateMachine(session_id, current_state)

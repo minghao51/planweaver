@@ -1,20 +1,32 @@
-from functools import lru_cache
+from typing import TYPE_CHECKING
 
 from fastapi import HTTPException
 
 from ..config import get_settings
 from ..orchestrator import Orchestrator
-from ..services.context_service import ContextService
 from ..services.comparison_service import ProposalComparisonService
+from ..services.context_service import ContextService
+
+if TYPE_CHECKING:
+    from ..models.plan import Plan
+
+_orchestrator: Orchestrator | None = None
 
 
-@lru_cache
-def get_orchestrator_factory() -> Orchestrator:
-    return Orchestrator()
+def _get_orchestrator_instance() -> Orchestrator:
+    global _orchestrator
+    if _orchestrator is None:
+        _orchestrator = Orchestrator()
+    return _orchestrator
 
 
 def get_orchestrator() -> Orchestrator:
-    return get_orchestrator_factory()
+    return _get_orchestrator_instance()
+
+
+def reset_orchestrator() -> None:
+    global _orchestrator
+    _orchestrator = None
 
 
 def get_context_service() -> ContextService:
@@ -28,14 +40,9 @@ def get_comparison_service() -> ProposalComparisonService:
     return ProposalComparisonService(orch.planner, orch.llm)
 
 
-def get_plan_or_404(session_id: str):
+def plan_or_404(session_id: str) -> tuple[Orchestrator, "Plan"]:
     orch = get_orchestrator()
-    try:
-        plan = orch.get_session(session_id)
-    except ValueError:
-        plan = None
-
+    plan = orch.get_session(session_id)
     if not plan:
         raise HTTPException(status_code=404, detail="Session not found")
-
     return orch, plan

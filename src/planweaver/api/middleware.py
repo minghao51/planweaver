@@ -1,7 +1,7 @@
-from slowapi import Limiter
-from slowapi.errors import RateLimitExceeded
 from fastapi import Request
 from fastapi.responses import JSONResponse
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
 
 
 def get_identifier(request: Request) -> str:

@@ -6,25 +6,25 @@ and proposal generation. It uses LLMs to break down user intents
 into structured execution plans with context awareness.
 """
 
-from typing import Dict, Any, Optional, List
 import json
 from decimal import Decimal
+from typing import Any, Dict, List, Optional
 
 from ..models.plan import (
     CandidatePlan,
     ContextSuggestion,
+    ExecutionStep,
+    ExecutionStepsList,
+    ExternalContext,
     IntentAnalysis,
     OpenQuestion,
     Plan,
     PlanStatus,
-    ExecutionStep,
-    ExecutionStepsList,
-    ExternalContext,
     ProposalAnalysis,
+    ProposalWithAnalysis,
+    StepStatus,
     StrawmanProposal,
     StrawmanProposalInputList,
-    StepStatus,
-    ProposalWithAnalysis,
 )
 from .llm_gateway import LLMGateway
 from .template_engine import TemplateEngine

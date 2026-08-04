@@ -1,7 +1,8 @@
 """Web search service for planning context"""
 
+from typing import Any, Dict, List
+
 from tavily import TavilyClient
-from typing import Dict, Any, List
 
 
 class WebSearchService:

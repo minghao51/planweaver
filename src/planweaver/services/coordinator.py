@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-import yaml  # type: ignore[import-untyped]
-from typing import List, Dict, Any, Optional
-from pathlib import Path
 import logging
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-from .llm_gateway import LLMGateway
+import yaml  # type: ignore[import-untyped]
+
 from ..models.coordination import SubPlanFragment
 from ..models.plan import ExecutionStep
+from .llm_gateway import LLMGateway
 
 logger = logging.getLogger(__name__)
 

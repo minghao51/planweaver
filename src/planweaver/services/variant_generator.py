@@ -1,7 +1,8 @@
-from typing import List, Dict, Any, Literal
 from logging import getLogger
-from .llm_gateway import LLMGateway
+from typing import Any, Dict, List, Literal
+
 from ..models.plan import VariantData
+from .llm_gateway import LLMGateway
 
 logger = getLogger(__name__)
 

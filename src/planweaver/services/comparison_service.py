@@ -1,16 +1,17 @@
 """Service for comparing proposals with detailed execution graphs."""
 
-from typing import Dict, List, Tuple, Literal
 import logging
 from decimal import Decimal
+from typing import Dict, List, Literal, Tuple
+
 from cachetools import TTLCache
 
 from planweaver.models.plan import (
-    Plan,
-    ProposalDetail,
-    ProposalComparison,
-    StepSummary,
     ExecutionStep,
+    Plan,
+    ProposalComparison,
+    ProposalDetail,
+    StepSummary,
 )
 
 logger = logging.getLogger(__name__)

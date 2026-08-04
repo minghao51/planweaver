@@ -9,17 +9,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-from .models.plan import Plan, ExternalContext
-from .services.llm_gateway import LLMGateway
 from .memory import MemoryLayer, MemorySearchQuery
+from .models.plan import ExternalContext, Plan
 from .services.github_analyzer import GitHubAnalyzer
+from .services.llm_gateway import LLMGateway
 from .services.web_search_service import WebSearchService
-
 
 logger = logging.getLogger(__name__)
 

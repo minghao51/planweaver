@@ -3,6 +3,7 @@ Environment variable probe.
 """
 
 import os
+
 from .base import Probe, ProbeResult
 
 

@@ -1,23 +1,25 @@
-from sqlalchemy import and_, create_engine, event, inspect, or_, text
-from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.pool import StaticPool
+import logging
+from datetime import datetime, timedelta, timezone
 from threading import Lock
-from typing import Dict, Any
+from typing import Any, Dict
+
+from sqlalchemy import and_, create_engine, event, inspect, or_, text
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from ..config import get_settings
 from .models import (
     Base,
     ExecutionLog,
     NormalizedPlanRecord,
     OptimizedVariant,
     PairwiseComparisonRecord,
-    PlanModel,
     PlanEvaluationRecord,
+    PlanModel,
     PlanRating,
     SessionModel,
     UserRating,
 )
-from ..config import get_settings
-from datetime import datetime, timezone, timedelta
-import logging
 
 logger = logging.getLogger(__name__)
 _db_init_lock = Lock()

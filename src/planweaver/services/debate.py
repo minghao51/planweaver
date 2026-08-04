@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from typing import List
 import logging
+from typing import List
 
-from .llm_gateway import LLMGateway
 from ..models.coordination import DebateRound
 from ..models.plan import Plan
+from .llm_gateway import LLMGateway
 
 logger = logging.getLogger(__name__)
 

@@ -1,18 +1,19 @@
-from sqlalchemy import (
-    Column,
-    String,
-    Text,
-    DateTime,
-    JSON,
-    Integer,
-    ForeignKey,
-    Boolean,
-    Float,
-)
-from sqlalchemy.orm import declarative_base
-from datetime import datetime, timezone
 import enum
 import uuid
+from datetime import datetime, timezone
+
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+)
+from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
 

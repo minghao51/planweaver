@@ -1,12 +1,14 @@
-from typing import Optional, AsyncIterator, Dict, Any, Type, Union
 import json
-from pydantic import BaseModel, ValidationError
-from litellm import completion, acompletion
-from ..config import get_settings
-import json_repair
 import logging
+from typing import Any, AsyncIterator, Dict, Optional, Type, Union
+
+import json_repair
 from google import genai
 from google.genai import types
+from litellm import acompletion, completion
+from pydantic import BaseModel, ValidationError
+
+from ..config import get_settings
 
 logger = logging.getLogger(__name__)
 JSON_ONLY_INSTRUCTION = "You must output valid JSON only. No markdown formatting, no code blocks."
@@ -183,8 +185,8 @@ class LLMGateway:
         Returns:
             List of model dictionaries with keys: id, name, type, provider, is_free, pricing_info, context_length
         """
-        from ..db.models import AvailableModel
         from ..db.database import get_session
+        from ..db.models import AvailableModel
 
         session = get_session()
         try:

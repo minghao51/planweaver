@@ -12,17 +12,16 @@ class TestAPI:
     def mock_orchestrator(self):
         with patch("src.planweaver.api.routers.sessions.get_orchestrator") as mock_get:
             orchestrator = Mock()
-            orchestrator.start_session_async = None
-            orchestrator.start_session = Mock(
-                return_value=Mock(
-                    session_id="test-123",
-                    status=Mock(value="brainstorming"),
-                    open_questions=[],
-                    selected_candidate_id=None,
-                    approved_candidate_id=None,
-                    metadata={},
-                )
+            plan_mock = Mock(
+                session_id="test-123",
+                status=Mock(value="brainstorming"),
+                open_questions=[],
+                selected_candidate_id=None,
+                approved_candidate_id=None,
+                metadata={},
             )
+            orchestrator.start_session_async = AsyncMock(return_value=plan_mock)
+            orchestrator.start_session = Mock(return_value=plan_mock)
             orchestrator.get_session = Mock(
                 return_value=Mock(
                     session_id="test-123",
@@ -83,7 +82,7 @@ class TestAPI:
             assert response.status_code == 200
             assert "session_id" in response.json()
 
-    def test_create_session_uses_sync_start_session_async_result(self):
+    def test_create_session_uses_async_path(self):
         from src.planweaver.api.main import app
 
         client = TestClient(app)
@@ -98,15 +97,14 @@ class TestAPI:
 
         with patch("src.planweaver.api.routers.sessions.get_orchestrator") as mock_get:
             mock_orch = Mock()
-            mock_orch.start_session_async = Mock(return_value=sync_plan)
-            mock_orch.start_session = Mock()
+            mock_orch.start_session_async = AsyncMock(return_value=sync_plan)
             mock_get.return_value = mock_orch
 
             response = client.post("/api/v1/sessions", json={"user_intent": "Create a web app"})
 
             assert response.status_code == 200
             assert response.json()["session_id"] == "test-123"
-            mock_orch.start_session.assert_not_called()
+            mock_orch.start_session_async.assert_called_once()
 
     def test_get_session_not_found(self):
         with patch("src.planweaver.api.routers.sessions.get_orchestrator") as mock_get:
@@ -222,7 +220,7 @@ class TestAPIValidation:
             assert response.status_code == 400
 
     def test_approve_returns_validation_errors_as_400(self):
-        with patch("src.planweaver.api.routers.sessions.get_plan_or_404") as mock_get_plan:
+        with patch("src.planweaver.api.routers.sessions.plan_or_404") as mock_get_plan:
             mock_orch = Mock()
             mock_plan = Mock()
             mock_plan.execution_graph = [Mock()]
@@ -354,7 +352,7 @@ class TestAPIValidation:
         orchestrator = Mock()
         orchestrator.plan_repository.save = Mock()
 
-        with patch("src.planweaver.api.routers.sessions.get_plan_or_404", return_value=(orchestrator, plan)):
+        with patch("src.planweaver.api.routers.sessions.plan_or_404", return_value=(orchestrator, plan)):
             with patch("src.planweaver.api.routers.sessions._get_message_history", return_value=[]):
                 with patch("src.planweaver.api.routers.sessions._save_session_message"):
                     with patch("src.planweaver.api.routers.sessions.Negotiator") as mock_negotiator_cls:
@@ -387,7 +385,7 @@ class TestAPIValidation:
         orchestrator = Mock()
         orchestrator.plan_repository.save = Mock()
 
-        with patch("src.planweaver.api.routers.sessions.get_plan_or_404", return_value=(orchestrator, plan)):
+        with patch("src.planweaver.api.routers.sessions.plan_or_404", return_value=(orchestrator, plan)):
             with patch("src.planweaver.api.routers.sessions._get_message_history", return_value=[]):
                 with patch("src.planweaver.api.routers.sessions._save_session_message"):
                     with patch("src.planweaver.api.routers.sessions.Negotiator") as mock_negotiator_cls:
@@ -432,7 +430,7 @@ class TestAPIValidation:
         orchestrator = Mock()
         orchestrator.plan_repository.save = Mock()
 
-        with patch("src.planweaver.api.routers.sessions.get_plan_or_404", return_value=(orchestrator, plan)):
+        with patch("src.planweaver.api.routers.sessions.plan_or_404", return_value=(orchestrator, plan)):
             with patch("src.planweaver.api.routers.sessions._get_message_history", return_value=[]):
                 with patch("src.planweaver.api.routers.sessions._save_session_message"):
                     with patch("src.planweaver.api.routers.sessions.Negotiator") as mock_negotiator_cls:

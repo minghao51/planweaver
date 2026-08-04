@@ -8,15 +8,14 @@ and feasibility issues in generated plans.
 from __future__ import annotations
 
 import logging
-from typing import List, Optional, Dict
 from datetime import datetime, timezone
 from enum import Enum
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-from .models.plan import Plan, CandidatePlan, ExecutionStep
+from .models.plan import CandidatePlan, ExecutionStep, Plan
 from .services.llm_gateway import LLMGateway
-
 
 logger = logging.getLogger(__name__)
 

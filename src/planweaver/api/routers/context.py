@@ -1,6 +1,6 @@
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
-from ..dependencies import get_context_service, get_plan_or_404
+from ..dependencies import get_context_service, plan_or_404
 from ..schemas import GitHubContextRequest, WebSearchContextRequest
 
 router = APIRouter()
@@ -8,7 +8,7 @@ router = APIRouter()
 
 @router.post("/sessions/{session_id}/context/github")
 async def add_github_context(session_id: str, request: GitHubContextRequest):
-    orch, _ = get_plan_or_404(session_id)
+    orch, _ = plan_or_404(session_id)
     context_service = get_context_service()
 
     try:
@@ -27,7 +27,7 @@ async def add_github_context(session_id: str, request: GitHubContextRequest):
 
 @router.post("/sessions/{session_id}/context/web-search")
 async def add_web_search_context(session_id: str, request: WebSearchContextRequest):
-    orch, plan = get_plan_or_404(session_id)
+    orch, plan = plan_or_404(session_id)
     context_service = get_context_service()
 
     try:
@@ -51,7 +51,7 @@ async def upload_file_context(
     session_id: str,
     file: UploadFile = File(..., description="File to upload for context"),
 ):
-    orch, _ = get_plan_or_404(session_id)
+    orch, _ = plan_or_404(session_id)
     context_service = get_context_service()
 
     # Validate file size (10MB limit)
@@ -97,7 +97,7 @@ async def upload_file_context(
 
 @router.get("/sessions/{session_id}/context")
 def list_contexts(session_id: str):
-    _, plan = get_plan_or_404(session_id)
+    _, plan = plan_or_404(session_id)
     return {
         "session_id": session_id,
         "contexts": [
